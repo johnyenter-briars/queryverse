@@ -31,8 +31,7 @@ const useStyles = makeStyles({
         flexDirection: "column",
         // Initial state: hidden off-screen to the left
         transform: `translateX(-${DRAWER_WIDTH})`,
-		//@ts-expect-error TODO: Fix this
-        transition: `transform ${tokens.durationNormal} ${tokens.curveEasyInOut}`,
+        transition: `transform ${tokens.durationNormal} ${tokens.curveEasyEase}`,
         ...shorthands.borderRight(`1px solid ${tokens.colorNeutralStroke1}`),
     },
     // OPEN Class (Applied conditionally to override transform to visible state)
@@ -44,14 +43,6 @@ const useStyles = makeStyles({
         minHeight: 0,
         overflowY: "auto",
         ...shorthands.padding(tokens.spacingHorizontalM),
-    },
-    // Custom scrollbar CSS (Remains the same)
-    customScroll: {
-        "&::-webkit-scrollbar": { width: "10px", height: "10px" },
-        "&::-webkit-scrollbar-track": { background: "#282828", ...shorthands.borderRadius("5px") },
-        "&::-webkit-scrollbar-thumb": { background: "#555555", ...shorthands.borderRadius("5px") },
-        "&::-webkit-scrollbar-thumb:hover": { background: "#777777" },
-        "&::-webkit-scrollbar-corner": { background: "#1f1f1f" },
     },
 });
 
@@ -83,7 +74,7 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
             className={flyoutClasses} 
             style={{ pointerEvents: isOpen ? 'auto' : 'none' }} 
         >
-            <div className={`${styles.flyoutHalf} ${styles.customScroll}`}>
+            <div className={`${styles.flyoutHalf}`}>
                 <Title3 className="mb-2">Connections</Title3>
                 <Divider />
                 <Tree size="small" aria-label="Connections List">
@@ -100,9 +91,7 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
                 </Tree>
             </div>
 
-            <Divider />
-
-            <div className={`${styles.flyoutHalf} ${styles.customScroll}`}>
+            <div className={`${styles.flyoutHalf}`}>
                 <Title3 className="mb-2">Schema Explorer</Title3>
                 <Divider />
                 <Tree size="small" aria-label="Database Schema">
