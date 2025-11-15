@@ -45,7 +45,12 @@ const useStyles = makeStyles({
     },
 });
 
-export function MenuBar() {
+interface IMenuBarProps {
+    vimEnabled: boolean;
+    onToggleVim: () => void;
+}
+
+export function MenuBar({ vimEnabled, onToggleVim }: IMenuBarProps) {
     const styles = useStyles();
 
     return (
@@ -90,6 +95,13 @@ export function MenuBar() {
                     <MenuList>
                         <MenuItem>Preferences</MenuItem>
                         <MenuItem>Theme: Dark</MenuItem>
+                        <MenuItem
+                            role="menuitemcheckbox"
+                            aria-checked={vimEnabled}
+                            onClick={onToggleVim}
+                        >
+                            Vim Mode
+                        </MenuItem>
                     </MenuList>
                 </MenuPopover>
             </Menu>

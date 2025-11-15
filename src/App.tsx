@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useEffect, useRef, useState } from "react";
-//@ts-expect-error I guess monaco-vim has no index.d.ts?
+//@ts-expect-error monaco-vim has no type declarations
 import { initVimMode } from "monaco-vim";
 import Editor, { OnMount } from "@monaco-editor/react";
 import {
@@ -85,12 +85,30 @@ export default function App() {
 	const styles = useStyles();
 	const vimModeRef = useRef<any>(null);
 	const statusBarRef = useRef<HTMLDivElement>(null);
+	const editorRef = useRef<any>(null);
+
+	const [code, setCode] = useState("-- Start typing SQL here...\n");
+	const [vimEnabled, setVimEnabled] = useState(true);
 
 	const handleEditorMount: OnMount = (editor) => {
-		if (statusBarRef.current) {
+		editorRef.current = editor;
+		if (vimEnabled && statusBarRef.current) {
 			vimModeRef.current = initVimMode(editor, statusBarRef.current);
 		}
 	};
+
+	// Toggle Vim mode programmatically
+	useEffect(() => {
+		if (!editorRef.current || !statusBarRef.current) return;
+
+		// If Vim should be enabled
+		if (vimEnabled && !vimModeRef.current) {
+			vimModeRef.current = initVimMode(editorRef.current, statusBarRef.current);
+		} else if (!vimEnabled && vimModeRef.current) {
+			vimModeRef.current.dispose();
+			vimModeRef.current = null;
+		}
+	}, [vimEnabled]);
 
 	useEffect(() => {
 		return () => {
@@ -101,24 +119,26 @@ export default function App() {
 	return (
 		<FluentProvider theme={webDarkTheme}>
 			<div className={styles.root}>
-				<MenuBar />
+				<MenuBar
+					vimEnabled={vimEnabled}
+					onToggleVim={() => setVimEnabled(!vimEnabled)}
+				/>
 
 				<div className={styles.wrapper}>
-					{/* Editor + Vim status */}
 					<div className={styles.top}>
 						<Editor
 							height="100%"
-							defaultLanguage="javascript"
-							defaultValue={`// Vim mode enabled`}
+							defaultLanguage="sql"
+							value={code}
 							theme="vs-dark"
 							onMount={handleEditorMount}
+							onChange={(v) => setCode(v || "")}
 						/>
 						<div ref={statusBarRef} className={styles.statusBar}>
-							-- NORMAL --
+							{vimEnabled ? "-- NORMAL --" : ""}
 						</div>
 					</div>
 
-					{/* Bottom table */}
 					<div className={styles.bottom}>
 						<h3 style={{ marginBottom: "0.5rem" }}>Team Members</h3>
 						<Table className={styles.table}>
@@ -142,9 +162,6 @@ export default function App() {
 						</Table>
 					</div>
 				</div>
-
-
-
 			</div>
 		</FluentProvider>
 	);
