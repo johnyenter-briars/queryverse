@@ -1,115 +1,57 @@
 import * as React from "react";
 import {
-    Menu,
-    MenuTrigger,
-    MenuPopover,
-    MenuList,
-    MenuItem,
-    Button,
+    Checkbox,
+    Label,
     makeStyles,
     shorthands,
     tokens,
+    Toolbar,
+    ToolbarButton,
 } from "@fluentui/react-components";
 
-const useStyles = makeStyles({
-    container: {
-        position: "relative", // ⬅ important
-        zIndex: 10,
-        height: "28px",
-        display: "flex",
-        alignItems: "center",
-        gap: "1rem",
-        paddingLeft: "0.75rem",
-        backgroundColor: tokens.colorNeutralBackground3,
-        color: tokens.colorNeutralForeground1,
-        borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-    },
-    itemButton: {
-        background: "none",
-        color: tokens.colorNeutralForeground1,
-        ...shorthands.padding(0),
-        minHeight: 0,
-        height: "28px",
-        fontSize: "13px",
-        ":hover": {
-            backgroundColor: tokens.colorNeutralBackground4,
-        },
-    },
-    popover: {
-        position: "absolute",
-        top: "0px !important",
-        left: "0px",
-        width: "auto",
-        height: "auto",
-        zIndex: 99999,
-    },
-});
+import {
+    Navigation24Regular, 
+    Settings24Filled,
+    Play24Filled,
+    WindowConsole20Filled,
+} from "@fluentui/react-icons";
 
-interface IMenuBarProps {
+export interface IMenuBarProps {
     vimEnabled: boolean;
-    onToggleVim: () => void;
+    onToggleVimEnabled: () => void;
+    connectionsEnabled: boolean;
+    onToggleConnections: () => void;
 }
 
-export function MenuBar({ vimEnabled, onToggleVim }: IMenuBarProps) {
-    const styles = useStyles();
-
+export function MenuBar({ vimEnabled, connectionsEnabled, onToggleConnections, onToggleVimEnabled }: IMenuBarProps) {
     return (
-        <div className={styles.container}>
-            <Menu>
-                <MenuTrigger disableButtonEnhancement>
-                    <Button className={styles.itemButton} appearance="subtle">
-                        File
-                    </Button>
-                </MenuTrigger>
-                <MenuPopover className={styles.popover}>
-                    <MenuList>
-                        <MenuItem>New File</MenuItem>
-                        <MenuItem>Open...</MenuItem>
-                        <MenuItem>Save</MenuItem>
-                        <MenuItem>Save As...</MenuItem>
-                    </MenuList>
-                </MenuPopover>
-            </Menu>
-
-            <Menu>
-                <MenuTrigger disableButtonEnhancement>
-                    <Button className={styles.itemButton} appearance="subtle">
-                        Connections
-                    </Button>
-                </MenuTrigger>
-                <MenuPopover className={styles.popover}>
-                    <MenuList>
-                        <MenuItem>New Connection</MenuItem>
-                        <MenuItem>Manage Connections</MenuItem>
-                    </MenuList>
-                </MenuPopover>
-            </Menu>
-
-            <Menu>
-                <MenuTrigger disableButtonEnhancement>
-                    <Button className={styles.itemButton} appearance="subtle">
-                        Settings
-                    </Button>
-                </MenuTrigger>
-                <MenuPopover className={styles.popover}>
-                    <MenuList>
-                        <MenuItem>Preferences</MenuItem>
-                        <MenuItem>Theme: Dark</MenuItem>
-                        <MenuItem
-                            role="menuitemcheckbox"
-                            aria-checked={vimEnabled}
-                            onClick={onToggleVim}
-                            style={{
-                                fontWeight: vimEnabled ? "bold" : "normal",
-                                color: vimEnabled ? "lightgreen" : undefined,
-                            }}
-                        >
-                            Vim Mode
-                        </MenuItem>
-                    </MenuList>
-                </MenuPopover>
-            </Menu>
-        </div>
+        <Toolbar 
+			size="medium" 
+			//@ts-ignore TODO: fix this
+			style={{ ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalS) }}
+		>
+            <ToolbarButton
+                icon={<Navigation24Regular />}
+                onClick={onToggleConnections}
+                appearance={connectionsEnabled ? "primary" : "subtle"}
+                title="Toggle Connections Menu"
+            >
+                Connections
+            </ToolbarButton>
+            <ToolbarButton icon={<Play24Filled />} title="Execute Query">
+                Execute
+            </ToolbarButton>
+            <ToolbarButton icon={<Settings24Filled />} title="Settings">
+                Settings
+            </ToolbarButton>
+            <ToolbarButton 
+                icon={<WindowConsole20Filled />} 
+                appearance={vimEnabled ? "primary" : "subtle"}
+                title="Vim Mode"
+                onClick={onToggleVimEnabled}
+            >
+                Vim Mode
+            </ToolbarButton>
+        </Toolbar>
     );
 }
-
