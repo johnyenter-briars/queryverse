@@ -135,7 +135,6 @@ export default function App() {
 							onChange={(v) => setCode(v || "")}
 						/>
 						<div ref={statusBarRef} className={styles.statusBar}>
-							{vimEnabled ? "-- NORMAL --" : ""}
 						</div>
 					</div>
 
