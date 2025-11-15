@@ -12,9 +12,17 @@
   "app": {
     "windows": [
       {
-        "title": "uitest",
-        "width": 800,
-        "height": 600
+        "label": "uitest",
+        "transparent": false,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "title": "UITEST",
+        "width": 1400,
+        "height": 800,
+        "minWidth": 1400,
+        "minHeight": 800,
+        "backgroundColor": "#1e1e1e"
       }
     ],
     "security": {

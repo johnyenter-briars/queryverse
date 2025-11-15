@@ -1,7 +1,6 @@
 import * as React from "react";
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-//@ts-expect-error monaco-vim has no type declarations I guess?
+//@ts-expect-error I guess monaco-vim has no index.d.ts?
 import { initVimMode } from "monaco-vim";
 import Editor, { OnMount } from "@monaco-editor/react";
 import {
@@ -17,7 +16,6 @@ import {
 	TableCell,
 	tokens,
 } from "@fluentui/react-components";
-import "monaco-vim";
 import { MenuBar } from "./components/MenuBar";
 
 const useStyles = makeStyles({
@@ -31,20 +29,33 @@ const useStyles = makeStyles({
 		color: webDarkTheme.colorNeutralForeground1,
 		overflow: "hidden",
 	},
-	top: {
-		flexBasis: "50%",
-		flexGrow: 0,
-		flexShrink: 0,
-		minHeight: 0, // allows editor to size properly inside flex
-		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-		overflow: "hidden", // critical for Monaco
+	wrapper: {
+		flex: 1,
 		display: "flex",
 		flexDirection: "column",
+		minHeight: 0,
+	},
+	top: {
+		flex: 1,
+		display: "flex",
+		flexDirection: "column",
+		minHeight: 0,
+		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+		overflow: "hidden",
+	},
+	statusBar: {
+		height: "24px",
+		backgroundColor: "#1e1e1e",
+		color: "#ccc",
+		display: "flex",
+		alignItems: "center",
+		paddingLeft: "10px",
+		fontFamily: "monospace",
+		borderTop: "1px solid #333",
+		flexShrink: 0,
 	},
 	bottom: {
-		flexBasis: "50%",
-		flexGrow: 1,
-		minHeight: 0,
+		flex: 1,
 		overflow: "auto",
 		padding: "1rem",
 	},
@@ -62,9 +73,7 @@ const useStyles = makeStyles({
 	},
 });
 
-
 const columns = ["ID", "Name", "Role", "Status"];
-
 const mockData = Array.from({ length: 10 }).map((_, i) => ({
 	id: i + 1,
 	name: `User ${i + 1}`,
@@ -74,95 +83,68 @@ const mockData = Array.from({ length: 10 }).map((_, i) => ({
 
 export default function App() {
 	const styles = useStyles();
-	const [code, setCode] = useState("// Start typing code here...\n");
-	const [greetMsg, setGreetMsg] = useState("");
-	const vimStatusRef = useRef<HTMLDivElement | null>(null);
 	const vimModeRef = useRef<any>(null);
 	const statusBarRef = useRef<HTMLDivElement>(null);
 
-	async function greet(name: string) {
-		const msg = await invoke<string>("greet", { name });
-		setGreetMsg(msg);
-	}
-
-	const handleEditorMount: OnMount = (editor, monaco) => {
+	const handleEditorMount: OnMount = (editor) => {
 		if (statusBarRef.current) {
 			vimModeRef.current = initVimMode(editor, statusBarRef.current);
 		}
 	};
 
-	// Clean up vim mode when component unmounts
 	useEffect(() => {
 		return () => {
-			if (vimModeRef.current) {
-				vimModeRef.current.dispose();
-			}
+			if (vimModeRef.current) vimModeRef.current.dispose();
 		};
 	}, []);
 
-
-
 	return (
-		<FluentProvider theme={webDarkTheme} className={styles.root}>
-			<MenuBar />
+		<FluentProvider theme={webDarkTheme}>
+			<div className={styles.root}>
+				<MenuBar />
 
-			<div
-				style={{
-					flex: 1,
-					display: "flex",
-					flexDirection: "column",
-					borderBottom: "1px solid #333",
-					minHeight: 0,
-				}}
-			>
-				<Editor
-					height="100%"
-					defaultLanguage="javascript"
-					defaultValue={`// Vim mode enabled`}
-					theme="vs-dark"
-					onMount={handleEditorMount}
-				/>
-				<div
-					id="my-statusbar"
-					ref={statusBarRef}
-					style={{
-						height: "24px",
-						backgroundColor: "#1e1e1e",
-						color: "#ccc",
-						display: "flex",
-						alignItems: "center",
-						paddingLeft: "10px",
-						fontFamily: "monospace",
-						borderTop: "1px solid #333",
-						flexShrink: 0,
-					}}
-				>
-					-- NORMAL --
+				<div className={styles.wrapper}>
+					{/* Editor + Vim status */}
+					<div className={styles.top}>
+						<Editor
+							height="100%"
+							defaultLanguage="javascript"
+							defaultValue={`// Vim mode enabled`}
+							theme="vs-dark"
+							onMount={handleEditorMount}
+						/>
+						<div ref={statusBarRef} className={styles.statusBar}>
+							-- NORMAL --
+						</div>
+					</div>
+
+					{/* Bottom table */}
+					<div className={styles.bottom}>
+						<h3 style={{ marginBottom: "0.5rem" }}>Team Members</h3>
+						<Table className={styles.table}>
+							<TableHeader>
+								<TableRow>
+									{columns.map((col) => (
+										<TableHeaderCell key={col}>{col}</TableHeaderCell>
+									))}
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{mockData.map((row) => (
+									<TableRow key={row.id}>
+										<TableCell>{row.id}</TableCell>
+										<TableCell>{row.name}</TableCell>
+										<TableCell>{row.role}</TableCell>
+										<TableCell>{row.status}</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+					</div>
 				</div>
-			</div>
 
-			<div className={styles.bottom}>
-				<h3 style={{ marginBottom: "0.5rem" }}>Team Members</h3>
-				<Table className={styles.table}>
-					<TableHeader>
-						<TableRow>
-							{columns.map((col) => (
-								<TableHeaderCell key={col}>{col}</TableHeaderCell>
-							))}
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{mockData.map((row) => (
-							<TableRow key={row.id}>
-								<TableCell>{row.id}</TableCell>
-								<TableCell>{row.name}</TableCell>
-								<TableCell>{row.role}</TableCell>
-								<TableCell>{row.status}</TableCell>
-							</TableRow>
-						))}
-					</TableBody>
-				</Table>
-				<p style={{ marginTop: "1rem", color: "#999" }}>{greetMsg}</p>
+
+
 			</div>
 		</FluentProvider>
 	);
