@@ -1,8 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "uitest",
-  "version": "0.1.0",
-  "identifier": "uitest",
+  "productName": "QueryVerse",
+  "identifier": "queryverse",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,12 +11,12 @@
   "app": {
     "windows": [
       {
-        "label": "uitest",
+        "label": "QueryVerse",
         "transparent": false,
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
-        "title": "UITEST",
+        "title": "QueryVerse",
         "width": 1400,
         "height": 800,
         "minWidth": 1400,
