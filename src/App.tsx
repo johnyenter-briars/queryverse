@@ -12,6 +12,7 @@ import {
 import { MenuBar } from "./components/MenuBar";
 import { CustomEditor } from "./components/CustomEditor";
 import { ResultsWindow } from "./components/ResultsWindow";
+import './App.css'
 
 const useStyles = makeStyles({
 	root: {
