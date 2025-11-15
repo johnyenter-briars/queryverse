@@ -17,6 +17,7 @@ import {
 	tokens,
 } from "@fluentui/react-components";
 import { MenuBar } from "./components/MenuBar";
+import { CustomEditor } from "./components/CustomEditor";
 
 const useStyles = makeStyles({
 	root: {
@@ -42,17 +43,6 @@ const useStyles = makeStyles({
 		minHeight: 0,
 		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
 		overflow: "hidden",
-	},
-	statusBar: {
-		height: "24px",
-		backgroundColor: "#1e1e1e",
-		color: "#ccc",
-		display: "flex",
-		alignItems: "center",
-		paddingLeft: "10px",
-		fontFamily: "monospace",
-		borderTop: "1px solid #333",
-		flexShrink: 0,
 	},
 	bottom: {
 		flex: 1,
@@ -83,38 +73,9 @@ const mockData = Array.from({ length: 10 }).map((_, i) => ({
 
 export default function App() {
 	const styles = useStyles();
-	const vimModeRef = useRef<any>(null);
-	const statusBarRef = useRef<HTMLDivElement>(null);
-	const editorRef = useRef<any>(null);
 
 	const [code, setCode] = useState("-- Start typing SQL here...\n");
 	const [vimEnabled, setVimEnabled] = useState(true);
-
-	const handleEditorMount: OnMount = (editor) => {
-		editorRef.current = editor;
-		if (vimEnabled && statusBarRef.current) {
-			vimModeRef.current = initVimMode(editor, statusBarRef.current);
-		}
-	};
-
-	// Toggle Vim mode programmatically
-	useEffect(() => {
-		if (!editorRef.current || !statusBarRef.current) return;
-
-		// If Vim should be enabled
-		if (vimEnabled && !vimModeRef.current) {
-			vimModeRef.current = initVimMode(editorRef.current, statusBarRef.current);
-		} else if (!vimEnabled && vimModeRef.current) {
-			vimModeRef.current.dispose();
-			vimModeRef.current = null;
-		}
-	}, [vimEnabled]);
-
-	useEffect(() => {
-		return () => {
-			if (vimModeRef.current) vimModeRef.current.dispose();
-		};
-	}, []);
 
 	return (
 		<FluentProvider theme={webDarkTheme}>
@@ -126,18 +87,10 @@ export default function App() {
 
 				<div className={styles.wrapper}>
 					<div className={styles.top}>
-						<Editor
-							height="100%"
-							defaultLanguage="sql"
-							value={code}
-							theme="vs-dark"
-							onMount={handleEditorMount}
-							onChange={(v) => setCode(v || "")}
+						<CustomEditor
+							vimEnabled={vimEnabled}
 						/>
-						<div ref={statusBarRef} className={styles.statusBar}>
-						</div>
 					</div>
-
 					<div className={styles.bottom}>
 						<h3 style={{ marginBottom: "0.5rem" }}>Team Members</h3>
 						<Table className={styles.table}>
