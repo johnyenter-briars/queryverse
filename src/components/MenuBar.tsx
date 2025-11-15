@@ -37,7 +37,7 @@ const useStyles = makeStyles({
     },
     popover: {
         position: "absolute",
-        top: "28px !important",
+        top: "0px !important",
         left: "0px",
         width: "auto",
         height: "auto",
@@ -99,6 +99,10 @@ export function MenuBar({ vimEnabled, onToggleVim }: IMenuBarProps) {
                             role="menuitemcheckbox"
                             aria-checked={vimEnabled}
                             onClick={onToggleVim}
+                            style={{
+                                fontWeight: vimEnabled ? "bold" : "normal",
+                                color: vimEnabled ? "lightgreen" : undefined,
+                            }}
                         >
                             Vim Mode
                         </MenuItem>

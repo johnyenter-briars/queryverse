@@ -1,106 +1,92 @@
 import * as React from "react";
-import { useEffect, useRef, useState } from "react";
-//@ts-expect-error monaco-vim has no type declarations
-import { initVimMode } from "monaco-vim";
-import Editor, { OnMount } from "@monaco-editor/react";
 import {
+	DataGrid,
+	DataGridHeader,
+	DataGridHeaderCell,
+	DataGridBody,
+	DataGridRow,
+	DataGridCell,
+	createTableColumn,
+	TableColumnDefinition,
+	TableCellLayout,
 	FluentProvider,
 	webDarkTheme,
-	makeStyles,
-	shorthands,
-	Table,
-	TableHeader,
-	TableHeaderCell,
-	TableBody,
-	TableRow,
-	TableCell,
-	tokens,
 } from "@fluentui/react-components";
 
-const useStyles = makeStyles({
-	root: {
-		...shorthands.padding(0),
-		...shorthands.margin(0),
-		display: "flex",
-		flexDirection: "column",
-		height: "100vh",
-		backgroundColor: webDarkTheme.colorNeutralBackground1,
-		color: webDarkTheme.colorNeutralForeground1,
-		overflow: "hidden",
-	},
-	wrapper: {
-		flex: 1,
-		display: "flex",
-		flexDirection: "column",
-		minHeight: 0,
-	},
-	top: {
-		flex: 1,
-		display: "flex",
-		flexDirection: "column",
-		minHeight: 0,
-		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-		overflow: "hidden",
-	},
-	bottom: {
-		flex: 1,
-		overflow: "auto",
-		padding: "1rem",
-	},
-	table: {
-		width: "100%",
-		borderCollapse: "collapse",
-		"& th, & td": {
-			padding: "0.5rem 1rem",
-			textAlign: "left",
-		},
-		"& th": {
-			borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-			color: tokens.colorNeutralForeground3,
-		},
-	},
-});
+type Item = {
+	id: number;
+	name: string;
+	role: string;
+	status: string;
+};
 
-const columns = ["ID", "Name", "Role", "Status"];
+const columns: TableColumnDefinition<Item>[] = [
+	createTableColumn<Item>({
+		columnId: "id",
+		renderHeaderCell: () => "ID",
+		renderCell: (item) => item.id,
+	}),
+	createTableColumn<Item>({
+		columnId: "name",
+		renderHeaderCell: () => "Name",
+		renderCell: (item) => item.name,
+	}),
+	createTableColumn<Item>({
+		columnId: "role",
+		renderHeaderCell: () => "Role",
+		renderCell: (item) => item.role,
+	}),
+	createTableColumn<Item>({
+		columnId: "status",
+		renderHeaderCell: () => "Status",
+		renderCell: (item) => item.status,
+	}),
+];
 
-const mockData = Array.from({ length: 10 }).map((_, i) => ({
+const mockData: Item[] = Array.from({ length: 50 }).map((_, i) => ({
 	id: i + 1,
 	name: `User ${i + 1}`,
 	role: i % 2 === 0 ? "Developer" : "Designer",
 	status: i % 3 === 0 ? "Online" : "Offline",
 }));
 
-interface IResultsWindow {
-}
+export function ResultsWindow() {
+	return (
+		<FluentProvider theme={webDarkTheme}>
+			<h3 style={{ marginBottom: "0.5rem" }}>Team Members</h3>
+			<div style={{ height: "400px", overflow: "auto" }}>
+				<DataGrid
+					items={mockData}
+					columns={columns}
+					sortable
+					selectionMode="multiselect"
+					getRowId={(item) => item.id}
+					style={{ minWidth: "600px" }}
+				>
+					<DataGridHeader
+						style={{
+							position: "sticky",
+							top: 0,
+							background: webDarkTheme.colorNeutralBackground1,
+							zIndex: 1,
+						}}
+					>
+						<DataGridRow>
+							{({ renderHeaderCell }) => (
+								<DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
+							)}
+						</DataGridRow>
+					</DataGridHeader>
 
-export function ResultsWindow({ }: IResultsWindow) {
-	const styles = useStyles();
-
-    return (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <h3 style={{ marginBottom: "0.5rem" }}>Team Members</h3>
-            <Table className={styles.table}>
-                <TableHeader>
-                    <TableRow>
-                        {columns.map((col) => (
-                            <TableHeaderCell key={col}>{col}</TableHeaderCell>
-                        ))}
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {mockData.map((row) => (
-                        <TableRow key={row.id}>
-                            <TableCell>{row.id}</TableCell>
-                            <TableCell>{row.name}</TableCell>
-                            <TableCell>{row.role}</TableCell>
-                            <TableCell>{row.status}</TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-
-        </div>
-
-
-    )
+					<DataGridBody>
+						{({ item, rowId }) => (
+							<DataGridRow key={rowId}>
+								{({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+							</DataGridRow>
+						)}
+					</DataGridBody>
+				</DataGrid>
+			</div>
+		</FluentProvider>
+	);
 }
