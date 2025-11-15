@@ -52,41 +52,43 @@ const mockData: Item[] = Array.from({ length: 50 }).map((_, i) => ({
 
 export function ResultsWindow() {
 	return (
-		<FluentProvider theme={webDarkTheme}>
-			<h3 style={{ marginBottom: "0.5rem" }}>Team Members</h3>
-			<div style={{ height: "400px", overflow: "auto" }}>
-				<DataGrid
-					items={mockData}
-					columns={columns}
-					sortable
-					selectionMode="multiselect"
-					getRowId={(item) => item.id}
-					style={{ minWidth: "600px" }}
+		<div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+			<h3
+				style={{ marginBottom: "0.5rem" }}
+			>
+				Team Members
+			</h3>
+			<DataGrid
+				items={mockData}
+				columns={columns}
+				sortable
+				selectionMode="multiselect"
+				getRowId={(item) => item.id}
+				style={{ minWidth: "600px" }}
+			>
+				<DataGridHeader
+					style={{
+						position: "sticky",
+						top: 0,
+						background: webDarkTheme.colorNeutralBackground1,
+						zIndex: 1,
+					}}
 				>
-					<DataGridHeader
-						style={{
-							position: "sticky",
-							top: 0,
-							background: webDarkTheme.colorNeutralBackground1,
-							zIndex: 1,
-						}}
-					>
-						<DataGridRow>
-							{({ renderHeaderCell }) => (
-								<DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
-							)}
-						</DataGridRow>
-					</DataGridHeader>
-
-					<DataGridBody>
-						{({ item, rowId }) => (
-							<DataGridRow key={rowId}>
-								{({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
-							</DataGridRow>
+					<DataGridRow>
+						{({ renderHeaderCell }) => (
+							<DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
 						)}
-					</DataGridBody>
-				</DataGrid>
-			</div>
-		</FluentProvider>
+					</DataGridRow>
+				</DataGridHeader>
+
+				<DataGridBody>
+					{({ item, rowId }) => (
+						<DataGridRow key={rowId}>
+							{({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+						</DataGridRow>
+					)}
+				</DataGridBody>
+			</DataGrid>
+		</div>
 	);
 }
