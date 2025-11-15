@@ -25,7 +25,9 @@ import {
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor } from "./components/CustomEditor";
 
-// --- Styles ---
+import { MenuBar } from "./components/MenuBar";
+import { ConnectionsMenu } from "./components/ConnectionsMenu";
+import { combineClasses } from "./utility/class";
 
 const DRAWER_WIDTH = "300px";
 
@@ -98,7 +100,7 @@ const useStyles = makeStyles({
         flexDirection: "column",
         // Initial state: hidden off-screen to the left
         transform: `translateX(-${DRAWER_WIDTH})`,
-		//@ts-expect-error TODO: Fix thsi
+		//@ts-expect-error TODO: Fix this
         transition: `transform ${tokens.durationNormal} ${tokens.curveEasyInOut}`,
         ...shorthands.borderRight(`1px solid ${tokens.colorNeutralStroke1}`),
     },
@@ -123,169 +125,38 @@ const useStyles = makeStyles({
     },
 });
 
-// --- MenuBar Component (Simplified) ---
-
-type MenuBarProps = {
-    vimEnabled: boolean;
-    onToggleVim: () => void;
-    onToggleConnections: () => void;
-};
-
-function MenuBar({ onToggleConnections }: MenuBarProps) {
-    return (
-        <Toolbar 
-			size="medium" 
-			//@ts-ignore TODO: fix this
-			style={{ ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalS) }}
-		>
-            <ToolbarButton
-                icon={<Navigation24Regular />}
-                onClick={onToggleConnections}
-                title="Toggle Connections Menu"
-            >
-                Connections
-            </ToolbarButton>
-            <ToolbarButton icon={<Play24Filled />} title="Execute Query">
-                Execute
-            </ToolbarButton>
-            <ToolbarButton icon={<Settings24Filled />} title="Settings">
-                Settings
-            </ToolbarButton>
-        </Toolbar>
-    );
-}
-
-// --- ConnectionsMenu Component (The new Flyout) ---
-
-type ConnectionsMenuProps = {
-    isOpen: boolean;
-};
-
-/**
- * A left-side flyout containing two sections: Connections and Schema.
- */
-function ConnectionsMenu({ isOpen }: ConnectionsMenuProps) {
-    // Call useStyles without arguments for static class names
-    const styles = useStyles();
-
-    // Utility to combine classes safely
-    const combineClasses = (...classes: (string | false | undefined)[]) => {
-        return classes.filter(Boolean).join(' ');
-    };
-
-    // Apply base class + open class conditionally
-    const flyoutClasses = combineClasses(
-        styles.flyoutBase,
-        isOpen && styles.flyoutOpen
-    );
-
-    // Mock data
-    const mockSchema = [
-        { name: "production_db", tables: ["users", "orders", "products", "transactions"] },
-        { name: "analytics_wh", tables: ["events", "sessions", "clicks"] },
-        { name: "staging_db", tables: ["temp_data"] },
-    ];
-    const mockConnections = [
-        { name: "Primary Localhost (SQL)", status: "Active" },
-        { name: "Dev Server (SSH Tunnel)", status: "Inactive" },
-        { name: "QA Read Replica", status: "Active" },
-    ];
-
-    return (
-        <div 
-            className={flyoutClasses} 
-            style={{ pointerEvents: isOpen ? 'auto' : 'none' }} 
-        >
-            {/* Top Half: Connections Tree */}
-            <div className={`${styles.flyoutHalf} ${styles.customScroll}`}>
-                <Title3 className="mb-2">Connections</Title3>
-                <Divider />
-                <Tree size="small" aria-label="Connections List">
-                    {mockConnections.map((conn, index) => (
-                        <TreeItem key={`conn-${index}`} itemType="leaf">
-                            <TreeItemLayout>
-                                <FolderOpen24Filled 
-                                    style={{ color: conn.status === 'Active' ? tokens.colorPaletteGreenForeground1 : tokens.colorNeutralForegroundDisabled }}
-                                /> 
-                                {conn.name}
-                            </TreeItemLayout>
-                        </TreeItem>
-                    ))}
-                </Tree>
-            </div>
-
-            {/* Middle Divider */}
-            <Divider />
-
-            {/* Bottom Half: Schema Tree */}
-            <div className={`${styles.flyoutHalf} ${styles.customScroll}`}>
-                <Title3 className="mb-2">Schema Explorer</Title3>
-                <Divider />
-                <Tree size="small" aria-label="Database Schema">
-                    {mockSchema.map((db, dbIndex) => (
-                        <TreeItem key={`db-${dbIndex}`} itemType="branch">
-                            <TreeItemLayout><FolderOpen24Filled /> {db.name}</TreeItemLayout>
-                            <Tree>
-                                {db.tables.map((table, tableIndex) => (
-                                    <TreeItem key={`table-${dbIndex}-${tableIndex}`} itemType="leaf">
-                                        <TreeItemLayout><Table24Filled /> {table}</TreeItemLayout>
-                                    </TreeItem>
-                                ))}
-                            </Tree>
-                        </TreeItem>
-                    ))}
-                </Tree>
-            </div>
-        </div>
-    );
-}
-
-// --- Main App Component ---
-
 export default function App() {
-    // State to control the visibility and shift of the menu/content
-    const [isMenuOpen, setIsMenuOpen] = useState(true); 
+    const [connectionsEnabled, setIsMenuOpen] = useState(true); 
     const [vimEnabled, setVimEnabled] = useState(true); 
 
-    // Styles are now static, call without arguments
     const styles = useStyles();
 
-    // Utility to combine classes safely
-    const combineClasses = (...classes: (string | false | undefined)[]) => {
-        return classes.filter(Boolean).join(' ');
-    };
-
-    // Apply base class + shifted class conditionally
     const contentClasses = combineClasses(
         styles.contentArea,
-        isMenuOpen && styles.contentShifted
+        connectionsEnabled && styles.contentShifted
     );
 
     return (
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
-                {/* 1. Menu Bar */}
                 <MenuBar
                     vimEnabled={vimEnabled}
-                    onToggleVim={() => setVimEnabled(!vimEnabled)}
-                    onToggleConnections={() => setIsMenuOpen(!isMenuOpen)} // Toggle logic
+					connectionsEnabled={connectionsEnabled}
+                    onToggleVimEnabled={() => setVimEnabled(!vimEnabled)} 
+                    onToggleConnections={() => setIsMenuOpen(!connectionsEnabled)} 
                 />
 
                 <div className={styles.wrapper}>
-                    {/* 2. Connections Flyout Menu */}
-                    <ConnectionsMenu isOpen={isMenuOpen} />
+                    <ConnectionsMenu isOpen={connectionsEnabled} />
 
-                    {/* 3. Main Content Area */}
                     <div className={contentClasses}> 
                         
-                        {/* Placeholder for CustomEditor */}
                         <div className={styles.top}>
 							<CustomEditor
 								vimEnabled={vimEnabled}
 							/>
                         </div>
 
-                        {/* Placeholder for ResultsWindow */}
                         <div className={styles.bottom}>
 							<ResultsWindow />
                         </div>
