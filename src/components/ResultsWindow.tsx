@@ -10,9 +10,6 @@ import {
     createTableColumn,
     TableColumnDefinition,
     webDarkTheme,
-    FluentProvider,
-    Theme,
-    tokens,
 } from "@fluentui/react-components";
 
 type Item = Record<string, string | number>;
@@ -41,7 +38,7 @@ const mockData: Item[] = Array.from({ length: ROW_COUNT }).map((_, i) => {
 const MIN_CONTENT_WIDTH = `${COLUMN_COUNT * COLUMN_WIDTH_PX}px`;
 
 
-export function ResultsWindow() {
+export const ResultsWindow = React.memo(() => {
     // Reference for the main DataGrid content container (vertical and horizontal scroll)
     const dataGridScrollRef = useRef<HTMLDivElement>(null);
     // Reference for the top-placed, synchronized horizontal scrollbar
@@ -115,4 +112,4 @@ export function ResultsWindow() {
             </div>
         </div>
     );
-}
+});

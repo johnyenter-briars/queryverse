@@ -4,17 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { initVimMode } from "monaco-vim";
 import Editor, { OnMount } from "@monaco-editor/react";
 import {
-    FluentProvider,
-    webDarkTheme,
     makeStyles,
-    shorthands,
-    Table,
-    TableHeader,
-    TableHeaderCell,
-    TableBody,
-    TableRow,
-    TableCell,
-    tokens,
 } from "@fluentui/react-components";
 
 const useStyles = makeStyles({
