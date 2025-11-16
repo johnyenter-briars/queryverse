@@ -8,12 +8,18 @@ import {
     TreeItem,
     TreeItemLayout,
     Divider,
+    Button,
 } from "@fluentui/react-components";
 import {
     Table24Filled,
     FolderOpen24Filled,
+    AddCircleRegular,
 } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
+import { createConnection } from "../binding/backend";
+import { Connection, ConnectionMethod } from "../binding/model/Connection";
+import { RequestType } from "../binding/model/QVRequest";
+import { useState } from "react";
 
 const DRAWER_WIDTH = "300px";
 
@@ -36,7 +42,7 @@ const useStyles = makeStyles({
     },
     // OPEN Class (Applied conditionally to override transform to visible state)
     flyoutOpen: {
-        transform: "translateX(0)", 
+        transform: "translateX(0)",
     },
     flyoutHalf: {
         flex: 1,
@@ -64,26 +70,48 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
         { name: "d365 prod", tables: ["systemuser", "account", "contact", "incident"] },
     ];
     const mockConnections = [
-        { name: "d365 dev", status: "Active" },
-        { name: "d365 qa", status: "Inactive" },
-        { name: "d365 prod", status: "Active" },
     ];
 
+    const [connections, setConnections] = useState<Connection[]>([
+        { name: "d365 dev", id: null, method: ConnectionMethod.ClientSecret },
+        { name: "d365 qa", id: null, method: ConnectionMethod.ClientSecret },
+        { name: "d365 prod", id: null, method: ConnectionMethod.ClientSecret },
+    ]);
+
     return (
-        <div 
-            className={flyoutClasses} 
-            style={{ pointerEvents: isOpen ? 'auto' : 'none' }} 
+        <div
+            className={flyoutClasses}
+            style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
         >
             <div className={`${styles.flyoutHalf}`}>
                 <Title3 className="mb-2">Connections</Title3>
+                <Button
+                    size="large"
+                    icon={<AddCircleRegular />}
+                    onClick={async () => {
+                        const newConnection = await createConnection({
+                            requestType: RequestType.Create,
+                            value: {
+                                name: "conn1",
+                                id: null,
+                                method: ConnectionMethod.ClientSecret,
+                            }
+                        });
+
+                        const foo = [...connections];
+                        foo.push(newConnection.value);
+
+                        setConnections(foo);
+                    }}
+                />
                 <Divider />
                 <Tree size="small" aria-label="Connections List">
-                    {mockConnections.map((conn, index) => (
+                    {connections.map((conn, index) => (
                         <TreeItem key={`conn-${index}`} itemType="leaf">
                             <TreeItemLayout>
-                                <FolderOpen24Filled 
-                                    style={{ color: conn.status === 'Active' ? tokens.colorPaletteGreenForeground1 : tokens.colorNeutralForegroundDisabled }}
-                                /> 
+                                <FolderOpen24Filled
+                                    style={{ color: tokens.colorPaletteGreenForeground1 }}
+                                />
                                 {conn.name}
                             </TreeItemLayout>
                         </TreeItem>

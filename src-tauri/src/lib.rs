@@ -1,14 +1,11 @@
 pub mod binding;
+pub mod connection;
 
-use crate::binding::model::qvresponse::{QVResponse};
+use crate::binding::model::multipleresponse::MultipleResponse;
+use crate::connection::connection::create_connection;
+
 
 struct Database;
-
-#[derive(serde::Serialize)]
-struct CustomResponse {
-    message: String,
-    other_val: usize,
-}
 
 async fn some_other_function() -> Option<String> {
     Some("response".into())
@@ -19,7 +16,7 @@ async fn query_results(
     window: tauri::Window,
     number: usize,
     database: tauri::State<'_, Database>,
-) -> Result<QVResponse<Vec<String>>, String> {
+) -> Result<MultipleResponse, String> {
     let response_result = reqwest::get("https://www.rust-lang.org").await;
 
     if let Ok(response) = response_result {
@@ -39,7 +36,7 @@ async fn query_results(
     } else {
     }
 
-    let resp = QVResponse::<Vec<String>>::new();
+    let resp = MultipleResponse::new();
 
     return Ok(resp);
 }
@@ -56,6 +53,7 @@ pub fn run() {
         .manage(Database {})
         .invoke_handler(tauri::generate_handler![greet])
         .invoke_handler(tauri::generate_handler![query_results])
+        .invoke_handler(tauri::generate_handler![create_connection])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
