@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+
+  <!-- Left blue swirl arm -->
+  <path
+    d="M90 300
+       C110 180 200 110 300 140
+       C340 155 380 185 405 210
+       L360 255
+       C330 230 295 210 255 210
+       C190 210 130 245 90 300 Z"
+    fill="#2f8dff"
+  />
+
+  <!-- Right blue swirl arm -->
+  <path
+    d="M420 210
+       C395 330 310 400 215 375
+       C175 365 135 340 110 315
+       L155 270
+       C185 295 220 310 260 310
+       C320 310 380 275 420 210 Z"
+    fill="#0b66ff"
+  />
+
+  <!-- Center circle (sharp, crisp) -->
+  <circle cx="256" cy="256" r="80" fill="#e6f3ff" stroke="#0b66ff" stroke-width="4"/>
+
+  <!-- Database table outline -->
+  <rect
+    x="206" y="226"
+    width="100" height="60"
+    rx="8" ry="8"
+    fill="#ffffff"
+    stroke="#0b66ff"
+    stroke-width="4"
+  />
+
+  <!-- Table header -->
+  <rect x="206" y="226" width="100" height="20" rx="6"
+        fill="#d8eaff" stroke="#0b66ff" stroke-width="2"/>
+
+  <!-- Column divider -->
+  <line x1="256" y1="246" x2="256" y2="286"
+        stroke="#0b66ff" stroke-width="3"/>
+
+  <!-- Row lines -->
+  <line x1="215" y1="260" x2="295" y2="260" stroke="#84bfff" stroke-width="2"/>
+  <line x1="215" y1="276" x2="295" y2="276" stroke="#84bfff" stroke-width="2"/>
+
+</svg>
+
