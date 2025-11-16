@@ -1,27 +1,11 @@
-import * as React from "react";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import {
     FluentProvider,
     webDarkTheme,
     makeStyles,
     shorthands,
     tokens,
-    Title3,
-    Tree,
-    TreeItem,
-    TreeItemLayout,
-    Toolbar,
-    ToolbarButton,
-    Divider,
 } from "@fluentui/react-components";
-import {
-    Navigation24Regular, // Icon for opening the flyout
-    CubeTree24Filled, // Icon for Schema
-    Table24Filled, // Icon for Tables
-    FolderOpen24Filled, // Icon for Database/Connection
-    Settings24Filled,
-    Play24Filled,
-} from "@fluentui/react-icons";
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor } from "./components/CustomEditor";
 
