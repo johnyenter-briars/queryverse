@@ -4,6 +4,7 @@ pub mod connection;
 use crate::binding::model::multipleresponse::MultipleResponse;
 use crate::connection::connection::create_connection;
 
+use tauri::{Builder, Manager};
 
 struct Database;
 
@@ -54,6 +55,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![greet])
         .invoke_handler(tauri::generate_handler![query_results])
         .invoke_handler(tauri::generate_handler![create_connection])
+        .setup(|app| {
+            let windows = app.webview_windows();
+            let window = windows.get("QueryVerse").unwrap();
+            window.open_devtools();
+            window.close_devtools(); // Dev tools starts open but not steal focus
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

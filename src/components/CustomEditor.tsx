@@ -31,7 +31,7 @@ export function CustomEditor({ vimEnabled }: ICustomEditor) {
     const statusBarRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<any>(null);
 
-    const [code, setCode] = useState("-- Start typing SQL here...\n");
+    const [code, setCode] = useState("select top 20 *\nfrom account");
 
     const handleEditorMount: OnMount = (editor) => {
         editorRef.current = editor;
@@ -40,11 +40,9 @@ export function CustomEditor({ vimEnabled }: ICustomEditor) {
         }
     };
 
-    // Toggle Vim mode programmatically
     useEffect(() => {
         if (!editorRef.current || !statusBarRef.current) return;
 
-        // If Vim should be enabled
         if (vimEnabled && !vimModeRef.current) {
             vimModeRef.current = initVimMode(editorRef.current, statusBarRef.current);
         } else if (!vimEnabled && vimModeRef.current) {

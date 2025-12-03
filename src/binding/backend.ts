@@ -1,5 +1,4 @@
 import { invoke, InvokeArgs } from '@tauri-apps/api/core';
-import { Connection } from './model/Connection';
 import { CreateConnectionResponse } from './model/CreateConnectionResponse';
 import { CreateConnectionRequest } from './model/CreateConnectionRequest';
 

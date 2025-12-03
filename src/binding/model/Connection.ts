@@ -1,9 +1,21 @@
-export interface Connection {
-    id: string | null,
-    name: string,
-    method: ConnectionMethod,
+export type Connection = ClientSecretConnection | OAuthConnection
+
+export type ConnectionMethod = 'ClientSecret' | 'OAuth'
+
+export interface ClientSecretConnection {
+    method: ConnectionMethod;
+    id: string | null;
+    name: string;
+    clientId: string;
+    clientSecret: string;
+    tenantId: string;
 }
 
-export enum ConnectionMethod {
-    ClientSecret = "ClientSecret",
+export interface OAuthConnection {
+    method: ConnectionMethod;
+    id: string | null;
+    name: string;
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: string; 
 }
