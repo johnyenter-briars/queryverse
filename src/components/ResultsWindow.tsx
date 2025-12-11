@@ -14,9 +14,9 @@ import {
 
 type Item = Record<string, string | number>;
 
-const COLUMN_COUNT = 30; 
+const COLUMN_COUNT = 30;
 const ROW_COUNT = 100;
-const COLUMN_WIDTH_PX = 150; 
+const COLUMN_WIDTH_PX = 150;
 
 const mockColumns: TableColumnDefinition<Item>[] = Array.from({ length: COLUMN_COUNT }).map((_, i) =>
     createTableColumn<Item>({
@@ -47,55 +47,45 @@ export const ResultsWindow = React.memo(() => {
     }, []);
 
     return (
-        <div 
-            className="flex flex-col h-full w-full p-4 bg-gray-900 rounded-xl shadow-2xl"
-            style={{ 
-                maxHeight: "100%", 
-                minHeight: 0,
-                backgroundColor: webDarkTheme.colorNeutralBackground1, 
-                color: webDarkTheme.colorNeutralForeground1, 
+        <div
+            ref={dataGridScrollRef}
+            onScroll={onBottomScroll}
+            style={{
+                maxHeight: '100%',
+                overflowY: 'auto'
             }}
         >
-            <div
-                ref={dataGridScrollRef}
-                onScroll={onBottomScroll}
-                className="flex-1 overflow-auto" 
-                style={{
-                    position: 'relative',
-                }}
+            <DataGrid
+                items={mockData}
+                columns={mockColumns}
+                sortable
+                getRowId={(item) => item.col1}
+                style={{ minWidth: MIN_CONTENT_WIDTH }}
             >
-                <DataGrid
-                    items={mockData}
-                    columns={mockColumns}
-                    sortable
-                    getRowId={(item) => item.col1}
-                    style={{ minWidth: MIN_CONTENT_WIDTH }}
+                <DataGridHeader
+                    style={{
+                        position: "sticky",
+                        top: 0,
+                        background: webDarkTheme.colorNeutralBackground1,
+                        backgroundColor: webDarkTheme.colorNeutralBackground1,
+                        zIndex: 10,
+                    }}
                 >
-                    <DataGridHeader
-                        style={{
-                            position: "sticky",
-                            top: 0,
-                            background: webDarkTheme.colorNeutralBackground1,
-                            zIndex: 10,
-                            boxShadow: `0 2px 4px rgba(0, 0, 0, 0.4)`, 
-                        }}
-                    >
-                        <DataGridRow>
-                            {({ renderHeaderCell }) => (
-                                <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
-                            )}
-                        </DataGridRow>
-                    </DataGridHeader>
-
-                    <DataGridBody>
-                        {({ item, rowId }) => (
-                            <DataGridRow key={rowId}>
-                                {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
-                            </DataGridRow>
+                    <DataGridRow>
+                        {({ renderHeaderCell }) => (
+                            <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
                         )}
-                    </DataGridBody>
-                </DataGrid>
-            </div>
+                    </DataGridRow>
+                </DataGridHeader>
+
+                <DataGridBody>
+                    {({ item, rowId }) => (
+                        <DataGridRow key={rowId}>
+                            {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+                        </DataGridRow>
+                    )}
+                </DataGridBody>
+            </DataGrid>
         </div>
     );
 });
