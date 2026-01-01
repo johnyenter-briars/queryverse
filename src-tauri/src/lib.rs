@@ -15,8 +15,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Database {})
-        .invoke_handler(tauri::generate_handler![query_results])
-        .invoke_handler(tauri::generate_handler![create_connection])
+        .invoke_handler(tauri::generate_handler![create_connection, query_results])
         .setup(|app| {
             let windows = app.webview_windows();
             let window = windows.get("QueryVerse").unwrap();

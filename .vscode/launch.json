@@ -8,7 +8,7 @@
             "program": "${workspaceFolder}/src-tauri/target/debug/QueryVerse.exe",
             "args": [],
             "cwd": "${workspaceFolder}/src-tauri",
-            "preLaunchTask": "Serve Frontend",
+            "preLaunchTask": "Build & Serve",
             "sourceLanguages": [
                 "rust"
             ],
