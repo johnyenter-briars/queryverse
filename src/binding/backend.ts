@@ -1,14 +1,13 @@
 import { invoke, InvokeArgs } from '@tauri-apps/api/core';
-import { Connection } from './model/Connection';
 import { CreateConnectionResponse } from './model/CreateConnectionResponse';
 import { CreateConnectionRequest } from './model/CreateConnectionRequest';
 
 export const queryResults = async () => {
-    const bing = await invoke('query_results', {
+    const response = await invoke('query_results', {
         number: 42,
     })
 
-    debugger;
+    console.log(response)
 }
 
 export const createConnection = async (connectionRequest: CreateConnectionRequest): Promise<CreateConnectionResponse> => {

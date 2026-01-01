@@ -15,8 +15,6 @@ import { combineClasses } from "./utility/class";
 
 const DRAWER_WIDTH = "300px";
 
-// All styles are static definitions. useStyles() will return an object 
-// where keys map to static class names.
 const useStyles = makeStyles({
     // Global App Layout
     root: {

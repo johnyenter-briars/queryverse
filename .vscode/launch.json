@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Tauri Backend",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/src-tauri/target/debug/QueryVerse.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}/src-tauri",
+            "preLaunchTask": "Build & Serve",
+            "sourceLanguages": [
+                "rust"
+            ],
+            "console": "integratedTerminal"
+        }
+    ]
+}

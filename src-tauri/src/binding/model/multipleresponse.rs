@@ -1,4 +1,4 @@
-use crate::binding::model::{connection::Connection, qvresponse::QVResponse};
+use crate::binding::model::qvresponse::QVResponse;
 
 pub type MultipleResponse = QVResponse<Vec<String>>;
 

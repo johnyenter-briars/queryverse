@@ -17,9 +17,10 @@ import {
 } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
 import { createConnection } from "../binding/backend";
-import { Connection, ConnectionMethod } from "../binding/model/Connection";
+import { Connection } from "../binding/model/Connection";
 import { RequestType } from "../binding/model/QVRequest";
 import { useState } from "react";
+import { CreateConnectionRequest } from "../binding/model/CreateConnectionRequest";
 
 const DRAWER_WIDTH = "300px";
 
@@ -69,13 +70,16 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
         { name: "d365 qa", tables: ["systemuser", "account", "contact", "incident"] },
         { name: "d365 prod", tables: ["systemuser", "account", "contact", "incident"] },
     ];
-    const mockConnections = [
-    ];
 
     const [connections, setConnections] = useState<Connection[]>([
-        { name: "d365 dev", id: null, method: ConnectionMethod.ClientSecret },
-        { name: "d365 qa", id: null, method: ConnectionMethod.ClientSecret },
-        { name: "d365 prod", id: null, method: ConnectionMethod.ClientSecret },
+        {
+            name: "d365 dev",
+            id: null,
+            method: "ClientSecret",
+            clientId: "foo",
+            clientSecret: "bing",
+            tenantId: "baz",
+        },
     ]);
 
     return (
@@ -94,7 +98,10 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
                             value: {
                                 name: "conn1",
                                 id: null,
-                                method: ConnectionMethod.ClientSecret,
+                                method: "ClientSecret",
+                                clientId: "foo",
+                                clientSecret: "bing",
+                                tenantId: "baz",
                             }
                         });
 
