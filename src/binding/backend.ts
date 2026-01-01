@@ -3,11 +3,12 @@ import { CreateConnectionResponse } from './model/CreateConnectionResponse';
 import { CreateConnectionRequest } from './model/CreateConnectionRequest';
 
 export const queryResults = async () => {
-    const bing = await invoke('query_results', {
+    debugger;
+    const results = await invoke('query_results', {
         number: 42,
     })
 
-    debugger;
+    console.log(results)
 }
 
 export const createConnection = async (connectionRequest: CreateConnectionRequest): Promise<CreateConnectionResponse> => {
