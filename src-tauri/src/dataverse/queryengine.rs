@@ -8,7 +8,6 @@ pub struct QueryEngine {
 }
 
 impl QueryEngine {
-    /// Create a new Dataverse client
     pub fn new(base_url: &str, token: &str) -> Self {
         Self {
             client: Client::new(),
@@ -17,8 +16,6 @@ impl QueryEngine {
         }
     }
 
-    /// Query the accounts table with optional OData $filter
-    /// filter_example: "name eq 'Contoso'"
     pub async fn query_accounts(&self, filter: Option<&str>) -> Result<Value, String> {
         let mut url = format!("{}/api/data/v9.2/accounts", self.base_url);
 
