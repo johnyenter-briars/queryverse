@@ -1,6 +1,10 @@
 use reqwest::Client;
 use serde_json::Value;
 
+use crate::binding::model::entity::Entity;
+use crate::binding::model::entity::Value::Int;
+use crate::binding::model::multipleresponse::MultipleResponse;
+
 pub struct QueryEngine {
     client: Client,
     base_url: String,
@@ -16,7 +20,10 @@ impl QueryEngine {
         }
     }
 
-    pub async fn query_accounts(&self, filter: Option<&str>) -> Result<Value, String> {
+    pub async fn query_accounts(
+        &self,
+        filter: Option<&str>,
+    ) -> Result<MultipleResponse<Entity>, String> {
         let mut url = format!("{}/api/data/v9.2/accounts", self.base_url);
 
         if let Some(f) = filter {
@@ -44,7 +51,44 @@ impl QueryEngine {
             .await
             .map_err(|e| format!("Failed to parse JSON: {e}"))?;
 
-        Ok(json)
+        let response_object = json
+            .as_object()
+            .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
+
+        let response_array = response_object
+            .get("value")
+            .ok_or_else(|| "Invalid response from Dataverse".to_string())?
+            .as_array()
+            .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
+
+        let mut entities: Vec<Entity> = vec![];
+
+        for record_value in response_array {
+            let mut entity = Entity::new();
+
+            let record = record_value
+                .as_object()
+                .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
+
+            for (key, value) in record {
+                if !value.is_i64() {
+                    continue;
+                }
+
+                let i = value
+                    .as_i64()
+                    .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
+
+                entity.attributes.insert(key.to_string(), Int(i));
+            }
+
+            entities.push(entity);
+        }
+
+        let mut multi_resposne = MultipleResponse::new();
+
+        multi_resposne.value = entities;
+
+        Ok(multi_resposne)
     }
 }
-
