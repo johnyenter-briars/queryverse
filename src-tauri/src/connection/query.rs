@@ -1,5 +1,8 @@
 use crate::{
-    Database, binding::model::{entity::Entity, response::MultipleResponse}, dataverse::queryengine::QueryEngine, oauth::tokencache::TokenCache
+    binding::model::{entity::Entity, response::MultipleResponse},
+    dataverse::queryengine::QueryEngine,
+    oauth::tokencache::TokenCache,
+    Database,
 };
 
 #[tauri::command]
@@ -13,7 +16,7 @@ pub async fn retrieve_multiple(
     let query_engine = QueryEngine::new("https://jyb.crm.dynamics.com/", &token);
 
     let resp = query_engine
-        .retrieve_multiple_accounts(Some("accountnumber eq 'ABSS4G45'"))
+        .retrieve_multiple_accounts(Some("accountid ne null"), Some("accountid,name,statecode,statuscode,cref1_syncedwithstar,donotsendmm,numberofemployees"))
         .await?;
 
     return Ok(resp);

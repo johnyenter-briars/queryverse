@@ -29,11 +29,16 @@ impl QueryEngine {
     pub async fn retrieve_multiple_accounts(
         &self,
         filter: Option<&str>,
+        select: Option<&str>,
     ) -> Result<MultipleResponse<Entity>, std::string::String> {
         let mut url = format!("{}/api/data/v9.2/accounts", self.base_url);
 
         if let Some(f) = filter {
             url.push_str(&format!("?$filter={}", urlencoding::encode(f)));
+        }
+
+        if let Some(s) = select {
+            url.push_str(&format!("&$select={}", urlencoding::encode(s)));
         }
 
         let resp = self
@@ -110,13 +115,13 @@ fn add_attribute(
     }
 
     //TODO: yea i know this sucks
-    // if value.is_i64() {
-    //     let i = value.as_i64().ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
+    if value.is_i64() {
+        let i = value.as_i64().ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
 
-    //     entity.attributes.insert(key.to_string(), Int(i));
+        entity.attributes.insert(key.to_string(), Int(i));
 
-    //     return Ok(ValueTypeImplented::True);
-    // }
+        return Ok(ValueTypeImplented::True);
+    }
 
     if value.is_string() {
         let i = value.as_str().ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
@@ -128,13 +133,13 @@ fn add_attribute(
         return Ok(ValueTypeImplented::True);
     }
 
-    // if value.is_boolean() {
-    //     let i = value.as_bool().ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
+    if value.is_boolean() {
+        let i = value.as_bool().ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
 
-    //     entity.attributes.insert(key.to_string(), Boolean(i));
+        entity.attributes.insert(key.to_string(), Boolean(i));
 
-    //     return Ok(ValueTypeImplented::True);
-    // }
+        return Ok(ValueTypeImplented::True);
+    }
 
     return Ok(ValueTypeImplented::False);
 }
