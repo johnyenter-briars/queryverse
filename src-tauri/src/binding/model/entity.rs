@@ -15,6 +15,7 @@ pub type Attribute = String;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Entity {
+    #[serde(flatten)]
     pub attributes: HashMap<Attribute, Value>,
 }
 
