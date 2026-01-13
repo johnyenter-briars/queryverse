@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use crate::binding::model::entity::Entity;
 use crate::binding::model::entity::Value::Int;
-use crate::binding::model::multipleresponse::MultipleResponse;
+use crate::binding::model::response::MultipleResponse;
 
 pub struct QueryEngine {
     client: Client,

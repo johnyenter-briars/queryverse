@@ -3,8 +3,11 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum Value {
     Int(i64),
+    String(String),
+    Bool(bool),
 }
 
 pub type Attribute = String;
