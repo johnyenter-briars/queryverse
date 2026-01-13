@@ -6,8 +6,9 @@ use serde::{Deserialize, Serialize};
 #[serde(untagged)]
 pub enum Value {
     Int(i64),
-    String(String),
-    Bool(bool),
+    String(String),//TODO: should be this be a string or an &Str?
+    Boolean(bool),
+    Null,
 }
 
 pub type Attribute = String;
