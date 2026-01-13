@@ -11,6 +11,14 @@ import {
     TableColumnDefinition,
     webDarkTheme,
 } from "@fluentui/react-components";
+import { Attribute, Entity, Value } from "../binding/model/Entity";
+
+
+function renderValue(value: Value): React.ReactNode {
+    if (value === null) return "";
+    return String(value);
+}
+
 
 type Item = Record<string, string | number>;
 
@@ -36,7 +44,13 @@ const mockData: Item[] = Array.from({ length: ROW_COUNT }).map((_, i) => {
 
 const MIN_CONTENT_WIDTH = `${COLUMN_COUNT * COLUMN_WIDTH_PX}px`;
 
-export const ResultsWindow = React.memo(() => {
+export interface IResultsWindowProps {
+    data: Entity[],
+}
+
+export const ResultsWindow = React.memo(({
+    data,
+}: IResultsWindowProps) => {
     const dataGridScrollRef = useRef<HTMLDivElement>(null);
     const topScrollRef = useRef<HTMLDivElement>(null);
 
@@ -45,6 +59,24 @@ export const ResultsWindow = React.memo(() => {
             topScrollRef.current.scrollLeft = dataGridScrollRef.current.scrollLeft;
         }
     }, []);
+
+    // const columns: TableColumnDefinition<Entity>[] = Array.from({ length: data[0]?.attributes?.length ?? 0 }).map((_, i) =>
+    //     createTableColumn<Item>({
+    //         columnId: `col${i + 1}`,
+    //         renderHeaderCell: () => `Field ${i + 1}`,
+    //         renderCell: (item) => item[`col${i + 1}`],
+    //     })
+    // );
+
+    const columns: TableColumnDefinition<Entity>[] = data.length === 0 ?
+        [] :
+        Object.keys(data[0].attributes).map((attribute) =>
+            createTableColumn<Entity>({
+                columnId: `col${attribute}`,
+                renderHeaderCell: () => attribute,
+                renderCell: (record) => record.attributes[attribute],
+            })
+        );
 
     return (
         <div
@@ -56,10 +88,10 @@ export const ResultsWindow = React.memo(() => {
             }}
         >
             <DataGrid
-                items={mockData}
-                columns={mockColumns}
+                items={data}
+                columns={columns}
                 sortable
-                getRowId={(item) => item.col1}
+                getRowId={(item: Entity) => item.attributes['accountid']?.toString() ?? ""}
                 style={{ minWidth: MIN_CONTENT_WIDTH }}
             >
                 <DataGridHeader

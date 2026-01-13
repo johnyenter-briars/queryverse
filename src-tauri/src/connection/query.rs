@@ -3,7 +3,7 @@ use crate::{
 };
 
 #[tauri::command]
-pub async fn query_results(
+pub async fn retrieve_multiple(
     _window: tauri::Window,
     _number: usize,
     _database: tauri::State<'_, Database>,
@@ -13,7 +13,7 @@ pub async fn query_results(
     let query_engine = QueryEngine::new("https://jyb.crm.dynamics.com/", &token);
 
     let resp = query_engine
-        .query_accounts(Some("accountnumber eq 'ABSS4G45'"))
+        .retrieve_multiple_accounts(Some("accountnumber eq 'ABSS4G45'"))
         .await?;
 
     return Ok(resp);

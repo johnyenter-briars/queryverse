@@ -12,6 +12,8 @@ import { CustomEditor } from "./components/CustomEditor";
 import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
 import { combineClasses } from "./utility/class";
+import { MultipleResponse } from "./binding/model/MultipleResponse";
+import { Entity } from "./binding/model/Entity";
 
 const DRAWER_WIDTH = "300px";
 
@@ -110,6 +112,7 @@ const useStyles = makeStyles({
 export default function App() {
     const [connectionsEnabled, setIsMenuOpen] = useState(true); 
     const [vimEnabled, setVimEnabled] = useState(true); 
+    const [data, setData] = useState<Entity[]>([]); 
 
     const styles = useStyles();
 
@@ -117,6 +120,15 @@ export default function App() {
         styles.contentArea,
         connectionsEnabled && styles.contentShifted
     );
+
+    const onRetrieveResults = (results: MultipleResponse<Entity>) =>  {
+        if (!results.success) {
+            console.log("Fail") //TODO
+            return;
+        }
+
+        setData(results.value);
+    }
 
     return (
         <FluentProvider theme={webDarkTheme}>
@@ -126,6 +138,7 @@ export default function App() {
 					connectionsEnabled={connectionsEnabled}
                     onToggleVimEnabled={() => setVimEnabled(!vimEnabled)} 
                     onToggleConnections={() => setIsMenuOpen(!connectionsEnabled)} 
+                    onRetrieveResults={onRetrieveResults}
                 />
 
                 <div className={styles.wrapper}>
@@ -140,7 +153,9 @@ export default function App() {
                         </div>
 
                         <div className={styles.bottom}>
-							<ResultsWindow />
+							<ResultsWindow
+                                data={data}
+                            />
                         </div>
                     </div>
                 </div>
