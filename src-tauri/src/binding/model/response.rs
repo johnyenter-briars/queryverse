@@ -1,8 +1,8 @@
 use crate::binding::model::qvresponse::QVResponse;
 
-pub type MultipleResponse = QVResponse<Vec<String>>;
+pub type MultipleResponse<T> = QVResponse<Vec<T>>;
 
-impl MultipleResponse {
+impl<T> MultipleResponse<T> {
     pub fn new() -> Self {
         QVResponse {
             message: "foo".to_string(),

@@ -11,16 +11,25 @@ import {
     Play24Filled,
     WindowConsole20Filled,
 } from "@fluentui/react-icons";
-import { queryResults } from "../binding/backend";
+import { retrieveMultiple } from "../binding/backend";
+import { MultipleResponse } from "../binding/model/MultipleResponse";
+import { Entity } from "../binding/model/Entity";
 
 export interface IMenuBarProps {
     vimEnabled: boolean;
     onToggleVimEnabled: () => void;
     connectionsEnabled: boolean;
     onToggleConnections: () => void;
+    onRetrieveResults: (results: MultipleResponse<Entity>) => void;
 }
 
-export function MenuBar({ vimEnabled, connectionsEnabled, onToggleConnections, onToggleVimEnabled }: IMenuBarProps) {
+export function MenuBar({
+    vimEnabled,
+    connectionsEnabled,
+    onToggleConnections,
+    onToggleVimEnabled,
+    onRetrieveResults,
+}: IMenuBarProps) {
     return (
         <Toolbar
             size="medium"
@@ -38,7 +47,11 @@ export function MenuBar({ vimEnabled, connectionsEnabled, onToggleConnections, o
             <ToolbarButton
                 icon={<Play24Filled />}
                 title="Execute Query"
-                onClick={async () => {await queryResults()}}
+                onClick={async () => {
+                    const response = await retrieveMultiple();
+
+                    onRetrieveResults(response);
+                }}
             >
                 Execute
             </ToolbarButton>
