@@ -1,11 +1,15 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
     FluentProvider,
     webDarkTheme,
     makeStyles,
     shorthands,
     tokens,
+    TabList,
+    Tab,
+    Button,
 } from "@fluentui/react-components";
+import { Add24Regular } from "@fluentui/react-icons";
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor } from "./components/CustomEditor";
 
@@ -65,6 +69,23 @@ const useStyles = makeStyles({
         overflow: "hidden",
         padding: tokens.spacingHorizontalS,
     },
+    tabsBar: {
+        display: "flex",
+        alignItems: "center",
+        gap: tokens.spacingHorizontalS,
+        paddingBottom: tokens.spacingVerticalS,
+        marginBottom: tokens.spacingVerticalS,
+        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    },
+    tabsList: {
+        flex: 1,
+        minWidth: 0,
+        overflowX: "auto",
+        overflowY: "hidden",
+    },
+    addTabButton: {
+        flexShrink: 0,
+    },
     bottom: {
         flex: 1,
         overflowY: "auto",
@@ -109,10 +130,25 @@ const useStyles = makeStyles({
     },
 });
 
+type EditorTab = {
+    id: number;
+    title: string;
+    query: string;
+};
+
 export default function App() {
     const [connectionsEnabled, setIsMenuOpen] = useState(true); 
     const [vimEnabled, setVimEnabled] = useState(true); 
     const [data, setData] = useState<Entity[]>([]); 
+    const [tabs, setTabs] = useState<EditorTab[]>([
+        {
+            id: 1,
+            title: "Query 1",
+            query: "select top 20 *\nfrom account",
+        },
+    ]);
+    const [activeTabId, setActiveTabId] = useState(1);
+    const nextTabId = useRef(2);
 
     const styles = useStyles();
 
@@ -129,6 +165,20 @@ export default function App() {
 
         setData(results.value);
     }
+
+    const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
+
+    const handleAddTab = () => {
+        const newId = nextTabId.current++;
+        const newTab: EditorTab = {
+            id: newId,
+            title: `Query ${newId}`,
+            query: "",
+        };
+
+        setTabs((prev) => [...prev, newTab]);
+        setActiveTabId(newId);
+    };
 
     return (
         <FluentProvider theme={webDarkTheme}>
@@ -147,8 +197,40 @@ export default function App() {
                     <div className={contentClasses}> 
                         
                         <div className={styles.top}>
+                            <div className={styles.tabsBar}>
+                                <TabList
+                                    className={styles.tabsList}
+                                    selectedValue={activeTab?.id}
+                                    onTabSelect={(_, data) => {
+                                        if (typeof data.value === "number") {
+                                            setActiveTabId(data.value);
+                                        }
+                                    }}
+                                >
+                                    {tabs.map((tab) => (
+                                        <Tab key={tab.id} value={tab.id}>
+                                            {tab.title}
+                                        </Tab>
+                                    ))}
+                                </TabList>
+                                <Button
+                                    className={styles.addTabButton}
+                                    icon={<Add24Regular />}
+                                    appearance="subtle"
+                                    onClick={handleAddTab}
+                                    title="New Tab"
+                                />
+                            </div>
 							<CustomEditor
 								vimEnabled={vimEnabled}
+                                value={activeTab?.query ?? ""}
+                                onChange={(value) => {
+                                    setTabs((prev) =>
+                                        prev.map((tab) =>
+                                            tab.id === activeTabId ? { ...tab, query: value } : tab
+                                        )
+                                    );
+                                }}
 							/>
                         </div>
 
