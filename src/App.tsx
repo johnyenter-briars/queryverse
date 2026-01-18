@@ -67,14 +67,13 @@ const useStyles = makeStyles({
         minHeight: 0,
         borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
         overflow: "hidden",
-        padding: tokens.spacingHorizontalS,
     },
     tabsBar: {
         display: "flex",
         alignItems: "center",
         gap: tokens.spacingHorizontalS,
-        paddingBottom: tokens.spacingVerticalS,
-        marginBottom: tokens.spacingVerticalS,
+        paddingBottom: tokens.spacingVerticalXS,
+        marginBottom: tokens.spacingVerticalXS,
         borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     },
     tabsList: {
