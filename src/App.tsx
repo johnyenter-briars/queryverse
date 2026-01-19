@@ -13,6 +13,7 @@ import { Add24Regular } from "@fluentui/react-icons";
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor } from "./components/CustomEditor";
 import { ShortcutManager } from "./components/ShortcutManager";
+import { ModalDialog } from "./components/ModalDialog";
 
 import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
@@ -167,6 +168,7 @@ export default function App() {
     const [tabs, setTabs] = useState<EditorTab[]>([]);
     const [activeTabId, setActiveTabId] = useState(0);
     const nextTabId = useRef(1);
+    const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
     const styles = useStyles();
 
@@ -241,12 +243,23 @@ export default function App() {
                     onToggleConnections={() => setIsMenuOpen(!connectionsEnabled)} 
                     onExecute={handleExecuteActiveTab}
                     canExecute={Boolean(activeTab)}
+                    onShowShortcuts={() => setShortcutsOpen(true)}
                 />
                 <ShortcutManager
                     onExecute={handleExecuteActiveTab}
                     onCloseActiveTab={handleCloseActiveTab}
                     canExecute={Boolean(activeTab)}
                 />
+                <ModalDialog
+                    open={shortcutsOpen}
+                    title="Keyboard Shortcuts"
+                    onClose={() => setShortcutsOpen(false)}
+                >
+                    <div>
+                        <div>F5 - Execute current query</div>
+                        <div>Ctrl+W - Close current tab</div>
+                    </div>
+                </ModalDialog>
 
                 <div className={styles.wrapper}>
                     <ConnectionsMenu isOpen={connectionsEnabled} />
