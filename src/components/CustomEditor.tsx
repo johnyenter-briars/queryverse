@@ -3,23 +3,7 @@ import { useEffect, useRef } from "react";
 //@ts-expect-error monaco-vim has no type declarations
 import { initVimMode } from "monaco-vim";
 import Editor, { OnMount } from "@monaco-editor/react";
-import {
-    makeStyles,
-} from "@fluentui/react-components";
-
-const useStyles = makeStyles({
-	statusBar: {
-		height: "24px",
-		backgroundColor: "#1e1e1e",
-		color: "#ccc",
-		display: "flex",
-		alignItems: "center",
-		paddingLeft: "10px",
-		fontFamily: "monospace",
-		borderTop: "1px solid #333",
-		flexShrink: 0,
-	},
-});
+import { useCustomEditorStyles } from "../styles/CustomEditorStyles";
 
 interface ICustomEditor {
     vimEnabled: boolean;
@@ -28,7 +12,7 @@ interface ICustomEditor {
 }
 
 export function CustomEditor({ vimEnabled, value, onChange }: ICustomEditor) {
-    const styles = useStyles();
+    const styles = useCustomEditorStyles();
     const vimModeRef = useRef<any>(null);
     const statusBarRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<any>(null);

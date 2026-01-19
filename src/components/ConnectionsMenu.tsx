@@ -1,7 +1,4 @@
 import {
-    webDarkTheme,
-    makeStyles,
-    shorthands,
     tokens,
     Title3,
     Tree,
@@ -20,45 +17,14 @@ import { createConnection } from "../binding/backend";
 import { Connection } from "../binding/model/Connection";
 import { RequestType } from "../binding/model/QVRequest";
 import { useState } from "react";
-import { CreateConnectionRequest } from "../binding/model/CreateConnectionRequest";
-
-const DRAWER_WIDTH = "300px";
-
-const useStyles = makeStyles({
-    // BASE Flyout Style (ALWAYS applied - handles hidden state/transition)
-    flyoutBase: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        bottom: 0,
-        width: DRAWER_WIDTH,
-        backgroundColor: webDarkTheme.colorNeutralBackground2,
-        zIndex: 20,
-        display: "flex",
-        flexDirection: "column",
-        // Initial state: hidden off-screen to the left
-        transform: `translateX(-${DRAWER_WIDTH})`,
-        transition: `transform ${tokens.durationNormal} ${tokens.curveEasyEase}`,
-        ...shorthands.borderRight(`1px solid ${tokens.colorNeutralStroke1}`),
-    },
-    // OPEN Class (Applied conditionally to override transform to visible state)
-    flyoutOpen: {
-        transform: "translateX(0)",
-    },
-    flyoutHalf: {
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        ...shorthands.padding(tokens.spacingHorizontalM),
-    },
-});
+import { useConnectionsMenuStyles } from "../styles/ConnectionsMenuStyles";
 
 export interface IConnectionsMenuProps {
     isOpen: boolean
 };
 
 export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
-    const styles = useStyles();
+    const styles = useConnectionsMenuStyles();
 
     const flyoutClasses = combineClasses(
         styles.flyoutBase,
