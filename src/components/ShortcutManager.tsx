@@ -1,39 +1,30 @@
 import { useEffect } from "react";
+import { SHORTCUTS, ShortcutActionId } from "../shortcuts";
 
 interface ShortcutManagerProps {
-    onExecute: () => void;
-    onCloseActiveTab: () => void;
-    canExecute: boolean;
+    handlers: Record<ShortcutActionId, () => void>;
+    isEnabled: (id: ShortcutActionId) => boolean;
 }
 
 export function ShortcutManager({
-    onExecute,
-    onCloseActiveTab,
-    canExecute,
+    handlers,
+    isEnabled,
 }: ShortcutManagerProps) {
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "F5") {
-                event.preventDefault();
-                event.stopPropagation();
-                event.stopImmediatePropagation();
-                if (canExecute) {
-                    onExecute();
-                }
-                return;
-            }
+            const shortcut = SHORTCUTS.find((entry) => entry.matches(event));
+            if (!shortcut) return;
+            if (!isEnabled(shortcut.id)) return;
 
-            if (event.ctrlKey && (event.key === "w" || event.key === "W")) {
-                event.preventDefault();
-                event.stopPropagation();
-                event.stopImmediatePropagation();
-                onCloseActiveTab();
-            }
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            handlers[shortcut.id]?.();
         };
 
         window.addEventListener("keydown", handleKeyDown, true);
         return () => window.removeEventListener("keydown", handleKeyDown, true);
-    }, [canExecute, onCloseActiveTab, onExecute]);
+    }, [handlers, isEnabled]);
 
     return null;
 }

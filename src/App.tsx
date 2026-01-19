@@ -21,6 +21,7 @@ import { combineClasses } from "./utility/class";
 import { MultipleResponse } from "./binding/model/MultipleResponse";
 import { Entity } from "./binding/model/Entity";
 import { retrieveMultiple } from "./binding/backend";
+import { SHORTCUTS, ShortcutActionId } from "./shortcuts";
 
 const DRAWER_WIDTH = "300px";
 
@@ -246,9 +247,13 @@ export default function App() {
                     onShowShortcuts={() => setShortcutsOpen(true)}
                 />
                 <ShortcutManager
-                    onExecute={handleExecuteActiveTab}
-                    onCloseActiveTab={handleCloseActiveTab}
-                    canExecute={Boolean(activeTab)}
+                    handlers={{
+                        execute: handleExecuteActiveTab,
+                        "close-tab": handleCloseActiveTab,
+                    }}
+                    isEnabled={(id: ShortcutActionId) =>
+                        id === "execute" ? Boolean(activeTab) : Boolean(activeTabId)
+                    }
                 />
                 <ModalDialog
                     open={shortcutsOpen}
@@ -256,8 +261,11 @@ export default function App() {
                     onClose={() => setShortcutsOpen(false)}
                 >
                     <div>
-                        <div>F5 - Execute current query</div>
-                        <div>Ctrl+W - Close current tab</div>
+                        {SHORTCUTS.map((shortcut) => (
+                            <div key={shortcut.id}>
+                                {shortcut.keyLabel} - {shortcut.label}
+                            </div>
+                        ))}
                     </div>
                 </ModalDialog>
 
