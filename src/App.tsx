@@ -116,9 +116,10 @@ export default function App() {
                     handlers={{
                         execute: handleExecuteActiveTab,
                         "close-tab": handleCloseActiveTab,
+                        "new-tab": handleAddTab,
                     }}
                     isEnabled={(id: ShortcutActionId) =>
-                        id === "execute" ? Boolean(activeTab) : Boolean(activeTabId)
+                        id === "execute" ? Boolean(activeTab) : true
                     }
                 />
                 <ModalDialog
