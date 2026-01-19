@@ -140,7 +140,7 @@ export default function App() {
     const [connectionsEnabled, setIsMenuOpen] = useState(true); 
     const [vimEnabled, setVimEnabled] = useState(true); 
     const [tabs, setTabs] = useState<EditorTab[]>([]);
-    const [activeTabId, setActiveTabId] = useState<number | null>(null);
+    const [activeTabId, setActiveTabId] = useState(0);
     const nextTabId = useRef(1);
 
     const styles = useStyles();
@@ -156,7 +156,7 @@ export default function App() {
             return;
         }
 
-        if (activeTabId === null) {
+        if (activeTabId === 0) {
             return;
         }
 
@@ -203,7 +203,7 @@ export default function App() {
                             <div className={styles.tabsBar}>
                                 <TabList
                                     className={styles.tabsList}
-                                    selectedValue={activeTab?.id}
+                                    selectedValue={activeTabId}
                                     onTabSelect={(_, data) => {
                                         if (typeof data.value === "number") {
                                             setActiveTabId(data.value);
