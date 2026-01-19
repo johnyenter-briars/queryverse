@@ -76,6 +76,29 @@ const useStyles = makeStyles({
         marginBottom: tokens.spacingVerticalXS,
         borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     },
+    tabLabel: {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: tokens.spacingHorizontalXS,
+    },
+    tabClose: {
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "16px",
+        height: "16px",
+        borderRadius: tokens.borderRadiusCircular,
+        color: tokens.colorNeutralForeground2,
+        cursor: "pointer",
+        userSelect: "none",
+        "&:hover": {
+            backgroundColor: tokens.colorNeutralBackground1Hover,
+            color: tokens.colorNeutralForeground1,
+        },
+        "&:active": {
+            backgroundColor: tokens.colorNeutralBackground1Pressed,
+        },
+    },
     tabsList: {
         flex: 1,
         minWidth: 0,
@@ -182,6 +205,19 @@ export default function App() {
         setActiveTabId(newId);
     };
 
+    const handleCloseTab = (id: number) => {
+        setTabs((prev) => {
+            const nextTabs = prev.filter((tab) => tab.id !== id);
+            if (activeTabId !== id) {
+                return nextTabs;
+            }
+
+            const fallback = nextTabs[nextTabs.length - 1];
+            setActiveTabId(fallback ? fallback.id : 0);
+            return nextTabs;
+        });
+    };
+
     return (
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
@@ -212,7 +248,21 @@ export default function App() {
                                 >
                                     {tabs.map((tab) => (
                                         <Tab key={tab.id} value={tab.id}>
-                                            {tab.title}
+                                            <span className={styles.tabLabel}>
+                                                <span>{tab.title}</span>
+                                                <span
+                                                    className={styles.tabClose}
+                                                    role="button"
+                                                    aria-label={`Close ${tab.title}`}
+                                                    onClick={(event) => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        handleCloseTab(tab.id);
+                                                    }}
+                                                >
+                                                    ×
+                                                </span>
+                                            </span>
                                         </Tab>
                                     ))}
                                 </TabList>
