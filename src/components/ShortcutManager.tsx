@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { SHORTCUTS, ShortcutActionId } from "../settings/shortcuts";
 
 interface ShortcutManagerProps {
-    handlers: Record<ShortcutActionId, () => void>;
+    handlers: Partial<Record<ShortcutActionId, () => void>>;
     isEnabled: (id: ShortcutActionId) => boolean;
 }
 
@@ -12,7 +12,9 @@ export function ShortcutManager({
 }: ShortcutManagerProps) {
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            const shortcut = SHORTCUTS.find((entry) => entry.matches(event));
+            const shortcut = SHORTCUTS.find(
+                (entry) => (entry.kind ?? "standard") === "standard" && entry.matches(event)
+            );
             if (!shortcut) return;
             if (!isEnabled(shortcut.id)) return;
 
