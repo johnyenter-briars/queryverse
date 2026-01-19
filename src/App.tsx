@@ -133,21 +133,15 @@ type EditorTab = {
     id: number;
     title: string;
     query: string;
+    results: Entity[];
 };
 
 export default function App() {
     const [connectionsEnabled, setIsMenuOpen] = useState(true); 
     const [vimEnabled, setVimEnabled] = useState(true); 
-    const [data, setData] = useState<Entity[]>([]); 
-    const [tabs, setTabs] = useState<EditorTab[]>([
-        {
-            id: 1,
-            title: "Query 1",
-            query: "select top 20 *\nfrom account",
-        },
-    ]);
-    const [activeTabId, setActiveTabId] = useState(1);
-    const nextTabId = useRef(2);
+    const [tabs, setTabs] = useState<EditorTab[]>([]);
+    const [activeTabId, setActiveTabId] = useState<number | null>(null);
+    const nextTabId = useRef(1);
 
     const styles = useStyles();
 
@@ -162,10 +156,18 @@ export default function App() {
             return;
         }
 
-        setData(results.value);
+        if (activeTabId === null) {
+            return;
+        }
+
+        setTabs((prev) =>
+            prev.map((tab) =>
+                tab.id === activeTabId ? { ...tab, results: results.value } : tab
+            )
+        );
     }
 
-    const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
 
     const handleAddTab = () => {
         const newId = nextTabId.current++;
@@ -173,6 +175,7 @@ export default function App() {
             id: newId,
             title: `Query ${newId}`,
             query: "",
+            results: [],
         };
 
         setTabs((prev) => [...prev, newTab]);
@@ -188,6 +191,7 @@ export default function App() {
                     onToggleVimEnabled={() => setVimEnabled(!vimEnabled)} 
                     onToggleConnections={() => setIsMenuOpen(!connectionsEnabled)} 
                     onRetrieveResults={onRetrieveResults}
+                    canExecute={Boolean(activeTab)}
                 />
 
                 <div className={styles.wrapper}>
@@ -220,23 +224,25 @@ export default function App() {
                                     title="New Tab"
                                 />
                             </div>
-							<CustomEditor
-								vimEnabled={vimEnabled}
-                                value={activeTab?.query ?? ""}
-                                onChange={(value) => {
-                                    setTabs((prev) =>
-                                        prev.map((tab) =>
-                                            tab.id === activeTabId ? { ...tab, query: value } : tab
-                                        )
-                                    );
-                                }}
-							/>
+                            {activeTab ? (
+                                <CustomEditor
+                                    vimEnabled={vimEnabled}
+                                    value={activeTab.query}
+                                    onChange={(value) => {
+                                        setTabs((prev) =>
+                                            prev.map((tab) =>
+                                                tab.id === activeTab.id ? { ...tab, query: value } : tab
+                                            )
+                                        );
+                                    }}
+                                />
+                            ) : null}
                         </div>
 
                         <div className={styles.bottom}>
-							<ResultsWindow
-                                data={data}
-                            />
+                            {activeTab ? (
+                                <ResultsWindow data={activeTab.results} />
+                            ) : null}
                         </div>
                     </div>
                 </div>

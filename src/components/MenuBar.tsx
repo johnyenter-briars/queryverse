@@ -21,6 +21,7 @@ export interface IMenuBarProps {
     connectionsEnabled: boolean;
     onToggleConnections: () => void;
     onRetrieveResults: (results: MultipleResponse<Entity>) => void;
+    canExecute: boolean;
 }
 
 export function MenuBar({
@@ -29,6 +30,7 @@ export function MenuBar({
     onToggleConnections,
     onToggleVimEnabled,
     onRetrieveResults,
+    canExecute,
 }: IMenuBarProps) {
     return (
         <Toolbar
@@ -47,7 +49,9 @@ export function MenuBar({
             <ToolbarButton
                 icon={<Play24Filled />}
                 title="Execute Query"
+                disabled={!canExecute}
                 onClick={async () => {
+                    if (!canExecute) return;
                     const response = await retrieveMultiple();
 
                     onRetrieveResults(response);
