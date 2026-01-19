@@ -12,12 +12,14 @@ import {
 import { Add24Regular } from "@fluentui/react-icons";
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor } from "./components/CustomEditor";
+import { ShortcutManager } from "./components/ShortcutManager";
 
 import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
 import { combineClasses } from "./utility/class";
 import { MultipleResponse } from "./binding/model/MultipleResponse";
 import { Entity } from "./binding/model/Entity";
+import { retrieveMultiple } from "./binding/backend";
 
 const DRAWER_WIDTH = "300px";
 
@@ -218,6 +220,17 @@ export default function App() {
         });
     };
 
+    const handleCloseActiveTab = () => {
+        if (activeTabId === 0) return;
+        handleCloseTab(activeTabId);
+    };
+
+    const handleExecuteActiveTab = async () => {
+        if (activeTabId === 0) return;
+        const response = await retrieveMultiple();
+        onRetrieveResults(response);
+    };
+
     return (
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
@@ -226,7 +239,12 @@ export default function App() {
 					connectionsEnabled={connectionsEnabled}
                     onToggleVimEnabled={() => setVimEnabled(!vimEnabled)} 
                     onToggleConnections={() => setIsMenuOpen(!connectionsEnabled)} 
-                    onRetrieveResults={onRetrieveResults}
+                    onExecute={handleExecuteActiveTab}
+                    canExecute={Boolean(activeTab)}
+                />
+                <ShortcutManager
+                    onExecute={handleExecuteActiveTab}
+                    onCloseActiveTab={handleCloseActiveTab}
                     canExecute={Boolean(activeTab)}
                 />
 

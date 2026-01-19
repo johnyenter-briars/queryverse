@@ -11,16 +11,12 @@ import {
     Play24Filled,
     WindowConsole20Filled,
 } from "@fluentui/react-icons";
-import { retrieveMultiple } from "../binding/backend";
-import { MultipleResponse } from "../binding/model/MultipleResponse";
-import { Entity } from "../binding/model/Entity";
-
 export interface IMenuBarProps {
     vimEnabled: boolean;
     onToggleVimEnabled: () => void;
     connectionsEnabled: boolean;
     onToggleConnections: () => void;
-    onRetrieveResults: (results: MultipleResponse<Entity>) => void;
+    onExecute: () => void;
     canExecute: boolean;
 }
 
@@ -29,7 +25,7 @@ export function MenuBar({
     connectionsEnabled,
     onToggleConnections,
     onToggleVimEnabled,
-    onRetrieveResults,
+    onExecute,
     canExecute,
 }: IMenuBarProps) {
     return (
@@ -52,9 +48,7 @@ export function MenuBar({
                 disabled={!canExecute}
                 onClick={async () => {
                     if (!canExecute) return;
-                    const response = await retrieveMultiple();
-
-                    onRetrieveResults(response);
+                    onExecute();
                 }}
             >
                 Execute
