@@ -15,6 +15,8 @@ export function ShortcutManager({
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === "F5") {
                 event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
                 if (canExecute) {
                     onExecute();
                 }
@@ -23,12 +25,14 @@ export function ShortcutManager({
 
             if (event.ctrlKey && (event.key === "w" || event.key === "W")) {
                 event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
                 onCloseActiveTab();
             }
         };
 
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
+        window.addEventListener("keydown", handleKeyDown, true);
+        return () => window.removeEventListener("keydown", handleKeyDown, true);
     }, [canExecute, onCloseActiveTab, onExecute]);
 
     return null;
