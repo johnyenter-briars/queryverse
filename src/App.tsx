@@ -21,7 +21,7 @@ import { combineClasses } from "./utility/class";
 import { MultipleResponse } from "./binding/model/MultipleResponse";
 import { Entity } from "./binding/model/Entity";
 import { retrieveMultiple } from "./binding/backend";
-import { SHORTCUTS, ShortcutActionId } from "./shortcuts";
+import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
 
 const DRAWER_WIDTH = "300px";
 

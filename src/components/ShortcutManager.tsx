@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { SHORTCUTS, ShortcutActionId } from "../shortcuts";
+import { SHORTCUTS, ShortcutActionId } from "../settings/shortcuts";
 
 interface ShortcutManagerProps {
     handlers: Record<ShortcutActionId, () => void>;
