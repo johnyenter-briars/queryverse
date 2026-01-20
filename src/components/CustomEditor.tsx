@@ -1,37 +1,21 @@
 import * as React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 //@ts-expect-error monaco-vim has no type declarations
 import { initVimMode } from "monaco-vim";
 import Editor, { OnMount } from "@monaco-editor/react";
-import {
-    makeStyles,
-} from "@fluentui/react-components";
-
-const useStyles = makeStyles({
-	statusBar: {
-		height: "24px",
-		backgroundColor: "#1e1e1e",
-		color: "#ccc",
-		display: "flex",
-		alignItems: "center",
-		paddingLeft: "10px",
-		fontFamily: "monospace",
-		borderTop: "1px solid #333",
-		flexShrink: 0,
-	},
-});
+import { useCustomEditorStyles } from "../styles/CustomEditorStyles";
 
 interface ICustomEditor {
     vimEnabled: boolean;
+    value: string;
+    onChange: (value: string) => void;
 }
 
-export function CustomEditor({ vimEnabled }: ICustomEditor) {
-    const styles = useStyles();
+export function CustomEditor({ vimEnabled, value, onChange }: ICustomEditor) {
+    const styles = useCustomEditorStyles();
     const vimModeRef = useRef<any>(null);
     const statusBarRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<any>(null);
-
-    const [code, setCode] = useState("select top 20 *\nfrom account");
 
     const handleEditorMount: OnMount = (editor) => {
         editorRef.current = editor;
@@ -62,10 +46,10 @@ export function CustomEditor({ vimEnabled }: ICustomEditor) {
             <Editor
                 height="100%"
                 defaultLanguage="sql"
-                value={code}
+                value={value}
                 theme="vs-dark"
                 onMount={handleEditorMount}
-                onChange={(v) => setCode(v || "")}
+                onChange={(v) => onChange(v || "")}
             />
             <div ref={statusBarRef} className={styles.statusBar}>
             </div>

@@ -10,17 +10,16 @@ import {
     Settings24Filled,
     Play24Filled,
     WindowConsole20Filled,
+    Keyboard24Regular,
 } from "@fluentui/react-icons";
-import { retrieveMultiple } from "../binding/backend";
-import { MultipleResponse } from "../binding/model/MultipleResponse";
-import { Entity } from "../binding/model/Entity";
-
 export interface IMenuBarProps {
     vimEnabled: boolean;
     onToggleVimEnabled: () => void;
     connectionsEnabled: boolean;
     onToggleConnections: () => void;
-    onRetrieveResults: (results: MultipleResponse<Entity>) => void;
+    onExecute: () => void;
+    canExecute: boolean;
+    onShowShortcuts: () => void;
 }
 
 export function MenuBar({
@@ -28,7 +27,9 @@ export function MenuBar({
     connectionsEnabled,
     onToggleConnections,
     onToggleVimEnabled,
-    onRetrieveResults,
+    onExecute,
+    canExecute,
+    onShowShortcuts,
 }: IMenuBarProps) {
     return (
         <Toolbar
@@ -47,16 +48,23 @@ export function MenuBar({
             <ToolbarButton
                 icon={<Play24Filled />}
                 title="Execute Query"
+                disabled={!canExecute}
                 onClick={async () => {
-                    const response = await retrieveMultiple();
-
-                    onRetrieveResults(response);
+                    if (!canExecute) return;
+                    onExecute();
                 }}
             >
                 Execute
             </ToolbarButton>
             <ToolbarButton icon={<Settings24Filled />} title="Settings">
                 Settings
+            </ToolbarButton>
+            <ToolbarButton
+                icon={<Keyboard24Regular />}
+                title="Keyboard Shortcuts"
+                onClick={onShowShortcuts}
+            >
+                Shortcuts
             </ToolbarButton>
             <ToolbarButton
                 icon={<WindowConsole20Filled />}
