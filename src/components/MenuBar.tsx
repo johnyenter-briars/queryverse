@@ -10,17 +10,16 @@ import {
     Settings24Filled,
     Play24Filled,
     WindowConsole20Filled,
+    DocumentText24Regular,
 } from "@fluentui/react-icons";
-import { retrieveMultiple } from "../binding/backend";
-import { MultipleResponse } from "../binding/model/MultipleResponse";
-import { Entity } from "../binding/model/Entity";
 
 export interface IMenuBarProps {
     vimEnabled: boolean;
     onToggleVimEnabled: () => void;
     connectionsEnabled: boolean;
     onToggleConnections: () => void;
-    onRetrieveResults: (results: MultipleResponse<Entity>) => void;
+    onExecuteSql: () => void;
+    onPreviewFetchXml: () => void;
 }
 
 export function MenuBar({
@@ -28,7 +27,8 @@ export function MenuBar({
     connectionsEnabled,
     onToggleConnections,
     onToggleVimEnabled,
-    onRetrieveResults,
+    onExecuteSql,
+    onPreviewFetchXml,
 }: IMenuBarProps) {
     return (
         <Toolbar
@@ -47,13 +47,16 @@ export function MenuBar({
             <ToolbarButton
                 icon={<Play24Filled />}
                 title="Execute Query"
-                onClick={async () => {
-                    const response = await retrieveMultiple();
-
-                    onRetrieveResults(response);
-                }}
+                onClick={onExecuteSql}
             >
                 Execute
+            </ToolbarButton>
+            <ToolbarButton
+                icon={<DocumentText24Regular />}
+                title="Preview FetchXML"
+                onClick={onPreviewFetchXml}
+            >
+                Preview FetchXML
             </ToolbarButton>
             <ToolbarButton icon={<Settings24Filled />} title="Settings">
                 Settings

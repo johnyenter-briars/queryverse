@@ -5,6 +5,7 @@ import {
     makeStyles,
     shorthands,
     tokens,
+    Button,
 } from "@fluentui/react-components";
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor } from "./components/CustomEditor";
@@ -12,8 +13,9 @@ import { CustomEditor } from "./components/CustomEditor";
 import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
 import { combineClasses } from "./utility/class";
-import { MultipleResponse } from "./binding/model/MultipleResponse";
 import { Entity } from "./binding/model/Entity";
+import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
+import { executeSql, previewFetchXml } from "./binding/backend";
 
 const DRAWER_WIDTH = "300px";
 
@@ -70,6 +72,41 @@ const useStyles = makeStyles({
         overflowY: "auto",
         padding: tokens.spacingHorizontalM,
     },
+    previewPanel: {
+        display: "flex",
+        flexDirection: "column",
+        backgroundColor: webDarkTheme.colorNeutralBackground2,
+        ...shorthands.border(`1px solid ${tokens.colorNeutralStroke1}`),
+        ...shorthands.borderRadius(tokens.borderRadiusMedium),
+        marginBottom: tokens.spacingVerticalM,
+        minHeight: 0,
+    },
+    previewHeader: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalM),
+        ...shorthands.borderBottom(`1px solid ${tokens.colorNeutralStroke1}`),
+    },
+    previewBody: {
+        fontFamily: "monospace",
+        whiteSpace: "pre-wrap",
+        overflowY: "auto",
+        maxHeight: "200px",
+        ...shorthands.padding(tokens.spacingHorizontalM),
+    },
+    previewError: {
+        color: tokens.colorPaletteRedForeground1,
+    },
+    previewMeta: {
+        color: tokens.colorNeutralForeground2,
+        ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalM),
+        ...shorthands.borderTop(`1px solid ${tokens.colorNeutralStroke1}`),
+    },
+    executeError: {
+        color: tokens.colorPaletteRedForeground1,
+        marginBottom: tokens.spacingVerticalS,
+    },
     
     // BASE Flyout Style (ALWAYS applied - handles hidden state/transition)
     flyoutBase: {
@@ -112,7 +149,11 @@ const useStyles = makeStyles({
 export default function App() {
     const [connectionsEnabled, setIsMenuOpen] = useState(true); 
     const [vimEnabled, setVimEnabled] = useState(true); 
-    const [data, setData] = useState<Entity[]>([]); 
+    const [queryText, setQueryText] = useState("select top 20 *\nfrom account");
+    const [results, setResults] = useState<Entity[]>([]);
+    const [fetchPreview, setFetchPreview] = useState<FetchXmlPreview | null>(null);
+    const [previewError, setPreviewError] = useState<string | null>(null);
+    const [executeError, setExecuteError] = useState<string | null>(null);
 
     const styles = useStyles();
 
@@ -121,14 +162,11 @@ export default function App() {
         connectionsEnabled && styles.contentShifted
     );
 
-    const onRetrieveResults = (results: MultipleResponse<Entity>) =>  {
-        if (!results.success) {
-            console.log("Fail") //TODO
-            return;
-        }
-
-        setData(results.value);
-    }
+    const getErrorMessage = (error: unknown): string => {
+        if (error instanceof Error) return error.message;
+        if (typeof error === "string") return error;
+        return "Unknown error";
+    };
 
     return (
         <FluentProvider theme={webDarkTheme}>
@@ -138,7 +176,25 @@ export default function App() {
 					connectionsEnabled={connectionsEnabled}
                     onToggleVimEnabled={() => setVimEnabled(!vimEnabled)} 
                     onToggleConnections={() => setIsMenuOpen(!connectionsEnabled)} 
-                    onRetrieveResults={onRetrieveResults}
+                    onExecuteSql={async () => {
+                        try {
+                            const response = await executeSql(queryText);
+                            setResults(response.value);
+                            setExecuteError(null);
+                        } catch (error) {
+                            setExecuteError(getErrorMessage(error));
+                        }
+                    }}
+                    onPreviewFetchXml={async () => {
+                        try {
+                            const response = await previewFetchXml(queryText);
+                            setFetchPreview(response);
+                            setPreviewError(null);
+                        } catch (error) {
+                            setFetchPreview(null);
+                            setPreviewError(getErrorMessage(error));
+                        }
+                    }}
                 />
 
                 <div className={styles.wrapper}>
@@ -149,13 +205,48 @@ export default function App() {
                         <div className={styles.top}>
 							<CustomEditor
 								vimEnabled={vimEnabled}
+                                value={queryText}
+                                onChange={setQueryText}
 							/>
                         </div>
 
                         <div className={styles.bottom}>
-							<ResultsWindow
-                                data={data}
-                            />
+                            {(fetchPreview || previewError) && (
+                                <div className={styles.previewPanel}>
+                                    <div className={styles.previewHeader}>
+                                        <span>FetchXML Preview</span>
+                                        <Button
+                                            appearance="subtle"
+                                            size="small"
+                                            onClick={() => {
+                                                setFetchPreview(null);
+                                                setPreviewError(null);
+                                            }}
+                                        >
+                                            Clear
+                                        </Button>
+                                    </div>
+                                    <pre
+                                        className={combineClasses(
+                                            styles.previewBody,
+                                            previewError && styles.previewError
+                                        )}
+                                    >
+                                        {previewError ?? fetchPreview?.fetchXml}
+                                    </pre>
+                                    {fetchPreview?.entity && (
+                                        <div className={styles.previewMeta}>
+                                            Entity: {fetchPreview.entity}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {executeError && (
+                                <div className={styles.executeError}>
+                                    {executeError}
+                                </div>
+                            )}
+							<ResultsWindow data={results} />
                         </div>
                     </div>
                 </div>
