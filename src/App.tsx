@@ -149,7 +149,7 @@ const useStyles = makeStyles({
 export default function App() {
     const [connectionsEnabled, setIsMenuOpen] = useState(true); 
     const [vimEnabled, setVimEnabled] = useState(true); 
-    const [queryText, setQueryText] = useState("select top 20 *\nfrom account");
+    const [queryText, setQueryText] = useState("select top 20 *\nfrom accounts");
     const [results, setResults] = useState<Entity[]>([]);
     const [fetchPreview, setFetchPreview] = useState<FetchXmlPreview | null>(null);
     const [previewError, setPreviewError] = useState<string | null>(null);
@@ -229,14 +229,14 @@ export default function App() {
                                     <pre
                                         className={combineClasses(
                                             styles.previewBody,
-                                            previewError && styles.previewError
+                                            previewError ? styles.previewError : undefined
                                         )}
                                     >
                                         {previewError ?? fetchPreview?.fetchXml}
                                     </pre>
-                                    {fetchPreview?.entity && (
+                                    {fetchPreview?.entityLogical && (
                                         <div className={styles.previewMeta}>
-                                            Entity: {fetchPreview.entity}
+                                            Entity: {fetchPreview.entityLogical} (set: {fetchPreview.entitySet})
                                         </div>
                                     )}
                                 </div>

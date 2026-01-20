@@ -3,7 +3,7 @@ use crate::sql_fetchxml::ast::{
 };
 use crate::sql_fetchxml::errors::TranslationError;
 
-pub fn to_fetchxml(stmt: &SelectStmt) -> Result<String, TranslationError> {
+pub fn to_fetchxml(stmt: &SelectStmt, entity_name: &str) -> Result<String, TranslationError> {
     let mut out = String::new();
 
     out.push_str("<fetch");
@@ -16,7 +16,7 @@ pub fn to_fetchxml(stmt: &SelectStmt) -> Result<String, TranslationError> {
     out.push_str(">");
 
     out.push_str("<entity name=\"");
-    out.push_str(&escape_xml(&stmt.entity));
+    out.push_str(&escape_xml(entity_name));
     out.push_str("\">");
 
     match &stmt.columns {

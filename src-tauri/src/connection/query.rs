@@ -11,7 +11,8 @@ use crate::{
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FetchXmlPreview {
-    pub entity: String,
+    pub entity_set: String,
+    pub entity_logical: String,
     pub fetch_xml: String,
 }
 
@@ -23,7 +24,8 @@ pub async fn parse_sql_to_fetchxml(
     let parsed = sql_fetchxml::sql_to_fetchxml(&sql).map_err(|e| e.to_string())?;
 
     Ok(FetchXmlPreview {
-        entity: parsed.entity,
+        entity_set: parsed.entity_set,
+        entity_logical: parsed.entity_logical,
         fetch_xml: parsed.fetchxml,
     })
 }
@@ -40,7 +42,7 @@ pub async fn execute_sql(
     let query_engine = QueryEngine::new("https://jyb.crm.dynamics.com/", &token);
 
     let resp = query_engine
-        .retrieve_multiple_fetchxml(&parsed.entity, &parsed.fetchxml)
+        .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
         .await?;
 
     Ok(resp)

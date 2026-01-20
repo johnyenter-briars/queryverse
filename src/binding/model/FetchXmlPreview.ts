@@ -1,4 +1,5 @@
 export interface FetchXmlPreview {
-    entity: string;
+    entitySet: string;
+    entityLogical: string;
     fetchXml: string;
 }
