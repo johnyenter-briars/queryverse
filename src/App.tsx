@@ -1,77 +1,32 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
     FluentProvider,
     webDarkTheme,
+    TabList,
+    Tab,
+    Button,
     makeStyles,
     shorthands,
     tokens,
-    Button,
 } from "@fluentui/react-components";
+import { Add24Regular } from "@fluentui/react-icons";
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor } from "./components/CustomEditor";
-
+import { ShortcutManager } from "./components/ShortcutManager";
+import { ModalDialog } from "./components/ModalDialog";
+import { TabSwitcher } from "./components/TabSwitcher";
 import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
 import { combineClasses } from "./utility/class";
 import { Entity } from "./binding/model/Entity";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
 import { executeSql, previewFetchXml } from "./binding/backend";
+import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
+import { useAppStyles } from "./styles/AppStyles";
 
-const DRAWER_WIDTH = "300px";
+const DEFAULT_QUERY = "select top 20 *\nfrom accounts";
 
-const useStyles = makeStyles({
-    // Global App Layout
-    root: {
-        ...shorthands.padding(0),
-        ...shorthands.margin(0),
-        display: "flex",
-        flexDirection: "column",
-        height: "100vh",
-        backgroundColor: webDarkTheme.colorNeutralBackground1,
-        color: webDarkTheme.colorNeutralForeground1,
-        overflow: "hidden",
-    },
-    // Main Wrapper for the Flyout and Content Area
-    wrapper: {
-        flex: 1,
-        display: "flex",
-        minHeight: 0,
-        overflow: "hidden",
-        position: "relative",
-    },
-    
-    // BASE Content Area Style (ALWAYS applied)
-    contentArea: {
-        display: "flex",
-        flexDirection: "column",
-        minHeight: 0,
-        flexGrow: 1,
-        transitionDuration: tokens.durationNormal,
-        transitionProperty: "margin-left, width",
-        width: "100%", 
-        marginLeft: "0", 
-    },
-    // SHIFTED Class (Applied conditionally for dynamic effect)
-    contentShifted: {
-        marginLeft: DRAWER_WIDTH,
-        width: `calc(100% - ${DRAWER_WIDTH})`,
-    },
-
-    // Placeholder Sections
-    top: {
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        minHeight: 0,
-        borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-        overflow: "hidden",
-        padding: tokens.spacingHorizontalS,
-    },
-    bottom: {
-        flex: 1,
-        overflowY: "auto",
-        padding: tokens.spacingHorizontalM,
-    },
+const usePreviewStyles = makeStyles({
     previewPanel: {
         display: "flex",
         flexDirection: "column",
@@ -107,60 +62,51 @@ const useStyles = makeStyles({
         color: tokens.colorPaletteRedForeground1,
         marginBottom: tokens.spacingVerticalS,
     },
-    
-    // BASE Flyout Style (ALWAYS applied - handles hidden state/transition)
-    flyoutBase: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        bottom: 0,
-        width: DRAWER_WIDTH,
-        backgroundColor: webDarkTheme.colorNeutralBackground2,
-        zIndex: 20,
-        display: "flex",
-        flexDirection: "column",
-        // Initial state: hidden off-screen to the left
-        transform: `translateX(-${DRAWER_WIDTH})`,
-		//@ts-expect-error TODO: Fix this
-        transition: `transform ${tokens.durationNormal} ${tokens.curveEasyInOut}`,
-        ...shorthands.borderRight(`1px solid ${tokens.colorNeutralStroke1}`),
-    },
-    // OPEN Class (Applied conditionally to override transform to visible state)
-    flyoutOpen: {
-        transform: "translateX(0)", 
-    },
+});
 
-    flyoutHalf: {
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        ...shorthands.padding(tokens.spacingHorizontalM),
-    },
-    // Custom scrollbar CSS (Remains the same)
-    customScroll: {
-        "&::-webkit-scrollbar": { width: "10px", height: "10px" },
-        "&::-webkit-scrollbar-track": { background: "#282828", ...shorthands.borderRadius("5px") },
-        "&::-webkit-scrollbar-thumb": { background: "#555555", ...shorthands.borderRadius("5px") },
-        "&::-webkit-scrollbar-thumb:hover": { background: "#777777" },
-        "&::-webkit-scrollbar-corner": { background: "#1f1f1f" },
-    },
+type EditorTab = {
+    id: number;
+    title: string;
+    query: string;
+    results: Entity[];
+    fetchPreview: FetchXmlPreview | null;
+    previewError: string | null;
+    executeError: string | null;
+};
+
+const createTab = (id: number): EditorTab => ({
+    id,
+    title: `Query ${id}`,
+    query: DEFAULT_QUERY,
+    results: [],
+    fetchPreview: null,
+    previewError: null,
+    executeError: null,
 });
 
 export default function App() {
-    const [connectionsEnabled, setIsMenuOpen] = useState(true); 
-    const [vimEnabled, setVimEnabled] = useState(true); 
-    const [queryText, setQueryText] = useState("select top 20 *\nfrom accounts");
-    const [results, setResults] = useState<Entity[]>([]);
-    const [fetchPreview, setFetchPreview] = useState<FetchXmlPreview | null>(null);
-    const [previewError, setPreviewError] = useState<string | null>(null);
-    const [executeError, setExecuteError] = useState<string | null>(null);
+    const [connectionsEnabled, setIsMenuOpen] = useState(true);
+    const [vimEnabled, setVimEnabled] = useState(true);
+    const [tabs, setTabs] = useState<EditorTab[]>([createTab(1)]);
+    const [activeTabId, setActiveTabId] = useState(1);
+    const nextTabId = useRef(2);
+    const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
-    const styles = useStyles();
+    const styles = useAppStyles();
+    const previewStyles = usePreviewStyles();
 
     const contentClasses = combineClasses(
         styles.contentArea,
         connectionsEnabled && styles.contentShifted
     );
+
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+
+    const updateTab = (tabId: number, updater: (tab: EditorTab) => EditorTab) => {
+        setTabs((prev) =>
+            prev.map((tab) => (tab.id === tabId ? updater(tab) : tab))
+        );
+    };
 
     const getErrorMessage = (error: unknown): string => {
         if (error instanceof Error) return error.message;
@@ -168,85 +114,231 @@ export default function App() {
         return "Unknown error";
     };
 
+    const handleAddTab = () => {
+        const newId = nextTabId.current++;
+        const newTab = createTab(newId);
+
+        setTabs((prev) => [...prev, newTab]);
+        setActiveTabId(newId);
+    };
+
+    const handleCloseTab = (id: number) => {
+        setTabs((prev) => {
+            const nextTabs = prev.filter((tab) => tab.id !== id);
+            if (activeTabId !== id) {
+                return nextTabs;
+            }
+
+            const fallback = nextTabs[nextTabs.length - 1];
+            setActiveTabId(fallback ? fallback.id : 0);
+            return nextTabs;
+        });
+    };
+
+    const handleCloseActiveTab = () => {
+        if (activeTabId === 0) return;
+        handleCloseTab(activeTabId);
+    };
+
+    const handleExecuteActiveTab = async () => {
+        if (activeTabId === 0) return;
+        const targetTab = tabs.find((tab) => tab.id === activeTabId);
+        if (!targetTab) return;
+
+        try {
+            const response = await executeSql(targetTab.query);
+            if (!response.success) {
+                updateTab(targetTab.id, (tab) => ({
+                    ...tab,
+                    results: response.value,
+                    executeError: response.message || "Query failed",
+                }));
+                return;
+            }
+
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                results: response.value,
+                executeError: null,
+            }));
+        } catch (error) {
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                executeError: getErrorMessage(error),
+            }));
+        }
+    };
+
+    const handlePreviewActiveTab = async () => {
+        if (activeTabId === 0) return;
+        const targetTab = tabs.find((tab) => tab.id === activeTabId);
+        if (!targetTab) return;
+
+        try {
+            const response = await previewFetchXml(targetTab.query);
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                fetchPreview: response,
+                previewError: null,
+            }));
+        } catch (error) {
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                fetchPreview: null,
+                previewError: getErrorMessage(error),
+            }));
+        }
+    };
+
+    const handleClearPreview = () => {
+        if (!activeTab) return;
+        updateTab(activeTab.id, (tab) => ({
+            ...tab,
+            fetchPreview: null,
+            previewError: null,
+        }));
+    };
+
     return (
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
                 <MenuBar
                     vimEnabled={vimEnabled}
-					connectionsEnabled={connectionsEnabled}
-                    onToggleVimEnabled={() => setVimEnabled(!vimEnabled)} 
-                    onToggleConnections={() => setIsMenuOpen(!connectionsEnabled)} 
-                    onExecuteSql={async () => {
-                        try {
-                            const response = await executeSql(queryText);
-                            setResults(response.value);
-                            setExecuteError(null);
-                        } catch (error) {
-                            setExecuteError(getErrorMessage(error));
-                        }
+                    connectionsEnabled={connectionsEnabled}
+                    onToggleVimEnabled={() => setVimEnabled(!vimEnabled)}
+                    onToggleConnections={() => setIsMenuOpen(!connectionsEnabled)}
+                    onExecuteSql={handleExecuteActiveTab}
+                    onPreviewFetchXml={handlePreviewActiveTab}
+                    canExecute={Boolean(activeTab)}
+                    onShowShortcuts={() => setShortcutsOpen(true)}
+                />
+                <ShortcutManager
+                    handlers={{
+                        execute: handleExecuteActiveTab,
+                        "close-tab": handleCloseActiveTab,
+                        "new-tab": handleAddTab,
                     }}
-                    onPreviewFetchXml={async () => {
-                        try {
-                            const response = await previewFetchXml(queryText);
-                            setFetchPreview(response);
-                            setPreviewError(null);
-                        } catch (error) {
-                            setFetchPreview(null);
-                            setPreviewError(getErrorMessage(error));
-                        }
-                    }}
+                    isEnabled={(id: ShortcutActionId) =>
+                        id === "execute" ? Boolean(activeTab) : true
+                    }
+                />
+                <ModalDialog
+                    open={shortcutsOpen}
+                    title="Keyboard Shortcuts"
+                    onClose={() => setShortcutsOpen(false)}
+                >
+                    <div>
+                        {SHORTCUTS.map((shortcut) => (
+                            <div key={shortcut.id}>
+                                {shortcut.keyLabel} - {shortcut.label}
+                            </div>
+                        ))}
+                    </div>
+                </ModalDialog>
+                <TabSwitcher
+                    tabs={tabs.map(({ id, title }) => ({ id, title }))}
+                    activeTabId={activeTabId}
+                    onTabSelect={setActiveTabId}
                 />
 
                 <div className={styles.wrapper}>
                     <ConnectionsMenu isOpen={connectionsEnabled} />
 
-                    <div className={contentClasses}> 
-                        
+                    <div className={contentClasses}>
                         <div className={styles.top}>
-							<CustomEditor
-								vimEnabled={vimEnabled}
-                                value={queryText}
-                                onChange={setQueryText}
-							/>
+                            <div className={styles.tabsBar}>
+                                <TabList
+                                    className={styles.tabsList}
+                                    selectedValue={activeTabId}
+                                    onTabSelect={(_, data) => {
+                                        if (typeof data.value === "number") {
+                                            setActiveTabId(data.value);
+                                        }
+                                    }}
+                                >
+                                    {tabs.map((tab) => (
+                                        <Tab key={tab.id} value={tab.id}>
+                                            <span className={styles.tabLabel}>
+                                                <span>{tab.title}</span>
+                                                <span
+                                                    className={styles.tabClose}
+                                                    role="button"
+                                                    aria-label={`Close ${tab.title}`}
+                                                    onClick={(event) => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        handleCloseTab(tab.id);
+                                                    }}
+                                                >
+                                                    ×
+                                                </span>
+                                            </span>
+                                        </Tab>
+                                    ))}
+                                </TabList>
+                                <Button
+                                    className={styles.addTabButton}
+                                    icon={<Add24Regular />}
+                                    appearance="subtle"
+                                    onClick={handleAddTab}
+                                    title="New Tab"
+                                />
+                            </div>
+                            {activeTab ? (
+                                <CustomEditor
+                                    vimEnabled={vimEnabled}
+                                    value={activeTab.query}
+                                    onChange={(value) => {
+                                        updateTab(activeTab.id, (tab) => ({
+                                            ...tab,
+                                            query: value,
+                                        }));
+                                    }}
+                                />
+                            ) : null}
                         </div>
 
                         <div className={styles.bottom}>
-                            {(fetchPreview || previewError) && (
-                                <div className={styles.previewPanel}>
-                                    <div className={styles.previewHeader}>
-                                        <span>FetchXML Preview</span>
-                                        <Button
-                                            appearance="subtle"
-                                            size="small"
-                                            onClick={() => {
-                                                setFetchPreview(null);
-                                                setPreviewError(null);
-                                            }}
-                                        >
-                                            Clear
-                                        </Button>
-                                    </div>
-                                    <pre
-                                        className={combineClasses(
-                                            styles.previewBody,
-                                            previewError ? styles.previewError : undefined
-                                        )}
-                                    >
-                                        {previewError ?? fetchPreview?.fetchXml}
-                                    </pre>
-                                    {fetchPreview?.entityLogical && (
-                                        <div className={styles.previewMeta}>
-                                            Entity: {fetchPreview.entityLogical} (set: {fetchPreview.entitySet})
+                            {activeTab ? (
+                                <>
+                                    {(activeTab.fetchPreview || activeTab.previewError) && (
+                                        <div className={previewStyles.previewPanel}>
+                                            <div className={previewStyles.previewHeader}>
+                                                <span>FetchXML Preview</span>
+                                                <Button
+                                                    appearance="subtle"
+                                                    size="small"
+                                                    onClick={handleClearPreview}
+                                                >
+                                                    Clear
+                                                </Button>
+                                            </div>
+                                            <pre
+                                                className={combineClasses(
+                                                    previewStyles.previewBody,
+                                                    activeTab.previewError
+                                                        ? previewStyles.previewError
+                                                        : undefined
+                                                )}
+                                            >
+                                                {activeTab.previewError ??
+                                                    activeTab.fetchPreview?.fetchXml}
+                                            </pre>
+                                            {activeTab.fetchPreview?.entityLogical && (
+                                                <div className={previewStyles.previewMeta}>
+                                                    Entity: {activeTab.fetchPreview.entityLogical} (set: {activeTab.fetchPreview.entitySet})
+                                                </div>
+                                            )}
                                         </div>
                                     )}
-                                </div>
-                            )}
-                            {executeError && (
-                                <div className={styles.executeError}>
-                                    {executeError}
-                                </div>
-                            )}
-							<ResultsWindow data={results} />
+                                    {activeTab.executeError && (
+                                        <div className={previewStyles.executeError}>
+                                            {activeTab.executeError}
+                                        </div>
+                                    )}
+                                    <ResultsWindow data={activeTab.results} />
+                                </>
+                            ) : null}
                         </div>
                     </div>
                 </div>
