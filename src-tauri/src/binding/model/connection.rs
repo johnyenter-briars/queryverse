@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "method")]
 pub enum Connection {
     ClientSecret {
@@ -19,6 +19,10 @@ pub enum Connection {
 
         #[serde(rename = "tenantId")]
         tenant_id: String,
+
+        #[serde(default)]
+        #[serde(rename = "scope")]
+        scope: String,
     },
 
     OAuth {

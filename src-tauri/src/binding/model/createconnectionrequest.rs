@@ -1,3 +1,3 @@
-use crate::binding::model::{connection::Connection, qvrequest::QVRequest};
+use crate::binding::model::{createconnectionpayload::CreateConnectionPayload, qvrequest::QVRequest};
 
-pub type CreateConnectionRequest = QVRequest<Connection>;
+pub type CreateConnectionRequest = QVRequest<CreateConnectionPayload>;

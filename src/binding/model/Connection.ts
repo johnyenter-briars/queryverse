@@ -9,6 +9,7 @@ export interface ClientSecretConnection {
     clientId: string;
     clientSecret: string;
     tenantId: string;
+    scope: string;
 }
 
 export interface OAuthConnection {

@@ -1,7 +1,9 @@
 pub mod qvresponse;
 pub mod qvrequest;
 pub mod createconnectionrequest;
+pub mod createconnectionpayload;
 pub mod createconnectionresponse;
+pub mod listconnectionsresponse;
 pub mod connection;
 pub mod entity;
 pub mod response;
