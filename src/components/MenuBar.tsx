@@ -11,8 +11,8 @@ import {
     Play24Filled,
     WindowConsole20Filled,
     DocumentText24Regular,
+    Keyboard24Regular
 } from "@fluentui/react-icons";
-
 export interface IMenuBarProps {
     vimEnabled: boolean;
     onToggleVimEnabled: () => void;
@@ -20,6 +20,8 @@ export interface IMenuBarProps {
     onToggleConnections: () => void;
     onExecuteSql: () => void;
     onPreviewFetchXml: () => void;
+    canExecute: boolean;
+    onShowShortcuts: () => void;
 }
 
 export function MenuBar({
@@ -29,6 +31,8 @@ export function MenuBar({
     onToggleVimEnabled,
     onExecuteSql,
     onPreviewFetchXml,
+    canExecute,
+    onShowShortcuts,
 }: IMenuBarProps) {
     return (
         <Toolbar
@@ -47,7 +51,11 @@ export function MenuBar({
             <ToolbarButton
                 icon={<Play24Filled />}
                 title="Execute Query"
-                onClick={onExecuteSql}
+                disabled={!canExecute}
+                onClick={async () => {
+                    if (!canExecute) return;
+                    onExecuteSql();
+                }}
             >
                 Execute
             </ToolbarButton>
@@ -60,6 +68,13 @@ export function MenuBar({
             </ToolbarButton>
             <ToolbarButton icon={<Settings24Filled />} title="Settings">
                 Settings
+            </ToolbarButton>
+            <ToolbarButton
+                icon={<Keyboard24Regular />}
+                title="Keyboard Shortcuts"
+                onClick={onShowShortcuts}
+            >
+                Shortcuts
             </ToolbarButton>
             <ToolbarButton
                 icon={<WindowConsole20Filled />}
