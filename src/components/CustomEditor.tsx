@@ -19,6 +19,7 @@ export function CustomEditor({ vimEnabled, value, onChange }: ICustomEditor) {
 
     const handleEditorMount: OnMount = (editor) => {
         editorRef.current = editor;
+        editor.focus();
         if (vimEnabled && statusBarRef.current) {
             vimModeRef.current = initVimMode(editor, statusBarRef.current);
         }
