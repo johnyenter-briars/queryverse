@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "method")]
 pub enum CreateConnectionPayload {
-    ClientSecret {
+    #[serde(rename = "ClientCredentials", alias = "ClientSecret")]
+    ClientCredentials {
         #[serde(rename = "name")]
         name: String,
 
@@ -18,9 +19,13 @@ pub enum CreateConnectionPayload {
 
         #[serde(rename = "scope")]
         scope: String,
+
+        #[serde(rename = "d365Url")]
+        d365_url: String,
     },
 
-    OAuth {
+    #[serde(rename = "AuthorizationCode", alias = "OAuth")]
+    AuthorizationCode {
         #[serde(rename = "name")]
         name: String,
 
@@ -41,5 +46,14 @@ pub enum CreateConnectionPayload {
 
         #[serde(rename = "redirectUri")]
         redirect_uri: String,
+
+        #[serde(rename = "username")]
+        username: String,
+
+        #[serde(rename = "password")]
+        password: String,
+
+        #[serde(rename = "d365Url")]
+        d365_url: String,
     },
 }

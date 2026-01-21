@@ -32,7 +32,7 @@ export interface IConnectionsMenuProps {
 export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
     const styles = useConnectionsMenuStyles();
     const [createOpen, setCreateOpen] = useState(false);
-    const [createMethod, setCreateMethod] = useState<"ClientSecret" | "OAuth">("ClientSecret");
+    const [createMethod, setCreateMethod] = useState<"ClientCredentials" | "AuthorizationCode">("ClientCredentials");
     const [createStatus, setCreateStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
     const [formState, setFormState] = useState({
         name: "",
@@ -42,6 +42,9 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
         scope: "",
         authorizationCode: "",
         redirectUri: "",
+        username: "",
+        password: "",
+        d365Url: "",
     });
 
     const flyoutClasses = combineClasses(
@@ -81,8 +84,11 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
             scope: "",
             authorizationCode: "",
             redirectUri: "",
+            username: "",
+            password: "",
+            d365Url: "",
         });
-        setCreateMethod("ClientSecret");
+        setCreateMethod("ClientCredentials");
         setCreateStatus(null);
     };
 
@@ -95,17 +101,18 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
         setCreateStatus(null);
 
         const payload =
-            createMethod === "ClientSecret"
+            createMethod === "ClientCredentials"
                 ? {
-                    method: "ClientSecret" as const,
+                    method: "ClientCredentials" as const,
                     name: formState.name.trim(),
                     clientId: formState.clientId.trim(),
                     clientSecret: formState.clientSecret,
                     tenantId: formState.tenantId.trim(),
                     scope: formState.scope.trim(),
+                    d365Url: formState.d365Url.trim(),
                 }
                 : {
-                    method: "OAuth" as const,
+                    method: "AuthorizationCode" as const,
                     name: formState.name.trim(),
                     clientId: formState.clientId.trim(),
                     clientSecret: formState.clientSecret,
@@ -113,6 +120,9 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
                     scope: formState.scope.trim(),
                     authorizationCode: formState.authorizationCode.trim(),
                     redirectUri: formState.redirectUri.trim(),
+                    username: formState.username.trim(),
+                    password: formState.password,
+                    d365Url: formState.d365Url.trim(),
                 };
 
         try {
@@ -147,8 +157,11 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
         !formState.clientSecret.trim() ||
         !formState.tenantId.trim() ||
         !formState.scope.trim() ||
-        (createMethod === "OAuth" &&
-            (!formState.authorizationCode.trim() || !formState.redirectUri.trim()));
+        !formState.d365Url.trim() ||
+        (createMethod === "AuthorizationCode" &&
+            (!formState.redirectUri.trim() ||
+                !formState.username.trim() ||
+                !formState.password.trim()));
 
     return (
         <div
@@ -189,10 +202,12 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
                 <div style={{ display: "grid", gap: "12px" }}>
                     <RadioGroup
                         value={createMethod}
-                        onChange={(_, data) => setCreateMethod(data.value as "ClientSecret" | "OAuth")}
+                        onChange={(_, data) =>
+                            setCreateMethod(data.value as "ClientCredentials" | "AuthorizationCode")
+                        }
                     >
-                        <Radio value="OAuth" label="Authorization Code" />
-                        <Radio value="ClientSecret" label="Client Credentials" />
+                        <Radio value="AuthorizationCode" label="Authorization Code" />
+                        <Radio value="ClientCredentials" label="Client Credentials" />
                     </RadioGroup>
 
                     <Field label="Connection name">
@@ -226,12 +241,17 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
                             onChange={(_, data) => setFormState((prev) => ({ ...prev, scope: data.value }))}
                         />
                     </Field>
+                    <Field label="D365 URL">
+                        <Input
+                            value={formState.d365Url}
+                            onChange={(_, data) => setFormState((prev) => ({ ...prev, d365Url: data.value }))}
+                        />
+                    </Field>
 
-                    {createMethod === "OAuth" ? (
+                    {createMethod === "AuthorizationCode" ? (
                         <>
                             <Field label="Authorization code">
                                 <Input
-                                    type="password"
                                     value={formState.authorizationCode}
                                     onChange={(_, data) =>
                                         setFormState((prev) => ({ ...prev, authorizationCode: data.value }))
@@ -243,6 +263,23 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
                                     value={formState.redirectUri}
                                     onChange={(_, data) =>
                                         setFormState((prev) => ({ ...prev, redirectUri: data.value }))
+                                    }
+                                />
+                            </Field>
+                            <Field label="Username">
+                                <Input
+                                    value={formState.username}
+                                    onChange={(_, data) =>
+                                        setFormState((prev) => ({ ...prev, username: data.value }))
+                                    }
+                                />
+                            </Field>
+                            <Field label="Password">
+                                <Input
+                                    type="password"
+                                    value={formState.password}
+                                    onChange={(_, data) =>
+                                        setFormState((prev) => ({ ...prev, password: data.value }))
                                     }
                                 />
                             </Field>

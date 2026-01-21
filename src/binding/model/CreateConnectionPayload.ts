@@ -1,18 +1,19 @@
 export type CreateConnectionPayload =
-    | ClientSecretCreatePayload
-    | OAuthAuthorizationCodeCreatePayload;
+    | ClientCredentialsCreatePayload
+    | AuthorizationCodeCreatePayload;
 
-export interface ClientSecretCreatePayload {
-    method: "ClientSecret";
+export interface ClientCredentialsCreatePayload {
+    method: "ClientCredentials";
     name: string;
     clientId: string;
     clientSecret: string;
     tenantId: string;
     scope: string;
+    d365Url: string;
 }
 
-export interface OAuthAuthorizationCodeCreatePayload {
-    method: "OAuth";
+export interface AuthorizationCodeCreatePayload {
+    method: "AuthorizationCode";
     name: string;
     clientId: string;
     clientSecret: string;
@@ -20,4 +21,7 @@ export interface OAuthAuthorizationCodeCreatePayload {
     scope: string;
     authorizationCode: string;
     redirectUri: string;
+    username: string;
+    password: string;
+    d365Url: string;
 }

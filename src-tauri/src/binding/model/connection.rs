@@ -4,7 +4,8 @@ use uuid::Uuid;
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "method")]
 pub enum Connection {
-    ClientSecret {
+    #[serde(rename = "ClientCredentials", alias = "ClientSecret")]
+    ClientCredentials {
         #[serde(rename = "id")]
         id: Option<Uuid>,
 
@@ -23,9 +24,14 @@ pub enum Connection {
         #[serde(default)]
         #[serde(rename = "scope")]
         scope: String,
+
+        #[serde(default)]
+        #[serde(rename = "d365Url")]
+        d365_url: String,
     },
 
-    OAuth {
+    #[serde(rename = "AuthorizationCode", alias = "OAuth")]
+    AuthorizationCode {
         #[serde(rename = "id")]
         id: Option<Uuid>,
 
@@ -40,5 +46,9 @@ pub enum Connection {
 
         #[serde(rename = "expiresAt")]
         expires_at: String, // could be chrono::DateTime if you want
+
+        #[serde(default)]
+        #[serde(rename = "d365Url")]
+        d365_url: String,
     },
 }

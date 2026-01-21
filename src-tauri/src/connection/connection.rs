@@ -21,25 +21,27 @@ pub async fn create_connection(
     connection_request: CreateConnectionRequest,
 ) -> Result<CreateConnectionResponse, String> {
     let connection = match connection_request.value {
-        CreateConnectionPayload::ClientSecret {
+        CreateConnectionPayload::ClientCredentials {
             name,
             client_id,
             client_secret,
             tenant_id,
             scope,
+            d365_url,
         } => {
             validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope).await?;
 
-            Connection::ClientSecret {
+            Connection::ClientCredentials {
                 id: Some(Uuid::new_v4()),
                 name,
                 client_id,
                 client_secret,
                 tenant_id,
                 scope,
+                d365_url,
             }
         }
-        CreateConnectionPayload::OAuth {
+        CreateConnectionPayload::AuthorizationCode {
             name,
             client_id,
             client_secret,
@@ -47,6 +49,9 @@ pub async fn create_connection(
             scope,
             authorization_code,
             redirect_uri,
+            username,
+            password,
+            d365_url,
         } => {
             let token = exchange_authorization_code(
                 &client_id,
@@ -55,15 +60,18 @@ pub async fn create_connection(
                 &scope,
                 &authorization_code,
                 &redirect_uri,
+                &username,
+                &password,
             )
             .await?;
 
-            Connection::OAuth {
+            Connection::AuthorizationCode {
                 id: Some(Uuid::new_v4()),
                 name,
                 access_token: token.access_token,
                 refresh_token: token.refresh_token,
                 expires_at: token.expires_at,
+                d365_url,
             }
         }
     };
@@ -136,6 +144,8 @@ async fn exchange_authorization_code(
     scope: &str,
     authorization_code: &str,
     redirect_uri: &str,
+    username: &str,
+    password: &str,
 ) -> Result<TokenExchange, String> {
     let client = Client::new();
     let token_url = format!(
@@ -147,9 +157,15 @@ async fn exchange_authorization_code(
     params.insert("client_id", client_id);
     params.insert("client_secret", client_secret);
     params.insert("scope", scope);
-    params.insert("grant_type", "authorization_code");
-    params.insert("code", authorization_code);
-    params.insert("redirect_uri", redirect_uri);
+    if authorization_code.trim().is_empty() {
+        params.insert("grant_type", "password");
+        params.insert("username", username);
+        params.insert("password", password);
+    } else {
+        params.insert("grant_type", "authorization_code");
+        params.insert("code", authorization_code);
+        params.insert("redirect_uri", redirect_uri);
+    }
 
     let resp = client
         .post(&token_url)

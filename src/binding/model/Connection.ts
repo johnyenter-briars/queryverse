@@ -1,8 +1,8 @@
-export type Connection = ClientSecretConnection | OAuthConnection
+export type Connection = ClientCredentialsConnection | AuthorizationCodeConnection
 
-export type ConnectionMethod = 'ClientSecret' | 'OAuth'
+export type ConnectionMethod = 'ClientCredentials' | 'AuthorizationCode'
 
-export interface ClientSecretConnection {
+export interface ClientCredentialsConnection {
     method: ConnectionMethod;
     id: string | null;
     name: string;
@@ -10,13 +10,15 @@ export interface ClientSecretConnection {
     clientSecret: string;
     tenantId: string;
     scope: string;
+    d365Url: string;
 }
 
-export interface OAuthConnection {
+export interface AuthorizationCodeConnection {
     method: ConnectionMethod;
     id: string | null;
     name: string;
     accessToken: string;
     refreshToken: string;
     expiresAt: string; 
+    d365Url: string;
 }
