@@ -2,7 +2,7 @@ pub mod binding;
 pub mod connection;
 pub mod oauth;
 pub mod dataverse;
-pub mod sql_fetchxml;
+pub mod sql;
 
 use crate::connection::connection::create_connection;
 use crate::connection::query::{execute_sql, parse_sql_to_fetchxml};

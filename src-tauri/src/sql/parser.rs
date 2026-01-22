@@ -1,8 +1,8 @@
-use crate::sql_fetchxml::ast::{
+use crate::sql::ast::{
     Column, CompareOp, Expr, Literal, OrderBy, Predicate, SelectColumns, SelectStmt,
 };
-use crate::sql_fetchxml::errors::ParseError;
-use crate::sql_fetchxml::lexer::{Keyword, Lexer, Token, TokenKind};
+use crate::sql::errors::ParseError;
+use crate::sql::lexer::{Keyword, Lexer, Token, TokenKind};
 
 pub struct Parser {
     tokens: Vec<Token>,

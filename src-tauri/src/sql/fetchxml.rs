@@ -1,7 +1,7 @@
-use crate::sql_fetchxml::ast::{
+use crate::sql::ast::{
     CompareOp, Expr, Literal, OrderBy, Predicate, SelectColumns, SelectStmt,
 };
-use crate::sql_fetchxml::errors::TranslationError;
+use crate::sql::errors::TranslationError;
 
 pub fn to_fetchxml(stmt: &SelectStmt, entity_name: &str) -> Result<String, TranslationError> {
     let mut out = String::new();

@@ -1,4 +1,4 @@
-use crate::sql_fetchxml::errors::ParseError;
+use crate::sql::errors::ParseError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Keyword {
