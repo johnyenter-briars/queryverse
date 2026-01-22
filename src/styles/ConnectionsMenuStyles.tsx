@@ -29,4 +29,63 @@ export const useConnectionsMenuStyles = makeStyles({
         overflowY: "auto",
         ...shorthands.padding(tokens.spacingHorizontalM),
     },
+    section: {
+        backgroundColor: tokens.colorNeutralBackground3,
+        ...shorthands.border(`1px solid ${tokens.colorNeutralStroke2}`),
+        ...shorthands.borderRadius(tokens.borderRadiusLarge),
+        ...shorthands.padding(tokens.spacingHorizontalM),
+        display: "flex",
+        flexDirection: "column",
+        gap: tokens.spacingVerticalS,
+        boxShadow: tokens.shadow4,
+    },
+    sectionHeader: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: tokens.spacingHorizontalS,
+    },
+    sectionTitle: {
+        display: "flex",
+        flexDirection: "column",
+        gap: tokens.spacingVerticalXXS,
+    },
+    sectionSubtitle: {
+        color: tokens.colorNeutralForeground3,
+        fontSize: tokens.fontSizeBase200,
+    },
+    sectionDivider: {
+        marginTop: tokens.spacingVerticalXS,
+        marginBottom: tokens.spacingVerticalXS,
+    },
+    list: {
+        ...shorthands.padding(0),
+    },
+    connectionRow: {
+        ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
+        ...shorthands.borderRadius(tokens.borderRadiusMedium),
+        display: "flex",
+        alignItems: "center",
+        gap: tokens.spacingHorizontalS,
+        cursor: "pointer",
+        transitionProperty: "background-color, color",
+        transitionDuration: tokens.durationFast,
+        "&:hover": {
+            backgroundColor: tokens.colorNeutralBackground1Hover,
+        },
+        "&:active": {
+            backgroundColor: tokens.colorNeutralBackground1Pressed,
+        },
+    },
+    connectionName: {
+        color: tokens.colorNeutralForeground1,
+        fontSize: tokens.fontSizeBase300,
+        fontWeight: tokens.fontWeightSemibold,
+    },
+    emptyState: {
+        color: tokens.colorNeutralForeground3,
+        fontSize: tokens.fontSizeBase200,
+        paddingTop: tokens.spacingVerticalS,
+        paddingBottom: tokens.spacingVerticalS,
+    },
 });

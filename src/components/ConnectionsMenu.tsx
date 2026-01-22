@@ -350,31 +350,47 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
             style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
         >
             <div className={`${styles.flyoutHalf}`}>
-                <Title3 className="mb-2">Connections</Title3>
-                <Button
-                    size="large"
-                    icon={<AddCircleRegular />}
-                    onClick={() => {
-                        resetForm();
-                        setCreateOpen(true);
-                    }}
-                />
-                <Divider />
-                <Tree size="small" aria-label="Connections List">
-                    {connections.map((conn, index) => (
-                        <TreeItem key={`conn-${index}`} itemType="leaf">
-                            <TreeItemLayout
-                                onClick={() => handleOpenEdit(conn, index)}
-                                style={{ cursor: "pointer" }}
-                            >
-                                <FolderOpen24Filled
-                                    style={{ color: tokens.colorPaletteGreenForeground1 }}
-                                />
-                                {conn.name}
-                            </TreeItemLayout>
-                        </TreeItem>
-                    ))}
-                </Tree>
+                <div className={styles.section}>
+                    <div className={styles.sectionHeader}>
+                        <div className={styles.sectionTitle}>
+                            <Title3>Connections</Title3>
+                            <Text className={styles.sectionSubtitle}>
+                                Validate and manage saved connections.
+                            </Text>
+                        </div>
+                        <Button
+                            appearance="primary"
+                            size="small"
+                            icon={<AddCircleRegular />}
+                            onClick={() => {
+                                resetForm();
+                                setCreateOpen(true);
+                            }}
+                        >
+                            New
+                        </Button>
+                    </div>
+                    <Divider className={styles.sectionDivider} />
+                    {connections.length === 0 ? (
+                        <Text className={styles.emptyState}>No connections yet.</Text>
+                    ) : (
+                        <Tree size="small" aria-label="Connections List" className={styles.list}>
+                            {connections.map((conn, index) => (
+                                <TreeItem key={`conn-${index}`} itemType="leaf">
+                                    <TreeItemLayout
+                                        onClick={() => handleOpenEdit(conn, index)}
+                                        className={styles.connectionRow}
+                                    >
+                                        <FolderOpen24Filled
+                                            style={{ color: tokens.colorPaletteGreenForeground1 }}
+                                        />
+                                        <span className={styles.connectionName}>{conn.name}</span>
+                                    </TreeItemLayout>
+                                </TreeItem>
+                            ))}
+                        </Tree>
+                    )}
+                </div>
             </div>
 
             <ModalDialog
@@ -625,22 +641,31 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
             </ModalDialog>
 
             <div className={`${styles.flyoutHalf}`}>
-                <Title3 className="mb-2">Schema Explorer</Title3>
-                <Divider />
-                <Tree size="small" aria-label="Database Schema">
-                    {mockSchema.map((db, dbIndex) => (
-                        <TreeItem key={`db-${dbIndex}`} itemType="branch">
-                            <TreeItemLayout><FolderOpen24Filled /> {db.name}</TreeItemLayout>
-                            <Tree>
-                                {db.tables.map((table, tableIndex) => (
-                                    <TreeItem key={`table-${dbIndex}-${tableIndex}`} itemType="leaf">
-                                        <TreeItemLayout><Table24Filled /> {table}</TreeItemLayout>
-                                    </TreeItem>
-                                ))}
-                            </Tree>
-                        </TreeItem>
-                    ))}
-                </Tree>
+                <div className={styles.section}>
+                    <div className={styles.sectionHeader}>
+                        <div className={styles.sectionTitle}>
+                            <Title3>Schema Explorer</Title3>
+                            <Text className={styles.sectionSubtitle}>
+                                Browse tables from connected environments.
+                            </Text>
+                        </div>
+                    </div>
+                    <Divider className={styles.sectionDivider} />
+                    <Tree size="small" aria-label="Database Schema">
+                        {mockSchema.map((db, dbIndex) => (
+                            <TreeItem key={`db-${dbIndex}`} itemType="branch">
+                                <TreeItemLayout><FolderOpen24Filled /> {db.name}</TreeItemLayout>
+                                <Tree>
+                                    {db.tables.map((table, tableIndex) => (
+                                        <TreeItem key={`table-${dbIndex}-${tableIndex}`} itemType="leaf">
+                                            <TreeItemLayout><Table24Filled /> {table}</TreeItemLayout>
+                                        </TreeItem>
+                                    ))}
+                                </Tree>
+                            </TreeItem>
+                        ))}
+                    </Tree>
+                </div>
             </div>
         </div>
     );
