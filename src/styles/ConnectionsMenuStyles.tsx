@@ -62,14 +62,14 @@ export const useConnectionsMenuStyles = makeStyles({
         ...shorthands.padding(0),
     },
     connectionRow: {
-        ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
-        ...shorthands.borderRadius(tokens.borderRadiusMedium),
         display: "flex",
         alignItems: "center",
         gap: tokens.spacingHorizontalS,
         cursor: "pointer",
         transitionProperty: "background-color, color",
         transitionDuration: tokens.durationFast,
+        ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
+        ...shorthands.borderRadius(tokens.borderRadiusMedium),
         "&:hover": {
             backgroundColor: tokens.colorNeutralBackground1Hover,
         },
@@ -81,6 +81,7 @@ export const useConnectionsMenuStyles = makeStyles({
         color: tokens.colorNeutralForeground1,
         fontSize: tokens.fontSizeBase300,
         fontWeight: tokens.fontWeightSemibold,
+        lineHeight: tokens.lineHeightBase300,
     },
     emptyState: {
         color: tokens.colorNeutralForeground3,

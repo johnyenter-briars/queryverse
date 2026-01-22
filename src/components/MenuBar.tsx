@@ -6,7 +6,7 @@ import {
 } from "@fluentui/react-components";
 
 import {
-    Navigation24Regular,
+    PlugConnected24Regular,
     Settings24Filled,
     Play24Filled,
     WindowConsole20Filled,
@@ -43,7 +43,7 @@ export function MenuBar({
             style={{ ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalS) }}
         >
             <ToolbarButton
-                icon={<Navigation24Regular />}
+                icon={<PlugConnected24Regular />}
                 onClick={onToggleConnections}
                 appearance={connectionsEnabled ? "primary" : "subtle"}
                 title="Toggle Connections Menu"

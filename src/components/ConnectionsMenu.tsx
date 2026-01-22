@@ -13,7 +13,7 @@ import {
     Text,
 } from "@fluentui/react-components";
 import {
-    FolderOpen24Filled,
+    Link24Filled,
     AddCircleRegular,
 } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
@@ -372,12 +372,13 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
                                 <TreeItem key={`conn-${index}`} itemType="leaf">
                                     <TreeItemLayout
                                         onClick={() => handleOpenEdit(conn, index)}
-                                        className={styles.connectionRow}
                                     >
-                                        <FolderOpen24Filled
-                                            style={{ color: tokens.colorPaletteGreenForeground1 }}
-                                        />
-                                        <span className={styles.connectionName}>{conn.name}</span>
+                                        <div className={styles.connectionRow}>
+                                            <Link24Filled
+                                                style={{ color: tokens.colorPaletteGreenForeground1 }}
+                                            />
+                                            <span className={styles.connectionName}>{conn.name}</span>
+                                        </div>
                                     </TreeItemLayout>
                                 </TreeItem>
                             ))}
