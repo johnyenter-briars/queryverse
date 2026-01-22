@@ -5,6 +5,9 @@ import {
     TabList,
     Tab,
     Button,
+    makeStyles,
+    shorthands,
+    tokens,
 } from "@fluentui/react-components";
 import { Add24Regular } from "@fluentui/react-icons";
 import { ResultsWindow } from "./components/ResultsWindow";
@@ -12,65 +15,108 @@ import { CustomEditor } from "./components/CustomEditor";
 import { ShortcutManager } from "./components/ShortcutManager";
 import { ModalDialog } from "./components/ModalDialog";
 import { TabSwitcher } from "./components/TabSwitcher";
-
 import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
 import { combineClasses } from "./utility/class";
-import { MultipleResponse } from "./binding/model/MultipleResponse";
 import { Entity } from "./binding/model/Entity";
-import { retrieveMultiple } from "./binding/backend";
+import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
+import { executeSql, previewFetchXml } from "./binding/backend";
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
+
+const DEFAULT_QUERY = "select top 20 *\nfrom accounts";
+
+const usePreviewStyles = makeStyles({
+    previewPanel: {
+        display: "flex",
+        flexDirection: "column",
+        backgroundColor: webDarkTheme.colorNeutralBackground2,
+        ...shorthands.border(`1px solid ${tokens.colorNeutralStroke1}`),
+        ...shorthands.borderRadius(tokens.borderRadiusMedium),
+        marginBottom: tokens.spacingVerticalM,
+        minHeight: 0,
+    },
+    previewHeader: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalM),
+        ...shorthands.borderBottom(`1px solid ${tokens.colorNeutralStroke1}`),
+    },
+    previewBody: {
+        fontFamily: "monospace",
+        whiteSpace: "pre-wrap",
+        overflowY: "auto",
+        maxHeight: "200px",
+        ...shorthands.padding(tokens.spacingHorizontalM),
+    },
+    previewError: {
+        color: tokens.colorPaletteRedForeground1,
+    },
+    previewMeta: {
+        color: tokens.colorNeutralForeground2,
+        ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalM),
+        ...shorthands.borderTop(`1px solid ${tokens.colorNeutralStroke1}`),
+    },
+    executeError: {
+        color: tokens.colorPaletteRedForeground1,
+        marginBottom: tokens.spacingVerticalS,
+    },
+});
 
 type EditorTab = {
     id: number;
     title: string;
     query: string;
     results: Entity[];
+    fetchPreview: FetchXmlPreview | null;
+    previewError: string | null;
+    executeError: string | null;
 };
 
+const createTab = (id: number): EditorTab => ({
+    id,
+    title: `Query ${id}`,
+    query: DEFAULT_QUERY,
+    results: [],
+    fetchPreview: null,
+    previewError: null,
+    executeError: null,
+});
+
 export default function App() {
-    const [connectionsEnabled, setIsMenuOpen] = useState(true); 
-    const [vimEnabled, setVimEnabled] = useState(true); 
-    const [tabs, setTabs] = useState<EditorTab[]>([]);
-    const [activeTabId, setActiveTabId] = useState(0);
-    const nextTabId = useRef(1);
+    const [connectionsEnabled, setIsMenuOpen] = useState(true);
+    const [vimEnabled, setVimEnabled] = useState(true);
+    const [tabs, setTabs] = useState<EditorTab[]>([createTab(1)]);
+    const [activeTabId, setActiveTabId] = useState(1);
+    const nextTabId = useRef(2);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
     const styles = useAppStyles();
+    const previewStyles = usePreviewStyles();
 
     const contentClasses = combineClasses(
         styles.contentArea,
         connectionsEnabled && styles.contentShifted
     );
 
-    const onRetrieveResults = (results: MultipleResponse<Entity>) =>  {
-        if (!results.success) {
-            console.log("Fail") //TODO
-            return;
-        }
-
-        if (activeTabId === 0) {
-            return;
-        }
-
-        setTabs((prev) =>
-            prev.map((tab) =>
-                tab.id === activeTabId ? { ...tab, results: results.value } : tab
-            )
-        );
-    }
-
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
+
+    const updateTab = (tabId: number, updater: (tab: EditorTab) => EditorTab) => {
+        setTabs((prev) =>
+            prev.map((tab) => (tab.id === tabId ? updater(tab) : tab))
+        );
+    };
+
+    const getErrorMessage = (error: unknown): string => {
+        if (error instanceof Error) return error.message;
+        if (typeof error === "string") return error;
+        return "Unknown error";
+    };
 
     const handleAddTab = () => {
         const newId = nextTabId.current++;
-        const newTab: EditorTab = {
-            id: newId,
-            title: `Query ${newId}`,
-            query: "",
-            results: [],
-        };
+        const newTab = createTab(newId);
 
         setTabs((prev) => [...prev, newTab]);
         setActiveTabId(newId);
@@ -96,20 +142,73 @@ export default function App() {
 
     const handleExecuteActiveTab = async () => {
         if (activeTabId === 0) return;
-        const response = await retrieveMultiple();
-        onRetrieveResults(response);
+        const targetTab = tabs.find((tab) => tab.id === activeTabId);
+        if (!targetTab) return;
+
+        try {
+            const response = await executeSql(targetTab.query);
+            if (!response.success) {
+                updateTab(targetTab.id, (tab) => ({
+                    ...tab,
+                    results: response.value,
+                    executeError: response.message || "Query failed",
+                }));
+                return;
+            }
+
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                results: response.value,
+                executeError: null,
+            }));
+        } catch (error) {
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                executeError: getErrorMessage(error),
+            }));
+        }
     };
 
+    const handlePreviewActiveTab = async () => {
+        if (activeTabId === 0) return;
+        const targetTab = tabs.find((tab) => tab.id === activeTabId);
+        if (!targetTab) return;
+
+        try {
+            const response = await previewFetchXml(targetTab.query);
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                fetchPreview: response,
+                previewError: null,
+            }));
+        } catch (error) {
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                fetchPreview: null,
+                previewError: getErrorMessage(error),
+            }));
+        }
+    };
+
+    const handleClearPreview = () => {
+        if (!activeTab) return;
+        updateTab(activeTab.id, (tab) => ({
+            ...tab,
+            fetchPreview: null,
+            previewError: null,
+        }));
+    };
 
     return (
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
                 <MenuBar
                     vimEnabled={vimEnabled}
-					connectionsEnabled={connectionsEnabled}
-                    onToggleVimEnabled={() => setVimEnabled(!vimEnabled)} 
-                    onToggleConnections={() => setIsMenuOpen(!connectionsEnabled)} 
-                    onExecute={handleExecuteActiveTab}
+                    connectionsEnabled={connectionsEnabled}
+                    onToggleVimEnabled={() => setVimEnabled(!vimEnabled)}
+                    onToggleConnections={() => setIsMenuOpen(!connectionsEnabled)}
+                    onExecuteSql={handleExecuteActiveTab}
+                    onPreviewFetchXml={handlePreviewActiveTab}
                     canExecute={Boolean(activeTab)}
                     onShowShortcuts={() => setShortcutsOpen(true)}
                 />
@@ -145,8 +244,7 @@ export default function App() {
                 <div className={styles.wrapper}>
                     <ConnectionsMenu isOpen={connectionsEnabled} />
 
-                    <div className={contentClasses}> 
-                        
+                    <div className={contentClasses}>
                         <div className={styles.top}>
                             <div className={styles.tabsBar}>
                                 <TabList
@@ -191,11 +289,10 @@ export default function App() {
                                     vimEnabled={vimEnabled}
                                     value={activeTab.query}
                                     onChange={(value) => {
-                                        setTabs((prev) =>
-                                            prev.map((tab) =>
-                                                tab.id === activeTab.id ? { ...tab, query: value } : tab
-                                            )
-                                        );
+                                        updateTab(activeTab.id, (tab) => ({
+                                            ...tab,
+                                            query: value,
+                                        }));
                                     }}
                                 />
                             ) : null}
@@ -203,7 +300,44 @@ export default function App() {
 
                         <div className={styles.bottom}>
                             {activeTab ? (
-                                <ResultsWindow data={activeTab.results} />
+                                <>
+                                    {(activeTab.fetchPreview || activeTab.previewError) && (
+                                        <div className={previewStyles.previewPanel}>
+                                            <div className={previewStyles.previewHeader}>
+                                                <span>FetchXML Preview</span>
+                                                <Button
+                                                    appearance="subtle"
+                                                    size="small"
+                                                    onClick={handleClearPreview}
+                                                >
+                                                    Clear
+                                                </Button>
+                                            </div>
+                                            <pre
+                                                className={combineClasses(
+                                                    previewStyles.previewBody,
+                                                    activeTab.previewError
+                                                        ? previewStyles.previewError
+                                                        : undefined
+                                                )}
+                                            >
+                                                {activeTab.previewError ??
+                                                    activeTab.fetchPreview?.fetchXml}
+                                            </pre>
+                                            {activeTab.fetchPreview?.entityLogical && (
+                                                <div className={previewStyles.previewMeta}>
+                                                    Entity: {activeTab.fetchPreview.entityLogical} (set: {activeTab.fetchPreview.entitySet})
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    {activeTab.executeError && (
+                                        <div className={previewStyles.executeError}>
+                                            {activeTab.executeError}
+                                        </div>
+                                    )}
+                                    <ResultsWindow data={activeTab.results} />
+                                </>
                             ) : null}
                         </div>
                     </div>

@@ -62,40 +62,40 @@ impl QueryEngine {
             .await
             .map_err(|e| format!("Failed to parse JSON: {e}"))?;
 
-        let response_object = json
-            .as_object()
-            .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
+        parse_multiple_response(json)
+    }
 
-        let response_array = response_object
-            .get("value")
-            .ok_or_else(|| "Invalid response from Dataverse".to_string())?
-            .as_array()
-            .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
+    pub async fn retrieve_multiple_fetchxml(
+        &self,
+        entity: &str,
+        fetchxml: &str,
+    ) -> Result<MultipleResponse<Entity>, std::string::String> {
+        let mut url = format!("{}/api/data/v9.2/{}", self.base_url, entity);
+        url.push_str("?fetchXml=");
+        url.push_str(&urlencoding::encode(fetchxml));
 
-        let mut entities: Vec<Entity> = vec![];
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.token)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {e}"))?;
 
-        for record_value in response_array {
-            let mut entity = Entity::new();
+        let status = resp.status();
 
-            let record = record_value
-                .as_object()
-                .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
-
-            for (key, value) in record {
-                let implemented = add_attribute(&mut entity, key, value)
-                    .map_err(|_| "Invalid response from Dataverse".to_string())?;
-
-                println!("Key: {}, implemented: {:?}", key, implemented);
-            }
-
-            entities.push(entity);
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("Dataverse API error ({}): {}", status, body));
         }
 
-        let mut multi_resposne = MultipleResponse::new();
+        let json: Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse JSON: {e}"))?;
 
-        multi_resposne.value = entities;
-
-        Ok(multi_resposne)
+        parse_multiple_response(json)
     }
 }
 
@@ -142,4 +142,43 @@ fn add_attribute(
     }
 
     return Ok(ValueTypeImplented::False);
+}
+
+fn parse_multiple_response(
+    json: Value,
+) -> Result<MultipleResponse<Entity>, std::string::String> {
+    let response_object = json
+        .as_object()
+        .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
+
+    let response_array = response_object
+        .get("value")
+        .ok_or_else(|| "Invalid response from Dataverse".to_string())?
+        .as_array()
+        .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
+
+    let mut entities: Vec<Entity> = vec![];
+
+    for record_value in response_array {
+        let mut entity = Entity::new();
+
+        let record = record_value
+            .as_object()
+            .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
+
+        for (key, value) in record {
+            let implemented = add_attribute(&mut entity, key, value)
+                .map_err(|_| "Invalid response from Dataverse".to_string())?;
+
+            println!("Key: {}, implemented: {:?}", key, implemented);
+        }
+
+        entities.push(entity);
+    }
+
+    let mut multi_resposne = MultipleResponse::new();
+
+    multi_resposne.value = entities;
+
+    Ok(multi_resposne)
 }

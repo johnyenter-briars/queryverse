@@ -2,8 +2,10 @@ pub mod binding;
 pub mod connection;
 pub mod oauth;
 pub mod dataverse;
+pub mod sql;
 
-use crate::connection::{connection::create_connection, query::retrieve_multiple};
+use crate::connection::connection::create_connection;
+use crate::connection::query::{execute_sql, parse_sql_to_fetchxml};
 
 use tauri::Manager;
 
@@ -15,7 +17,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Database {})
-        .invoke_handler(tauri::generate_handler![create_connection, retrieve_multiple])
+        .invoke_handler(tauri::generate_handler![
+            create_connection,
+            execute_sql,
+            parse_sql_to_fetchxml
+        ])
         .setup(|app| {
             let windows = app.webview_windows();
             let window = windows.get("QueryVerse").unwrap();
