@@ -6,10 +6,13 @@ import { UpdateConnectionResponse } from './model/UpdateConnectionResponse';
 import { MultipleResponse } from './model/MultipleResponse';
 import { Entity } from './model/Entity';
 import { ListConnectionsResponse } from './model/ListConnectionsResponse';
+import { RetrieveMultipleRequest } from './model/RetrieveMultipleRequest';
 
-export const retrieveMultiple = async (): Promise<MultipleResponse<Entity>> => {
+export const retrieveMultiple = async (connectionId: string): Promise<MultipleResponse<Entity>> => {
     const response: MultipleResponse<Entity> = await invoke('retrieve_multiple', {
-        number: 42,
+        request: {
+            connectionId,
+        } satisfies RetrieveMultipleRequest,
     })
 
     console.log(response)

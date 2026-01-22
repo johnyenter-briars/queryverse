@@ -28,6 +28,7 @@ type EditorTab = {
     title: string;
     query: string;
     results: Entity[];
+    connectionId: string | null;
 };
 
 export default function App() {
@@ -72,6 +73,7 @@ export default function App() {
             title: `Query ${newId}`,
             query: "",
             results: [],
+            connectionId: null,
         };
 
         setTabs((prev) => [...prev, newTab]);
@@ -98,7 +100,11 @@ export default function App() {
 
     const handleExecuteActiveTab = async () => {
         if (activeTabId === 0) return;
-        const response = await retrieveMultiple();
+        if (!activeTab?.connectionId) {
+            console.error("No connection assigned to this tab.");
+            return;
+        }
+        const response = await retrieveMultiple(activeTab.connectionId);
         onRetrieveResults(response);
     };
 
@@ -126,7 +132,7 @@ export default function App() {
                         }
                     }}
                     onExecute={handleExecuteActiveTab}
-                    canExecute={Boolean(activeTab)}
+                    canExecute={Boolean(activeTab?.connectionId)}
                     onShowShortcuts={() => setShortcutsOpen(true)}
                 />
                 <ShortcutManager
@@ -136,7 +142,7 @@ export default function App() {
                         "new-tab": handleAddTab,
                     }}
                     isEnabled={(id: ShortcutActionId) =>
-                        id === "execute" ? Boolean(activeTab) : true
+                        id === "execute" ? Boolean(activeTab?.connectionId) : true
                     }
                 />
                 <ModalDialog
@@ -159,7 +165,21 @@ export default function App() {
                 />
 
                 <div className={styles.wrapper}>
-                    <ConnectionsMenu isOpen={connectionsEnabled} />
+                    <ConnectionsMenu
+                        isOpen={connectionsEnabled}
+                        onOpenConnection={(connection) => {
+                            const newId = nextTabId.current++;
+                            const newTab: EditorTab = {
+                                id: newId,
+                                title: `Query - ${connection.name}`,
+                                query: "",
+                                results: [],
+                                connectionId: connection.id ?? null,
+                            };
+                            setTabs((prev) => [...prev, newTab]);
+                            setActiveTabId(newId);
+                        }}
+                    />
                     <SchemaExplorerMenu isOpen={schemaEnabled} />
 
                     <div className={contentClasses}> 

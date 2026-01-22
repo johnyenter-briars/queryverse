@@ -15,6 +15,7 @@ import {
 import {
     Link24Filled,
     AddCircleRegular,
+    Open24Regular,
 } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
 import { createConnection, listConnections, updateConnection } from "../binding/backend";
@@ -25,10 +26,11 @@ import { useConnectionsMenuStyles } from "../styles/ConnectionsMenuStyles";
 import { ModalDialog } from "./ModalDialog";
 
 export interface IConnectionsMenuProps {
-    isOpen: boolean
+    isOpen: boolean;
+    onOpenConnection: (connection: Connection) => void;
 };
 
-export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
+export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuProps) {
     const styles = useConnectionsMenuStyles();
     const [createOpen, setCreateOpen] = useState(false);
     const [createMethod, setCreateMethod] = useState<"ClientCredentials" | "AuthorizationCode">("ClientCredentials");
@@ -370,18 +372,28 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
                         <Tree size="small" aria-label="Connections List" className={styles.list}>
                             {connections.map((conn, index) => (
                                 <TreeItem key={`conn-${index}`} itemType="leaf">
-                                    <TreeItemLayout
-                                        onClick={() => handleOpenEdit(conn, index)}
-                                    >
-                                        <div className={styles.connectionRow}>
-                                            <Link24Filled
-                                                style={{ color: tokens.colorPaletteGreenForeground1 }}
-                                            />
-                                            <span className={styles.connectionName}>{conn.name}</span>
-                                        </div>
-                                    </TreeItemLayout>
-                                </TreeItem>
-                            ))}
+                                <TreeItemLayout
+                                    onClick={() => handleOpenEdit(conn, index)}
+                                >
+                                    <div className={styles.connectionRow}>
+                                        <Link24Filled
+                                            style={{ color: tokens.colorPaletteGreenForeground1 }}
+                                        />
+                                        <span className={styles.connectionName}>{conn.name}</span>
+                                        <Button
+                                            appearance="subtle"
+                                            size="small"
+                                            icon={<Open24Regular />}
+                                            aria-label={`Open query for ${conn.name}`}
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                onOpenConnection(conn);
+                                            }}
+                                        />
+                                    </div>
+                                </TreeItemLayout>
+                            </TreeItem>
+                        ))}
                         </Tree>
                     )}
                 </div>

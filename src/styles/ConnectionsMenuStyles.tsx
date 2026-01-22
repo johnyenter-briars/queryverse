@@ -70,6 +70,7 @@ export const useConnectionsMenuStyles = makeStyles({
         transitionDuration: tokens.durationFast,
         ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
         ...shorthands.borderRadius(tokens.borderRadiusMedium),
+        width: "100%",
         "&:hover": {
             backgroundColor: tokens.colorNeutralBackground1Hover,
         },
@@ -82,6 +83,7 @@ export const useConnectionsMenuStyles = makeStyles({
         fontSize: tokens.fontSizeBase300,
         fontWeight: tokens.fontWeightSemibold,
         lineHeight: tokens.lineHeightBase300,
+        flex: 1,
     },
     emptyState: {
         color: tokens.colorNeutralForeground3,

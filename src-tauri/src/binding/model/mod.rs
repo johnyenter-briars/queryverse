@@ -5,6 +5,7 @@ pub mod createconnectionpayload;
 pub mod createconnectionresponse;
 pub mod updateconnectionrequest;
 pub mod updateconnectionresponse;
+pub mod retrievemultiplerequest;
 pub mod listconnectionsresponse;
 pub mod connection;
 pub mod entity;

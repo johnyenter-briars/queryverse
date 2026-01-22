@@ -193,12 +193,12 @@ struct TokenExchange {
     expires_at: String,
 }
 
-async fn validate_client_credentials(
+pub async fn fetch_client_credentials_token(
     client_id: &str,
     client_secret: &str,
     tenant_id: &str,
     scope: &str,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let client = Client::new();
     let token_url = format!(
         "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
@@ -234,6 +234,16 @@ async fn validate_client_credentials(
         return Err("Access token was empty".to_string());
     }
 
+    Ok(access_token.to_string())
+}
+
+async fn validate_client_credentials(
+    client_id: &str,
+    client_secret: &str,
+    tenant_id: &str,
+    scope: &str,
+) -> Result<(), String> {
+    fetch_client_credentials_token(client_id, client_secret, tenant_id, scope).await?;
     Ok(())
 }
 
@@ -312,7 +322,7 @@ async fn exchange_authorization_code(
     })
 }
 
-fn load_connections() -> Result<Vec<Connection>, String> {
+pub fn load_connections() -> Result<Vec<Connection>, String> {
     let path = connections_path()?;
 
     if !path.exists() {
