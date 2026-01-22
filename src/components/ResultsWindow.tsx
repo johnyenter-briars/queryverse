@@ -24,7 +24,7 @@ export interface IResultsWindowProps {
     data: Entity[];
 }
 
-// TODO: determine the primary id via a look-ahead metadata request
+// TODO: determine the primary id via a look-ahead metadata request 
 function getEntityRowId(entity: Entity): string {
     const keys = Object.keys(entity.attributes);
     if (keys.length === 0) return "empty-row";
