@@ -3,7 +3,7 @@ pub mod connection;
 pub mod oauth;
 pub mod dataverse;
 
-use crate::connection::{connection::{create_connection, list_connections}, query::retrieve_multiple};
+use crate::connection::{connection::{create_connection, list_connections, update_connection}, query::retrieve_multiple};
 
 use tauri::Manager;
 
@@ -18,6 +18,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             create_connection,
             list_connections,
+            update_connection,
             retrieve_multiple
         ])
         .setup(|app| {

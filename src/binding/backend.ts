@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { CreateConnectionResponse } from './model/CreateConnectionResponse';
 import { CreateConnectionRequest } from './model/CreateConnectionRequest';
+import { UpdateConnectionRequest } from './model/UpdateConnectionRequest';
+import { UpdateConnectionResponse } from './model/UpdateConnectionResponse';
 import { MultipleResponse } from './model/MultipleResponse';
 import { Entity } from './model/Entity';
 import { ListConnectionsResponse } from './model/ListConnectionsResponse';
@@ -27,6 +29,16 @@ export const createConnection = async (connectionRequest: CreateConnectionReques
 
 export const listConnections = async (): Promise<ListConnectionsResponse> => {
     const response: ListConnectionsResponse = await invoke('list_connections');
+
+    console.log(response);
+
+    return response;
+}
+
+export const updateConnection = async (connectionRequest: UpdateConnectionRequest): Promise<UpdateConnectionResponse> => {
+    const response: UpdateConnectionResponse = await invoke('update_connection', {
+        connectionRequest: connectionRequest,
+    });
 
     console.log(response);
 

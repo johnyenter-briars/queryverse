@@ -18,7 +18,7 @@ import {
     AddCircleRegular,
 } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
-import { createConnection, listConnections } from "../binding/backend";
+import { createConnection, listConnections, updateConnection } from "../binding/backend";
 import { Connection } from "../binding/model/Connection";
 import { RequestType } from "../binding/model/QVRequest";
 import { useEffect, useState } from "react";
@@ -34,7 +34,23 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
     const [createOpen, setCreateOpen] = useState(false);
     const [createMethod, setCreateMethod] = useState<"ClientCredentials" | "AuthorizationCode">("ClientCredentials");
     const [createStatus, setCreateStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+    const [editOpen, setEditOpen] = useState(false);
+    const [editIndex, setEditIndex] = useState<number | null>(null);
+    const [editStatus, setEditStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
     const [formState, setFormState] = useState({
+        name: "",
+        clientId: "",
+        clientSecret: "",
+        tenantId: "",
+        scope: "",
+        authorizationCode: "",
+        redirectUri: "",
+        username: "",
+        password: "",
+        d365Url: "",
+    });
+    const [editFormState, setEditFormState] = useState({
+        method: "ClientCredentials" as "ClientCredentials" | "AuthorizationCode",
         name: "",
         clientId: "",
         clientSecret: "",
@@ -60,18 +76,18 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
 
     const [connections, setConnections] = useState<Connection[]>([]);
 
-    useEffect(() => {
-        const loadConnections = async () => {
-            try {
-                const response = await listConnections();
-                if (response.success) {
-                    setConnections(response.value);
-                }
-            } catch (error) {
-                console.error("Failed to load connections", error);
+    const loadConnections = async () => {
+        try {
+            const response = await listConnections();
+            if (response.success) {
+                setConnections(response.value);
             }
-        };
+        } catch (error) {
+            console.error("Failed to load connections", error);
+        }
+    };
 
+    useEffect(() => {
         loadConnections();
     }, []);
 
@@ -95,6 +111,49 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
     const handleCloseCreate = () => {
         setCreateOpen(false);
         resetForm();
+    };
+
+    const handleCloseEdit = () => {
+        setEditOpen(false);
+        setEditIndex(null);
+        setEditStatus(null);
+    };
+
+    const handleOpenEdit = (conn: Connection, index: number) => {
+        setEditStatus(null);
+        setEditIndex(index);
+
+        if (conn.method === "ClientCredentials") {
+            setEditFormState({
+                method: "ClientCredentials",
+                name: conn.name ?? "",
+                clientId: conn.clientId ?? "",
+                clientSecret: conn.clientSecret ?? "",
+                tenantId: conn.tenantId ?? "",
+                scope: conn.scope ?? "",
+                authorizationCode: "",
+                redirectUri: "",
+                username: "",
+                password: "",
+                d365Url: conn.d365Url ?? "",
+            });
+        } else {
+            setEditFormState({
+                method: "AuthorizationCode",
+                name: conn.name ?? "",
+                clientId: "",
+                clientSecret: "",
+                tenantId: "",
+                scope: "",
+                authorizationCode: "",
+                redirectUri: "",
+                username: "",
+                password: "",
+                d365Url: conn.d365Url ?? "",
+            });
+        }
+
+        setEditOpen(true);
     };
 
     const handleCreateConnection = async () => {
@@ -151,6 +210,128 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
         }
     };
 
+    const getEditValidationError = () => {
+        if (!editFormState.name.trim()) {
+            return "Connection name is required.";
+        }
+
+        if (!editFormState.d365Url.trim()) {
+            return "D365 URL is required.";
+        }
+
+        if (editFormState.method === "ClientCredentials") {
+            if (!editFormState.clientId.trim()) {
+                return "Client ID is required.";
+            }
+            if (!editFormState.clientSecret.trim()) {
+                return "Client secret is required.";
+            }
+            if (!editFormState.tenantId.trim()) {
+                return "Tenant ID is required.";
+            }
+            if (!editFormState.scope.trim()) {
+                return "Scope is required.";
+            }
+        } else {
+            if (!editFormState.clientId.trim()) {
+                return "Client ID is required.";
+            }
+            if (!editFormState.clientSecret.trim()) {
+                return "Client secret is required.";
+            }
+            if (!editFormState.tenantId.trim()) {
+                return "Tenant ID is required.";
+            }
+            if (!editFormState.scope.trim()) {
+                return "Scope is required.";
+            }
+            if (!editFormState.redirectUri.trim()) {
+                return "Redirect URI is required.";
+            }
+            if (!editFormState.username.trim()) {
+                return "Username is required.";
+            }
+            if (!editFormState.password.trim()) {
+                return "Password is required.";
+            }
+        }
+
+        return null;
+    };
+
+    const handleSaveEdit = async () => {
+        setEditStatus(null);
+
+        const validationError = getEditValidationError();
+        if (validationError) {
+            setEditStatus({
+                type: "error",
+                message: validationError,
+            });
+            return;
+        }
+
+        if (editIndex === null) {
+            setEditStatus({
+                type: "error",
+                message: "No connection selected.",
+            });
+            return;
+        }
+
+        const targetIndex = editIndex;
+        const payload =
+            editFormState.method === "ClientCredentials"
+                ? {
+                    method: "ClientCredentials" as const,
+                    name: editFormState.name.trim(),
+                    clientId: editFormState.clientId.trim(),
+                    clientSecret: editFormState.clientSecret,
+                    tenantId: editFormState.tenantId.trim(),
+                    scope: editFormState.scope.trim(),
+                    d365Url: editFormState.d365Url.trim(),
+                }
+                : {
+                    method: "AuthorizationCode" as const,
+                    name: editFormState.name.trim(),
+                    clientId: editFormState.clientId.trim(),
+                    clientSecret: editFormState.clientSecret,
+                    tenantId: editFormState.tenantId.trim(),
+                    scope: editFormState.scope.trim(),
+                    authorizationCode: editFormState.authorizationCode.trim(),
+                    redirectUri: editFormState.redirectUri.trim(),
+                    username: editFormState.username.trim(),
+                    password: editFormState.password,
+                    d365Url: editFormState.d365Url.trim(),
+                };
+
+        try {
+            const response = await updateConnection({
+                id: connections[targetIndex]?.id ?? null,
+                index: targetIndex,
+                payload,
+            });
+
+            if (response.success) {
+                await loadConnections();
+                setEditStatus({
+                    type: "success",
+                    message: response.message || "Connection updated.",
+                });
+            } else {
+                setEditStatus({
+                    type: "error",
+                    message: response.message || "Failed to update connection.",
+                });
+            }
+        } catch (error) {
+            setEditStatus({
+                type: "error",
+                message: error instanceof Error ? error.message : "Failed to update connection.",
+            });
+        }
+    };
+
     const isCreateDisabled =
         !formState.name.trim() ||
         !formState.clientId.trim() ||
@@ -182,7 +363,10 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
                 <Tree size="small" aria-label="Connections List">
                     {connections.map((conn, index) => (
                         <TreeItem key={`conn-${index}`} itemType="leaf">
-                            <TreeItemLayout>
+                            <TreeItemLayout
+                                onClick={() => handleOpenEdit(conn, index)}
+                                style={{ cursor: "pointer" }}
+                            >
                                 <FolderOpen24Filled
                                     style={{ color: tokens.colorPaletteGreenForeground1 }}
                                 />
@@ -305,6 +489,137 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
                         disabled={isCreateDisabled}
                     >
                         Create Connection
+                    </Button>
+                </div>
+            </ModalDialog>
+
+            <ModalDialog
+                open={editOpen}
+                title="Edit Connection"
+                onClose={handleCloseEdit}
+                closeLabel="Cancel"
+            >
+                <div style={{ display: "grid", gap: "12px" }}>
+                    <Field label="Connection name">
+                        <Input
+                            value={editFormState.name}
+                            onChange={(_, data) => setEditFormState((prev) => ({ ...prev, name: data.value }))}
+                        />
+                    </Field>
+
+                    {editFormState.method === "ClientCredentials" ? (
+                        <>
+                            <Field label="Client ID">
+                                <Input
+                                    value={editFormState.clientId}
+                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, clientId: data.value }))}
+                                />
+                            </Field>
+                            <Field label="Client secret">
+                                <Input
+                                    type="password"
+                                    value={editFormState.clientSecret}
+                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, clientSecret: data.value }))}
+                                />
+                            </Field>
+                            <Field label="Tenant ID">
+                                <Input
+                                    value={editFormState.tenantId}
+                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, tenantId: data.value }))}
+                                />
+                            </Field>
+                            <Field label="Scope">
+                                <Input
+                                    value={editFormState.scope}
+                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, scope: data.value }))}
+                                />
+                            </Field>
+                        </>
+                    ) : (
+                        <>
+                            <Field label="Client ID">
+                                <Input
+                                    value={editFormState.clientId}
+                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, clientId: data.value }))}
+                                />
+                            </Field>
+                            <Field label="Client secret">
+                                <Input
+                                    type="password"
+                                    value={editFormState.clientSecret}
+                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, clientSecret: data.value }))}
+                                />
+                            </Field>
+                            <Field label="Tenant ID">
+                                <Input
+                                    value={editFormState.tenantId}
+                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, tenantId: data.value }))}
+                                />
+                            </Field>
+                            <Field label="Scope">
+                                <Input
+                                    value={editFormState.scope}
+                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, scope: data.value }))}
+                                />
+                            </Field>
+                            <Field label="Authorization code">
+                                <Input
+                                    value={editFormState.authorizationCode}
+                                    onChange={(_, data) =>
+                                        setEditFormState((prev) => ({ ...prev, authorizationCode: data.value }))
+                                    }
+                                />
+                            </Field>
+                            <Field label="Redirect URI">
+                                <Input
+                                    value={editFormState.redirectUri}
+                                    onChange={(_, data) =>
+                                        setEditFormState((prev) => ({ ...prev, redirectUri: data.value }))
+                                    }
+                                />
+                            </Field>
+                            <Field label="Username">
+                                <Input
+                                    value={editFormState.username}
+                                    onChange={(_, data) =>
+                                        setEditFormState((prev) => ({ ...prev, username: data.value }))
+                                    }
+                                />
+                            </Field>
+                            <Field label="Password">
+                                <Input
+                                    type="password"
+                                    value={editFormState.password}
+                                    onChange={(_, data) =>
+                                        setEditFormState((prev) => ({ ...prev, password: data.value }))
+                                    }
+                                />
+                            </Field>
+                        </>
+                    )}
+
+                    <Field label="D365 URL">
+                        <Input
+                            value={editFormState.d365Url}
+                            onChange={(_, data) => setEditFormState((prev) => ({ ...prev, d365Url: data.value }))}
+                        />
+                    </Field>
+
+                    {editStatus ? (
+                        <Text
+                            style={{
+                                color:
+                                    editStatus.type === "success"
+                                        ? tokens.colorPaletteGreenForeground1
+                                        : tokens.colorPaletteRedForeground1,
+                            }}
+                        >
+                            {editStatus.message}
+                        </Text>
+                    ) : null}
+
+                    <Button appearance="primary" onClick={handleSaveEdit}>
+                        Save Changes
                     </Button>
                 </div>
             </ModalDialog>

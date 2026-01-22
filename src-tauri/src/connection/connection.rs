@@ -14,6 +14,8 @@ use crate::binding::model::{
     createconnectionrequest::CreateConnectionRequest,
     createconnectionresponse::CreateConnectionResponse,
     listconnectionsresponse::ListConnectionsResponse,
+    updateconnectionrequest::UpdateConnectionRequest,
+    updateconnectionresponse::UpdateConnectionResponse,
 };
 
 #[tauri::command]
@@ -88,6 +90,101 @@ pub async fn create_connection(
 pub async fn list_connections(_window: tauri::Window) -> Result<ListConnectionsResponse, String> {
     let connections = load_connections()?;
     Ok(ListConnectionsResponse::success(connections))
+}
+
+#[tauri::command]
+pub async fn update_connection(
+    _window: tauri::Window,
+    connection_request: UpdateConnectionRequest,
+) -> Result<UpdateConnectionResponse, String> {
+    let UpdateConnectionRequest { id, index, payload } = connection_request;
+    let mut connections = load_connections()?;
+
+    let target_index = if let Some(request_id) = id {
+        connections
+            .iter()
+            .position(|connection| match connection {
+                Connection::ClientCredentials { id, .. }
+                | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&request_id),
+            })
+            .ok_or("Connection not found")?
+    } else {
+        if index >= connections.len() {
+            return Err("Connection not found".to_string());
+        }
+        index
+    };
+
+    let existing_id = match &connections[target_index] {
+        Connection::ClientCredentials { id, .. } | Connection::AuthorizationCode { id, .. } => id.clone(),
+    };
+
+    let updated_connection = match payload {
+        CreateConnectionPayload::ClientCredentials {
+            name,
+            client_id,
+            client_secret,
+            tenant_id,
+            scope,
+            d365_url,
+        } => {
+            validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope).await?;
+
+            Connection::ClientCredentials {
+                id: existing_id,
+                name,
+                client_id,
+                client_secret,
+                tenant_id,
+                scope,
+                d365_url,
+                generated_on: utc_timestamp(),
+            }
+        }
+        CreateConnectionPayload::AuthorizationCode {
+            name,
+            client_id,
+            client_secret,
+            tenant_id,
+            scope,
+            authorization_code,
+            redirect_uri,
+            username,
+            password,
+            d365_url,
+        } => {
+            let token = exchange_authorization_code(
+                &client_id,
+                &client_secret,
+                &tenant_id,
+                &scope,
+                &authorization_code,
+                &redirect_uri,
+                &username,
+                &password,
+            )
+            .await?;
+
+            Connection::AuthorizationCode {
+                id: existing_id,
+                name,
+                access_token: token.access_token,
+                refresh_token: token.refresh_token,
+                expires_at: token.expires_at,
+                d365_url,
+                generated_on: utc_timestamp(),
+            }
+        }
+    };
+
+    connections[target_index] = updated_connection.clone();
+    save_connections(&connections)?;
+
+    Ok(UpdateConnectionResponse {
+        message: "Connection validated.".to_string(),
+        success: true,
+        value: updated_connection,
+    })
 }
 
 struct TokenExchange {
