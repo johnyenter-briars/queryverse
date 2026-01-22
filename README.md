@@ -1,11 +1,7 @@
-<h1>
-  QueryVerse
-  <img align="right" src="./img/app-icon.png" alt="QueryVerse app icon" width="120" />
+<h1 align="left">QueryVerse
+  <img align="right" src="./img/app-icon.png" alt="QueryVerse app icon" style="height: 1.5em;" />
 </h1>
 
-<br>
-
----
 
 Perform SQL queries against [Microsoft Dataverse](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/data-platform-intro) — ⚡blazingly⚡fast.
 
