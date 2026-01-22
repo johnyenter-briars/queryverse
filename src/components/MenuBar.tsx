@@ -11,12 +11,15 @@ import {
     Play24Filled,
     WindowConsole20Filled,
     Keyboard24Regular,
+    Table24Regular,
 } from "@fluentui/react-icons";
 export interface IMenuBarProps {
     vimEnabled: boolean;
     onToggleVimEnabled: () => void;
     connectionsEnabled: boolean;
     onToggleConnections: () => void;
+    schemaEnabled: boolean;
+    onToggleSchema: () => void;
     onExecute: () => void;
     canExecute: boolean;
     onShowShortcuts: () => void;
@@ -26,6 +29,8 @@ export function MenuBar({
     vimEnabled,
     connectionsEnabled,
     onToggleConnections,
+    schemaEnabled,
+    onToggleSchema,
     onToggleVimEnabled,
     onExecute,
     canExecute,
@@ -44,6 +49,14 @@ export function MenuBar({
                 title="Toggle Connections Menu"
             >
                 Connections
+            </ToolbarButton>
+            <ToolbarButton
+                icon={<Table24Regular />}
+                onClick={onToggleSchema}
+                appearance={schemaEnabled ? "primary" : "subtle"}
+                title="Toggle Schema Explorer"
+            >
+                Schema
             </ToolbarButton>
             <ToolbarButton
                 icon={<Play24Filled />}

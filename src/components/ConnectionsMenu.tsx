@@ -13,7 +13,6 @@ import {
     Text,
 } from "@fluentui/react-components";
 import {
-    Table24Filled,
     FolderOpen24Filled,
     AddCircleRegular,
 } from "@fluentui/react-icons";
@@ -67,12 +66,6 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
         styles.flyoutBase,
         isOpen && styles.flyoutOpen
     );
-
-    const mockSchema = [
-        { name: "d365 dev", tables: ["systemuser", "account", "contact", "incident"] },
-        { name: "d365 qa", tables: ["systemuser", "account", "contact", "incident"] },
-        { name: "d365 prod", tables: ["systemuser", "account", "contact", "incident"] },
-    ];
 
     const [connections, setConnections] = useState<Connection[]>([]);
 
@@ -640,33 +633,6 @@ export function ConnectionsMenu({ isOpen }: IConnectionsMenuProps) {
                 </div>
             </ModalDialog>
 
-            <div className={`${styles.flyoutHalf}`}>
-                <div className={styles.section}>
-                    <div className={styles.sectionHeader}>
-                        <div className={styles.sectionTitle}>
-                            <Title3>Schema Explorer</Title3>
-                            <Text className={styles.sectionSubtitle}>
-                                Browse tables from connected environments.
-                            </Text>
-                        </div>
-                    </div>
-                    <Divider className={styles.sectionDivider} />
-                    <Tree size="small" aria-label="Database Schema">
-                        {mockSchema.map((db, dbIndex) => (
-                            <TreeItem key={`db-${dbIndex}`} itemType="branch">
-                                <TreeItemLayout><FolderOpen24Filled /> {db.name}</TreeItemLayout>
-                                <Tree>
-                                    {db.tables.map((table, tableIndex) => (
-                                        <TreeItem key={`table-${dbIndex}-${tableIndex}`} itemType="leaf">
-                                            <TreeItemLayout><Table24Filled /> {table}</TreeItemLayout>
-                                        </TreeItem>
-                                    ))}
-                                </Tree>
-                            </TreeItem>
-                        ))}
-                    </Tree>
-                </div>
-            </div>
         </div>
     );
 }

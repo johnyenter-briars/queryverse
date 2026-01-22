@@ -15,6 +15,7 @@ import { TabSwitcher } from "./components/TabSwitcher";
 
 import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
+import { SchemaExplorerMenu } from "./components/SchemaExplorerMenu";
 import { combineClasses } from "./utility/class";
 import { MultipleResponse } from "./binding/model/MultipleResponse";
 import { Entity } from "./binding/model/Entity";
@@ -31,6 +32,7 @@ type EditorTab = {
 
 export default function App() {
     const [connectionsEnabled, setIsMenuOpen] = useState(true); 
+    const [schemaEnabled, setSchemaEnabled] = useState(false); 
     const [vimEnabled, setVimEnabled] = useState(true); 
     const [tabs, setTabs] = useState<EditorTab[]>([]);
     const [activeTabId, setActiveTabId] = useState(0);
@@ -41,7 +43,7 @@ export default function App() {
 
     const contentClasses = combineClasses(
         styles.contentArea,
-        connectionsEnabled && styles.contentShifted
+        (connectionsEnabled || schemaEnabled) && styles.contentShifted
     );
 
     const onRetrieveResults = (results: MultipleResponse<Entity>) =>  {
@@ -108,7 +110,21 @@ export default function App() {
                     vimEnabled={vimEnabled}
 					connectionsEnabled={connectionsEnabled}
                     onToggleVimEnabled={() => setVimEnabled(!vimEnabled)} 
-                    onToggleConnections={() => setIsMenuOpen(!connectionsEnabled)} 
+                    onToggleConnections={() => {
+                        const next = !connectionsEnabled;
+                        setIsMenuOpen(next);
+                        if (next) {
+                            setSchemaEnabled(false);
+                        }
+                    }} 
+                    schemaEnabled={schemaEnabled}
+                    onToggleSchema={() => {
+                        const next = !schemaEnabled;
+                        setSchemaEnabled(next);
+                        if (next) {
+                            setIsMenuOpen(false);
+                        }
+                    }}
                     onExecute={handleExecuteActiveTab}
                     canExecute={Boolean(activeTab)}
                     onShowShortcuts={() => setShortcutsOpen(true)}
@@ -144,6 +160,7 @@ export default function App() {
 
                 <div className={styles.wrapper}>
                     <ConnectionsMenu isOpen={connectionsEnabled} />
+                    <SchemaExplorerMenu isOpen={schemaEnabled} />
 
                     <div className={contentClasses}> 
                         
