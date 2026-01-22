@@ -1,5 +1,5 @@
 <h1 align="left">QueryVerse
-  <img align="right" src="./img/app-icon.png" alt="QueryVerse app icon" style="height: 2em;" />
+  <img align="left" src="./img/app-icon.png" alt="QueryVerse app icon" style="height: 1.5em;" />
 </h1>
 
 
