@@ -28,6 +28,10 @@ pub enum Connection {
         #[serde(default)]
         #[serde(rename = "d365Url")]
         d365_url: String,
+
+        #[serde(default)]
+        #[serde(rename = "generatedOn")]
+        generated_on: String,
     },
 
     #[serde(rename = "AuthorizationCode", alias = "OAuth")]
@@ -50,5 +54,9 @@ pub enum Connection {
         #[serde(default)]
         #[serde(rename = "d365Url")]
         d365_url: String,
+
+        #[serde(default)]
+        #[serde(rename = "generatedOn")]
+        generated_on: String,
     },
 }

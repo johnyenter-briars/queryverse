@@ -11,6 +11,7 @@ export interface ClientCredentialsConnection {
     tenantId: string;
     scope: string;
     d365Url: string;
+    generatedOn: string;
 }
 
 export interface AuthorizationCodeConnection {
@@ -21,4 +22,5 @@ export interface AuthorizationCodeConnection {
     refreshToken: string;
     expiresAt: string; 
     d365Url: string;
+    generatedOn: string;
 }

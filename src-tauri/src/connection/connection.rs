@@ -3,6 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use chrono::Utc;
 use reqwest::Client;
 use serde_json::Value;
 use uuid::Uuid;
@@ -39,6 +40,7 @@ pub async fn create_connection(
                 tenant_id,
                 scope,
                 d365_url,
+                generated_on: utc_timestamp(),
             }
         }
         CreateConnectionPayload::AuthorizationCode {
@@ -72,6 +74,7 @@ pub async fn create_connection(
                 refresh_token: token.refresh_token,
                 expires_at: token.expires_at,
                 d365_url,
+                generated_on: utc_timestamp(),
             }
         }
     };
@@ -246,4 +249,8 @@ fn connections_path() -> Result<PathBuf, String> {
     let dir = base.join("QueryVerse");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir.join("connections.json"))
+}
+
+fn utc_timestamp() -> String {
+    Utc::now().to_rfc3339()
 }
