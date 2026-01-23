@@ -1,4 +1,3 @@
-import * as React from "react";
 import { useEffect, useRef } from "react";
 //@ts-expect-error monaco-vim has no type declarations
 import { initVimMode } from "monaco-vim";

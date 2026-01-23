@@ -4,7 +4,6 @@ import {
     Tree,
     TreeItem,
     TreeItemLayout,
-    Text,
 } from "@fluentui/react-components";
 import { FolderOpen24Filled, Table24Filled } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
