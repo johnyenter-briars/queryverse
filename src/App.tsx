@@ -5,9 +5,6 @@ import {
     TabList,
     Tab,
     Button,
-    makeStyles,
-    shorthands,
-    tokens,
 } from "@fluentui/react-components";
 import { Add24Regular } from "@fluentui/react-icons";
 import { ResultsWindow } from "./components/ResultsWindow";
@@ -21,49 +18,12 @@ import { SchemaExplorerMenu } from "./components/SchemaExplorerMenu";
 import { combineClasses } from "./utility/class";
 import { Entity } from "./binding/model/Entity";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
+import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
 import { executeSql, previewFetchXml } from "./binding/function";
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
 
 const DEFAULT_QUERY = "select top 20 *\nfrom account";
-
-const usePreviewStyles = makeStyles({
-    previewPanel: {
-        display: "flex",
-        flexDirection: "column",
-        backgroundColor: webDarkTheme.colorNeutralBackground2,
-        ...shorthands.border(`1px solid ${tokens.colorNeutralStroke1}`),
-        ...shorthands.borderRadius(tokens.borderRadiusMedium),
-        marginBottom: tokens.spacingVerticalM,
-        minHeight: 0,
-    },
-    previewHeader: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalM),
-        ...shorthands.borderBottom(`1px solid ${tokens.colorNeutralStroke1}`),
-    },
-    previewBody: {
-        fontFamily: "monospace",
-        whiteSpace: "pre-wrap",
-        overflowY: "auto",
-        maxHeight: "200px",
-        ...shorthands.padding(tokens.spacingHorizontalM),
-    },
-    previewError: {
-        color: tokens.colorPaletteRedForeground1,
-    },
-    previewMeta: {
-        color: tokens.colorNeutralForeground2,
-        ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalM),
-        ...shorthands.borderTop(`1px solid ${tokens.colorNeutralStroke1}`),
-    },
-    executeError: {
-        color: tokens.colorPaletteRedForeground1,
-        marginBottom: tokens.spacingVerticalS,
-    },
-});
 
 type EditorTab = {
     id: number;
@@ -97,7 +57,6 @@ export default function App() {
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
     const styles = useAppStyles();
-    const previewStyles = usePreviewStyles();
 
     const contentClasses = combineClasses(
         styles.contentArea,
@@ -334,38 +293,13 @@ export default function App() {
                         <div className={styles.bottom}>
                             {activeTab ? (
                                 <>
-                                    {(activeTab.fetchPreview || activeTab.previewError) && (
-                                        <div className={previewStyles.previewPanel}>
-                                            <div className={previewStyles.previewHeader}>
-                                                <span>FetchXML Preview</span>
-                                                <Button
-                                                    appearance="subtle"
-                                                    size="small"
-                                                    onClick={handleClearPreview}
-                                                >
-                                                    Clear
-                                                </Button>
-                                            </div>
-                                            <pre
-                                                className={combineClasses(
-                                                    previewStyles.previewBody,
-                                                    activeTab.previewError
-                                                        ? previewStyles.previewError
-                                                        : undefined
-                                                )}
-                                            >
-                                                {activeTab.previewError ??
-                                                    activeTab.fetchPreview?.fetchXml}
-                                            </pre>
-                                            {activeTab.fetchPreview?.entityLogical && (
-                                                <div className={previewStyles.previewMeta}>
-                                                    Entity: {activeTab.fetchPreview.entityLogical} (set: {activeTab.fetchPreview.entitySet})
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                    <FetchXmlPreviewPanel
+                                        fetchPreview={activeTab.fetchPreview}
+                                        previewError={activeTab.previewError}
+                                        onClear={handleClearPreview}
+                                    />
                                     {activeTab.executeError && (
-                                        <div className={previewStyles.executeError}>
+                                        <div className={styles.executeError}>
                                             {activeTab.executeError}
                                         </div>
                                     )}

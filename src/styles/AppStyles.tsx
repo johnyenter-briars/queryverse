@@ -95,6 +95,10 @@ export const useAppStyles = makeStyles({
         overflowY: "auto",
         padding: tokens.spacingHorizontalM,
     },
+    executeError: {
+        color: tokens.colorPaletteRedForeground1,
+        marginBottom: tokens.spacingVerticalS,
+    },
 
     // BASE Flyout Style (ALWAYS applied - handles hidden state/transition)
     flyoutBase: {
