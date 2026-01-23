@@ -1,16 +1,12 @@
 use serde::Serialize;
 
 use crate::{
-    binding::model::{
+    Database, auth::{connection::load_connections, credentials::fetch_client_credentials_token}, binding::model::{
         connection::Connection,
         entity::Entity,
         executesqlrequest::ExecuteSqlRequest,
         response::MultipleResponse,
-    },
-    connection::connection::{fetch_client_credentials_token, load_connections},
-    dataverse::queryengine::QueryEngine,
-    sql,
-    Database,
+    }, dataverse::queryengine::QueryEngine, sql
 };
 
 #[derive(Debug, Serialize)]

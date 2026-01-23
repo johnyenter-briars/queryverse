@@ -18,7 +18,7 @@ import {
     Open24Regular,
 } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
-import { createConnection, listConnections, updateConnection } from "../binding/backend";
+import { createConnection, listConnections, updateConnection } from "../binding/function";
 import { ClientCredentialsConnection, Connection } from "../binding/model/Connection";
 import { RequestType } from "../binding/model/QVRequest";
 import { useEffect, useState } from "react";

@@ -1,16 +1,16 @@
 pub mod binding;
-pub mod connection;
-pub mod oauth;
 pub mod dataverse;
+pub mod auth;
 pub mod sql;
-
-use crate::connection::connection::{create_connection, list_connections, update_connection};
-use crate::connection::query::{execute_sql, parse_sql_to_fetchxml};
 
 use tauri::Manager;
 
-pub struct Database;
+use crate::binding::function::{
+    connection::{create_connection, list_connections, update_connection},
+    query::{execute_sql, parse_sql_to_fetchxml},
+};
 
+pub struct Database;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

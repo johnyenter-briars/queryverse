@@ -21,7 +21,7 @@ import { SchemaExplorerMenu } from "./components/SchemaExplorerMenu";
 import { combineClasses } from "./utility/class";
 import { Entity } from "./binding/model/Entity";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
-import { executeSql, previewFetchXml } from "./binding/backend";
+import { executeSql, previewFetchXml } from "./binding/function";
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
 
