@@ -25,7 +25,7 @@ import { executeSql, previewFetchXml } from "./binding/backend";
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
 
-const DEFAULT_QUERY = "select top 20 *\nfrom accounts";
+const DEFAULT_QUERY = "select top 20 *\nfrom account";
 
 const usePreviewStyles = makeStyles({
     previewPanel: {

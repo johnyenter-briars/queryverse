@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn maps_plural_entity_set_to_logical_name() {
-        let sql = "select name from accounts where statecode = 0";
+        let sql = "select name from account where statecode = 0";
         let result = sql_to_fetchxml(sql).expect("fetchxml");
         assert_eq!(result.entity_set, "accounts");
         assert_eq!(result.entity_logical, "account");
