@@ -2,8 +2,10 @@ pub mod binding;
 pub mod connection;
 pub mod oauth;
 pub mod dataverse;
+pub mod sql;
 
-use crate::connection::{connection::{create_connection, list_connections, update_connection}, query::retrieve_multiple};
+use crate::connection::connection::{create_connection, list_connections, update_connection};
+use crate::connection::query::{execute_sql, parse_sql_to_fetchxml};
 
 use tauri::Manager;
 
@@ -19,7 +21,8 @@ pub fn run() {
             create_connection,
             list_connections,
             update_connection,
-            retrieve_multiple
+            execute_sql,
+            parse_sql_to_fetchxml
         ])
         .setup(|app| {
             let windows = app.webview_windows();

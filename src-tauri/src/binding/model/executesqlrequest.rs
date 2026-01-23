@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RetrieveMultipleRequest {
+pub struct ExecuteSqlRequest {
+    pub sql: String,
     pub connection_id: Uuid,
 }

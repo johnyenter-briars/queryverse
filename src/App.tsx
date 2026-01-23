@@ -5,6 +5,9 @@ import {
     TabList,
     Tab,
     Button,
+    makeStyles,
+    shorthands,
+    tokens,
 } from "@fluentui/react-components";
 import { Add24Regular } from "@fluentui/react-icons";
 import { ResultsWindow } from "./components/ResultsWindow";
@@ -12,16 +15,55 @@ import { CustomEditor } from "./components/CustomEditor";
 import { ShortcutManager } from "./components/ShortcutManager";
 import { ModalDialog } from "./components/ModalDialog";
 import { TabSwitcher } from "./components/TabSwitcher";
-
 import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
 import { SchemaExplorerMenu } from "./components/SchemaExplorerMenu";
 import { combineClasses } from "./utility/class";
-import { MultipleResponse } from "./binding/model/MultipleResponse";
 import { Entity } from "./binding/model/Entity";
-import { retrieveMultiple } from "./binding/backend";
+import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
+import { executeSql, previewFetchXml } from "./binding/backend";
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
+
+const DEFAULT_QUERY = "select top 20 *\nfrom accounts";
+
+const usePreviewStyles = makeStyles({
+    previewPanel: {
+        display: "flex",
+        flexDirection: "column",
+        backgroundColor: webDarkTheme.colorNeutralBackground2,
+        ...shorthands.border(`1px solid ${tokens.colorNeutralStroke1}`),
+        ...shorthands.borderRadius(tokens.borderRadiusMedium),
+        marginBottom: tokens.spacingVerticalM,
+        minHeight: 0,
+    },
+    previewHeader: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalM),
+        ...shorthands.borderBottom(`1px solid ${tokens.colorNeutralStroke1}`),
+    },
+    previewBody: {
+        fontFamily: "monospace",
+        whiteSpace: "pre-wrap",
+        overflowY: "auto",
+        maxHeight: "200px",
+        ...shorthands.padding(tokens.spacingHorizontalM),
+    },
+    previewError: {
+        color: tokens.colorPaletteRedForeground1,
+    },
+    previewMeta: {
+        color: tokens.colorNeutralForeground2,
+        ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalM),
+        ...shorthands.borderTop(`1px solid ${tokens.colorNeutralStroke1}`),
+    },
+    executeError: {
+        color: tokens.colorPaletteRedForeground1,
+        marginBottom: tokens.spacingVerticalS,
+    },
+});
 
 type EditorTab = {
     id: number;
@@ -29,52 +71,56 @@ type EditorTab = {
     query: string;
     results: Entity[];
     connectionId: string | null;
+    fetchPreview: FetchXmlPreview | null;
+    previewError: string | null;
+    executeError: string | null;
 };
 
+const createTab = (id: number): EditorTab => ({
+    id,
+    title: `Query ${id}`,
+    query: DEFAULT_QUERY,
+    results: [],
+    connectionId: null,
+    fetchPreview: null,
+    previewError: null,
+    executeError: null,
+});
+
 export default function App() {
-    const [connectionsEnabled, setIsMenuOpen] = useState(true); 
-    const [schemaEnabled, setSchemaEnabled] = useState(false); 
-    const [vimEnabled, setVimEnabled] = useState(true); 
-    const [tabs, setTabs] = useState<EditorTab[]>([]);
-    const [activeTabId, setActiveTabId] = useState(0);
-    const nextTabId = useRef(1);
+    const [connectionsEnabled, setIsMenuOpen] = useState(true);
+    const [schemaEnabled, setSchemaEnabled] = useState(false);
+    const [vimEnabled, setVimEnabled] = useState(true);
+    const [tabs, setTabs] = useState<EditorTab[]>([createTab(1)]);
+    const [activeTabId, setActiveTabId] = useState(1);
+    const nextTabId = useRef(2);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
     const styles = useAppStyles();
+    const previewStyles = usePreviewStyles();
 
     const contentClasses = combineClasses(
         styles.contentArea,
         (connectionsEnabled || schemaEnabled) && styles.contentShifted
     );
 
-    const onRetrieveResults = (results: MultipleResponse<Entity>) =>  {
-        if (!results.success) {
-            console.log("Fail") //TODO
-            return;
-        }
-
-        if (activeTabId === 0) {
-            return;
-        }
-
-        setTabs((prev) =>
-            prev.map((tab) =>
-                tab.id === activeTabId ? { ...tab, results: results.value } : tab
-            )
-        );
-    }
-
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
+
+    const updateTab = (tabId: number, updater: (tab: EditorTab) => EditorTab) => {
+        setTabs((prev) =>
+            prev.map((tab) => (tab.id === tabId ? updater(tab) : tab))
+        );
+    };
+
+    const getErrorMessage = (error: unknown): string => {
+        if (error instanceof Error) return error.message;
+        if (typeof error === "string") return error;
+        return "Unknown error";
+    };
 
     const handleAddTab = () => {
         const newId = nextTabId.current++;
-        const newTab: EditorTab = {
-            id: newId,
-            title: `Query ${newId}`,
-            query: "",
-            results: [],
-            connectionId: null,
-        };
+        const newTab = createTab(newId);
 
         setTabs((prev) => [...prev, newTab]);
         setActiveTabId(newId);
@@ -100,30 +146,80 @@ export default function App() {
 
     const handleExecuteActiveTab = async () => {
         if (activeTabId === 0) return;
-        if (!activeTab?.connectionId) {
-            console.error("No connection assigned to this tab.");
+        const targetTab = tabs.find((tab) => tab.id === activeTabId);
+        if (!targetTab?.connectionId) {
             return;
         }
-        const response = await retrieveMultiple(activeTab.connectionId);
-        onRetrieveResults(response);
+
+        try {
+            const response = await executeSql(targetTab.query, targetTab.connectionId);
+            if (!response.success) {
+                updateTab(targetTab.id, (tab) => ({
+                    ...tab,
+                    results: response.value,
+                    executeError: response.message || "Query failed",
+                }));
+                return;
+            }
+
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                results: response.value,
+                executeError: null,
+            }));
+        } catch (error) {
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                executeError: getErrorMessage(error),
+            }));
+        }
     };
 
+    const handlePreviewActiveTab = async () => {
+        if (activeTabId === 0) return;
+        const targetTab = tabs.find((tab) => tab.id === activeTabId);
+        if (!targetTab) return;
+
+        try {
+            const response = await previewFetchXml(targetTab.query);
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                fetchPreview: response,
+                previewError: null,
+            }));
+        } catch (error) {
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                fetchPreview: null,
+                previewError: getErrorMessage(error),
+            }));
+        }
+    };
+
+    const handleClearPreview = () => {
+        if (!activeTab) return;
+        updateTab(activeTab.id, (tab) => ({
+            ...tab,
+            fetchPreview: null,
+            previewError: null,
+        }));
+    };
 
     return (
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
                 <MenuBar
                     vimEnabled={vimEnabled}
-					connectionsEnabled={connectionsEnabled}
-                    onToggleVimEnabled={() => setVimEnabled(!vimEnabled)} 
+                    connectionsEnabled={connectionsEnabled}
+                    schemaEnabled={schemaEnabled}
+                    onToggleVimEnabled={() => setVimEnabled(!vimEnabled)}
                     onToggleConnections={() => {
                         const next = !connectionsEnabled;
                         setIsMenuOpen(next);
                         if (next) {
                             setSchemaEnabled(false);
                         }
-                    }} 
-                    schemaEnabled={schemaEnabled}
+                    }}
                     onToggleSchema={() => {
                         const next = !schemaEnabled;
                         setSchemaEnabled(next);
@@ -131,7 +227,8 @@ export default function App() {
                             setIsMenuOpen(false);
                         }
                     }}
-                    onExecute={handleExecuteActiveTab}
+                    onExecuteSql={handleExecuteActiveTab}
+                    onPreviewFetchXml={handlePreviewActiveTab}
                     canExecute={Boolean(activeTab?.connectionId)}
                     onShowShortcuts={() => setShortcutsOpen(true)}
                 />
@@ -169,11 +266,9 @@ export default function App() {
                         isOpen={connectionsEnabled}
                         onOpenConnection={(connection) => {
                             const newId = nextTabId.current++;
-                            const newTab: EditorTab = {
-                                id: newId,
+                            const newTab = {
+                                ...createTab(newId),
                                 title: `Query - ${connection.name}`,
-                                query: "",
-                                results: [],
                                 connectionId: connection.id ?? null,
                             };
                             setTabs((prev) => [...prev, newTab]);
@@ -182,8 +277,7 @@ export default function App() {
                     />
                     <SchemaExplorerMenu isOpen={schemaEnabled} />
 
-                    <div className={contentClasses}> 
-                        
+                    <div className={contentClasses}>
                         <div className={styles.top}>
                             <div className={styles.tabsBar}>
                                 <TabList
@@ -228,11 +322,10 @@ export default function App() {
                                     vimEnabled={vimEnabled}
                                     value={activeTab.query}
                                     onChange={(value) => {
-                                        setTabs((prev) =>
-                                            prev.map((tab) =>
-                                                tab.id === activeTab.id ? { ...tab, query: value } : tab
-                                            )
-                                        );
+                                        updateTab(activeTab.id, (tab) => ({
+                                            ...tab,
+                                            query: value,
+                                        }));
                                     }}
                                 />
                             ) : null}
@@ -240,7 +333,44 @@ export default function App() {
 
                         <div className={styles.bottom}>
                             {activeTab ? (
-                                <ResultsWindow data={activeTab.results} />
+                                <>
+                                    {(activeTab.fetchPreview || activeTab.previewError) && (
+                                        <div className={previewStyles.previewPanel}>
+                                            <div className={previewStyles.previewHeader}>
+                                                <span>FetchXML Preview</span>
+                                                <Button
+                                                    appearance="subtle"
+                                                    size="small"
+                                                    onClick={handleClearPreview}
+                                                >
+                                                    Clear
+                                                </Button>
+                                            </div>
+                                            <pre
+                                                className={combineClasses(
+                                                    previewStyles.previewBody,
+                                                    activeTab.previewError
+                                                        ? previewStyles.previewError
+                                                        : undefined
+                                                )}
+                                            >
+                                                {activeTab.previewError ??
+                                                    activeTab.fetchPreview?.fetchXml}
+                                            </pre>
+                                            {activeTab.fetchPreview?.entityLogical && (
+                                                <div className={previewStyles.previewMeta}>
+                                                    Entity: {activeTab.fetchPreview.entityLogical} (set: {activeTab.fetchPreview.entitySet})
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    {activeTab.executeError && (
+                                        <div className={previewStyles.executeError}>
+                                            {activeTab.executeError}
+                                        </div>
+                                    )}
+                                    <ResultsWindow data={activeTab.results} />
+                                </>
                             ) : null}
                         </div>
                     </div>

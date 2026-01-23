@@ -24,6 +24,17 @@ export interface IResultsWindowProps {
     data: Entity[];
 }
 
+// TODO: determine the primary id via a look-ahead metadata request 
+function getEntityRowId(entity: Entity): string {
+    const keys = Object.keys(entity.attributes);
+    if (keys.length === 0) return "empty-row";
+    const primaryKey = keys.find((key) => key.endsWith("id")) ?? keys[0];
+    const value = entity.attributes[primaryKey];
+    return value !== null && value !== undefined
+        ? String(value)
+        : JSON.stringify(entity.attributes);
+}
+
 export const ResultsWindow = React.memo(({ data }: IResultsWindowProps) => {
     const dataGridScrollRef = useRef<HTMLDivElement>(null);
 
@@ -58,7 +69,7 @@ export const ResultsWindow = React.memo(({ data }: IResultsWindowProps) => {
                 columns={columns}
                 sortable
                 getRowId={
-                    (entity: Entity) => String(entity.attributes["accountid"]) ?? ''
+                    (entity: Entity) => getEntityRowId(entity)
                 }
                 style={{ minWidth: totalWidth }}
             >
@@ -94,4 +105,3 @@ export const ResultsWindow = React.memo(({ data }: IResultsWindowProps) => {
         </div>
     );
 });
-
