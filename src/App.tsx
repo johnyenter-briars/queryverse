@@ -18,8 +18,9 @@ import { SchemaExplorerMenu } from "./components/SchemaExplorerMenu";
 import { combineClasses } from "./utility/class";
 import { Entity } from "./binding/model/Entity";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
+import { Connection } from "./binding/model/Connection";
 import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
-import { executeSql, previewFetchXml } from "./binding/function";
+import { executeSql, listConnections, previewFetchXml } from "./binding/function";
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
 
@@ -77,12 +78,30 @@ export default function App() {
         return "Unknown error";
     };
 
-    const handleAddTab = () => {
+    const openTab = (connection?: Connection | null) => {
         const newId = nextTabId.current++;
-        const newTab = createTab(newId);
+        const newTab = {
+            ...createTab(newId),
+            title: connection?.name ? `Query - ${connection.name}` : `Query ${newId}`,
+            connectionId: connection?.id ?? null,
+        };
 
         setTabs((prev) => [...prev, newTab]);
         setActiveTabId(newId);
+    };
+
+    const handleAddTab = () => {
+        openTab();
+    };
+
+    const handleAddTabWithFirstConnection = async () => {
+        try {
+            const response = await listConnections();
+            const firstConnection = response.success ? response.value[0] : undefined;
+            openTab(firstConnection ?? null);
+        } catch {
+            openTab(null);
+        }
     };
 
     const handleCloseTab = (id: number) => {
@@ -195,7 +214,7 @@ export default function App() {
                     handlers={{
                         execute: handleExecuteActiveTab,
                         "close-tab": handleCloseActiveTab,
-                        "new-tab": handleAddTab,
+                        "new-tab": handleAddTabWithFirstConnection,
                     }}
                     isEnabled={(id: ShortcutActionId) =>
                         id === "execute" ? Boolean(activeTab?.connectionId) : true
@@ -224,14 +243,7 @@ export default function App() {
                     <ConnectionsMenu
                         isOpen={connectionsEnabled}
                         onOpenConnection={(connection) => {
-                            const newId = nextTabId.current++;
-                            const newTab = {
-                                ...createTab(newId),
-                                title: `Query - ${connection.name}`,
-                                connectionId: connection.id ?? null,
-                            };
-                            setTabs((prev) => [...prev, newTab]);
-                            setActiveTabId(newId);
+                            openTab(connection);
                         }}
                     />
                     <SchemaExplorerMenu isOpen={schemaEnabled} />
