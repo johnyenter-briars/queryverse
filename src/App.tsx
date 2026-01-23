@@ -51,9 +51,9 @@ export default function App() {
     const [connectionsEnabled, setIsMenuOpen] = useState(true);
     const [schemaEnabled, setSchemaEnabled] = useState(false);
     const [vimEnabled, setVimEnabled] = useState(true);
-    const [tabs, setTabs] = useState<EditorTab[]>([createTab(1)]);
-    const [activeTabId, setActiveTabId] = useState(1);
-    const nextTabId = useRef(2);
+    const [tabs, setTabs] = useState<EditorTab[]>([]);
+    const [activeTabId, setActiveTabId] = useState(0);
+    const nextTabId = useRef(1);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
     const styles = useAppStyles();
