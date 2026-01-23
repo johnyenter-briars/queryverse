@@ -2,7 +2,7 @@ export type Connection = ClientCredentialsConnection | AuthorizationCodeConnecti
 
 export type ConnectionMethod = 'ClientCredentials' | 'AuthorizationCode'
 
-export interface ClientCredentialsConnection {
+export type ClientCredentialsConnection = {
     method: ConnectionMethod;
     id: string | null;
     name: string;
@@ -14,7 +14,7 @@ export interface ClientCredentialsConnection {
     generatedOn: string;
 }
 
-export interface AuthorizationCodeConnection {
+export type AuthorizationCodeConnection = {
     method: ConnectionMethod;
     id: string | null;
     name: string;

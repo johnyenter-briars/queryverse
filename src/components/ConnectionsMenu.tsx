@@ -19,7 +19,7 @@ import {
 } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
 import { createConnection, listConnections, updateConnection } from "../binding/backend";
-import { Connection } from "../binding/model/Connection";
+import { ClientCredentialsConnection, Connection } from "../binding/model/Connection";
 import { RequestType } from "../binding/model/QVRequest";
 import { useEffect, useState } from "react";
 import { useConnectionsMenuStyles } from "../styles/ConnectionsMenuStyles";
@@ -63,6 +63,21 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         password: "",
         d365Url: "",
     });
+
+    const deriveScopeFromUrl = (value: string) => {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return "";
+        }
+
+        try {
+            const normalized = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+            const parsed = new URL(normalized);
+            return `${parsed.origin}/.default`;
+        } catch {
+            return "";
+        }
+    };
 
     const flyoutClasses = combineClasses(
         styles.flyoutBase,
@@ -114,11 +129,16 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         setEditStatus(null);
     };
 
+    const isClientCredentialsConnection = (
+        connection: Connection
+    ): connection is ClientCredentialsConnection =>
+        connection.method === "ClientCredentials";
+
     const handleOpenEdit = (conn: Connection, index: number) => {
         setEditStatus(null);
         setEditIndex(index);
 
-        if (conn.method === "ClientCredentials") {
+        if (isClientCredentialsConnection(conn)) {
             setEditFormState({
                 method: "ClientCredentials",
                 name: conn.name ?? "",
@@ -154,6 +174,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
     const handleCreateConnection = async () => {
         setCreateStatus(null);
 
+        const derivedScope = deriveScopeFromUrl(formState.d365Url);
         const payload =
             createMethod === "ClientCredentials"
                 ? {
@@ -162,7 +183,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                     clientId: formState.clientId.trim(),
                     clientSecret: formState.clientSecret,
                     tenantId: formState.tenantId.trim(),
-                    scope: formState.scope.trim(),
+                    scope: derivedScope,
                     d365Url: formState.d365Url.trim(),
                 }
                 : {
@@ -171,7 +192,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                     clientId: formState.clientId.trim(),
                     clientSecret: formState.clientSecret,
                     tenantId: formState.tenantId.trim(),
-                    scope: formState.scope.trim(),
+                    scope: derivedScope,
                     authorizationCode: formState.authorizationCode.trim(),
                     redirectUri: formState.redirectUri.trim(),
                     username: formState.username.trim(),
@@ -349,9 +370,6 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                     <div className={styles.sectionHeader}>
                         <div className={styles.sectionTitle}>
                             <Title3>Connections</Title3>
-                            <Text className={styles.sectionSubtitle}>
-                                Validate and manage saved connections.
-                            </Text>
                         </div>
                         <Button
                             appearance="primary"
@@ -441,16 +459,16 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                             onChange={(_, data) => setFormState((prev) => ({ ...prev, tenantId: data.value }))}
                         />
                     </Field>
-                    <Field label="Scope">
-                        <Input
-                            value={formState.scope}
-                            onChange={(_, data) => setFormState((prev) => ({ ...prev, scope: data.value }))}
-                        />
-                    </Field>
                     <Field label="D365 URL">
                         <Input
                             value={formState.d365Url}
-                            onChange={(_, data) => setFormState((prev) => ({ ...prev, d365Url: data.value }))}
+                            onChange={(_, data) =>
+                                setFormState((prev) => ({
+                                    ...prev,
+                                    d365Url: data.value,
+                                    scope: deriveScopeFromUrl(data.value),
+                                }))
+                            }
                         />
                     </Field>
 

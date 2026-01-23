@@ -37,9 +37,6 @@ export function SchemaExplorerMenu({ isOpen }: ISchemaExplorerMenuProps) {
                     <div className={styles.sectionHeader}>
                         <div className={styles.sectionTitle}>
                             <Title3>Schema Explorer</Title3>
-                            <Text className={styles.sectionSubtitle}>
-                                Browse tables from connected environments.
-                            </Text>
                         </div>
                     </div>
                     <Divider className={styles.sectionDivider} />
