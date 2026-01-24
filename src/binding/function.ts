@@ -9,7 +9,7 @@ import { FetchXmlPreview } from "./model/FetchXmlPreview";
 import { ListConnectionsResponse } from "./model/ListConnectionsResponse";
 import { ExecuteSqlRequest } from "./model/ExecuteSqlRequest";
 import { ListEntityDefinitionsRequest } from "./model/ListEntityDefinitionsRequest";
-import { EntityDefinitionSummary } from "./model/EntityDefinitionSummary";
+import { EntityDefinition } from "./model/EntityDefinition";
 
 export const executeSql = async (
     sql: string,
@@ -71,8 +71,8 @@ export const updateConnection = async (
 
 export const listEntityDefinitions = async (
     connectionId: string
-): Promise<MultipleResponse<EntityDefinitionSummary>> => {
-    const response: MultipleResponse<EntityDefinitionSummary> = await invoke(
+): Promise<MultipleResponse<EntityDefinition>> => {
+    const response: MultipleResponse<EntityDefinition> = await invoke(
         "list_entity_definitions",
         {
             request: {

@@ -6,7 +6,7 @@ use crate::{
     binding::model::{
         connection::Connection,
         dataverse::entity::Entity,
-        dataverse::entitydefinitionsummary::EntityDefinitionSummary,
+        dataverse::entitydefinition::EntityDefinition,
         executesqlrequest::ExecuteSqlRequest,
         listentitydefinitionsrequest::ListEntityDefinitionsRequest,
         response::MultipleResponse,
@@ -85,7 +85,9 @@ pub async fn execute_sql(
         .get_entity_metadata(&parsed.entity_logical)
         .await?;
 
-    println!("PrimaryIdAttribute: {}", metadata.primary_id_attribute);
+    if let Some(primary_id_attribute) = metadata.primary_id_attribute {
+        println!("PrimaryIdAttribute: {}", primary_id_attribute);
+    }
 
     let resp = query_engine
         .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
@@ -98,7 +100,7 @@ pub async fn execute_sql(
 pub async fn list_entity_definitions(
     _window: tauri::Window,
     request: ListEntityDefinitionsRequest,
-) -> Result<MultipleResponse<EntityDefinitionSummary>, String> {
+) -> Result<MultipleResponse<EntityDefinition>, String> {
     let connections = load_connections()?;
     let connection = connections
         .into_iter()

@@ -2,8 +2,7 @@ use reqwest::Client;
 use serde_json::Value;
 
 use crate::binding::model::dataverse::entity::Entity;
-use crate::binding::model::dataverse::entitydefinitionsummary::EntityDefinitionSummary;
-use crate::binding::model::dataverse::entitymetadata::EntityMetadata;
+use crate::binding::model::dataverse::entitydefinition::EntityDefinition;
 use crate::binding::model::dataverse::entity::Value::{Boolean, Int, Null, String};
 use crate::binding::model::response::MultipleResponse;
 
@@ -75,7 +74,7 @@ impl QueryEngine {
     pub async fn get_entity_metadata(
         &self,
         entity_logical: &str,
-    ) -> Result<EntityMetadata, std::string::String> {
+    ) -> Result<EntityDefinition, std::string::String> {
         let logical = entity_logical.replace('\'', "''");
         let url = format!(
             "{}/api/data/v9.2/EntityDefinitions(LogicalName='{}')",
@@ -98,7 +97,7 @@ impl QueryEngine {
             return Err(format!("Dataverse API error ({}): {}", status, body));
         }
 
-        resp.json::<EntityMetadata>()
+        resp.json::<EntityDefinition>()
             .await
             .map_err(|e| format!("Failed to parse JSON: {e}"))
     }
@@ -138,7 +137,7 @@ impl QueryEngine {
 
     pub async fn list_entity_definitions(
         &self,
-    ) -> Result<Vec<EntityDefinitionSummary>, std::string::String> {
+    ) -> Result<Vec<EntityDefinition>, std::string::String> {
         let url = format!(
             "{}/api/data/v9.2/EntityDefinitions?$select=LogicalName,SchemaName,DisplayName,EntitySetName,IsCustomEntity",
             self.base_url
@@ -160,7 +159,7 @@ impl QueryEngine {
             return Err(format!("Dataverse API error ({}): {}", status, body));
         }
 
-        let parsed: ODataList<EntityDefinitionSummary> = resp
+        let parsed: ODataList<EntityDefinition> = resp
             .json()
             .await
             .map_err(|e| format!("Failed to parse JSON: {e}"))?;

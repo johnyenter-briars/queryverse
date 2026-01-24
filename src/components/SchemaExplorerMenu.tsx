@@ -12,7 +12,7 @@ import { Table24Filled } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
 import { useConnectionsMenuStyles } from "../styles/ConnectionsMenuStyles";
 import { Connection } from "../binding/model/Connection";
-import { EntityDefinitionSummary } from "../binding/model/EntityDefinitionSummary";
+import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { listEntityDefinitions } from "../binding/function";
 import { useState } from "react";
 
@@ -61,11 +61,11 @@ export function SchemaExplorerMenu({ isOpen, currentConnection }: ISchemaExplore
         isOpen && styles.flyoutOpen
     );
 
-    const [tables, setTables] = useState<EntityDefinitionSummary[]>([]);
+    const [tables, setTables] = useState<EntityDefinition[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const getDisplayName = (displayName: EntityDefinitionSummary["displayName"]) => {
+    const getDisplayName = (displayName: EntityDefinition["displayName"]) => {
         if (!displayName || typeof displayName !== "object") {
             return null;
         }
