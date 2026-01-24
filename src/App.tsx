@@ -136,7 +136,7 @@ export default function App() {
     const handleExecuteActiveTab = async () => {
         if (activeTabId === 0) return;
         const targetTab = tabs.find((tab) => tab.id === activeTabId);
-        if (!selectedConnection?.id) {
+        if (!targetTab || !selectedConnection?.id) {
             return;
         }
 
