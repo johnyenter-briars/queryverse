@@ -2,8 +2,8 @@ use reqwest::Client;
 use serde_json::Value;
 
 use crate::binding::model::dataverse::entity::Entity;
-use crate::binding::model::dataverse::entitydefinition::EntityDefinition;
 use crate::binding::model::dataverse::entity::Value::{Boolean, Int, Null, String};
+use crate::binding::model::dataverse::entitydefinition::EntityDefinition;
 use crate::binding::model::response::MultipleResponse;
 
 #[derive(Debug, serde::Deserialize)]
@@ -185,7 +185,9 @@ fn add_attribute(
 
     //TODO: yea i know this sucks
     if value.is_i64() {
-        let i = value.as_i64().ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
+        let i = value
+            .as_i64()
+            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
 
         entity.attributes.insert(key.to_string(), Int(i));
 
@@ -193,7 +195,9 @@ fn add_attribute(
     }
 
     if value.is_string() {
-        let i = value.as_str().ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
+        let i = value
+            .as_str()
+            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
 
         entity
             .attributes
@@ -203,7 +207,9 @@ fn add_attribute(
     }
 
     if value.is_boolean() {
-        let i = value.as_bool().ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
+        let i = value
+            .as_bool()
+            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
 
         entity.attributes.insert(key.to_string(), Boolean(i));
 
@@ -213,9 +219,7 @@ fn add_attribute(
     return Ok(ValueTypeImplented::False);
 }
 
-fn parse_multiple_response(
-    json: Value,
-) -> Result<MultipleResponse<Entity>, std::string::String> {
+fn parse_multiple_response(json: Value) -> Result<MultipleResponse<Entity>, std::string::String> {
     let response_object = json
         .as_object()
         .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
@@ -239,7 +243,9 @@ fn parse_multiple_response(
             let implemented = add_attribute(&mut entity, key, value)
                 .map_err(|_| "Invalid response from Dataverse".to_string())?;
 
-            // println!("Key: {}, implemented: {:?}", key, implemented);
+            if (!implemented) {
+                println!("Key: {}, implemented: {:?}", key, implemented);
+            }
         }
 
         entities.push(entity);

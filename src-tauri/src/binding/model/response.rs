@@ -5,7 +5,7 @@ pub type MultipleResponse<T> = QVResponse<Vec<T>>;
 impl<T> MultipleResponse<T> {
     pub fn new() -> Self {
         QVResponse {
-            message: "foo".to_string(),
+            message: "Results found".to_string(),
             success: true,
             value: vec![],
         }
