@@ -3,7 +3,7 @@ use serde::Serialize;
 use crate::{
     Database, auth::{connection::load_connections, credentials::fetch_client_credentials_token}, binding::model::{
         connection::Connection,
-        entity::Entity,
+        dataverse::entity::Entity,
         executesqlrequest::ExecuteSqlRequest,
         response::MultipleResponse,
     }, dataverse::queryengine::QueryEngine, sql
@@ -74,6 +74,12 @@ pub async fn execute_sql(
     }
 
     let query_engine = QueryEngine::new(&d365_url, &token);
+
+    let metadata = query_engine
+        .get_entity_metadata(&parsed.entity_logical)
+        .await?;
+
+    println!("PrimaryIdAttribute: {}", metadata.primary_id_attribute);
 
     let resp = query_engine
         .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)

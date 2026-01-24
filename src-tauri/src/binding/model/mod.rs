@@ -8,5 +8,5 @@ pub mod updateconnectionresponse;
 pub mod executesqlrequest;
 pub mod listconnectionsresponse;
 pub mod connection;
-pub mod entity;
+pub mod dataverse;
 pub mod response;

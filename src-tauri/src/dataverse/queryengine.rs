@@ -1,8 +1,9 @@
 use reqwest::Client;
 use serde_json::Value;
 
-use crate::binding::model::entity::Entity;
-use crate::binding::model::entity::Value::{Boolean, Int, Null, String};
+use crate::binding::model::dataverse::entity::Entity;
+use crate::binding::model::dataverse::entitymetadata::EntityMetadata;
+use crate::binding::model::dataverse::entity::Value::{Boolean, Int, Null, String};
 use crate::binding::model::response::MultipleResponse;
 
 #[derive(Debug)]
@@ -63,6 +64,37 @@ impl QueryEngine {
             .map_err(|e| format!("Failed to parse JSON: {e}"))?;
 
         parse_multiple_response(json)
+    }
+
+    pub async fn get_entity_metadata(
+        &self,
+        entity_logical: &str,
+    ) -> Result<EntityMetadata, std::string::String> {
+        let logical = entity_logical.replace('\'', "''");
+        let url = format!(
+            "{}/api/data/v9.2/EntityDefinitions(LogicalName='{}')",
+            self.base_url, logical
+        );
+
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.token)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {e}"))?;
+
+        let status = resp.status();
+
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("Dataverse API error ({}): {}", status, body));
+        }
+
+        resp.json::<EntityMetadata>()
+            .await
+            .map_err(|e| format!("Failed to parse JSON: {e}"))
     }
 
     pub async fn retrieve_multiple_fetchxml(
@@ -170,7 +202,7 @@ fn parse_multiple_response(
             let implemented = add_attribute(&mut entity, key, value)
                 .map_err(|_| "Invalid response from Dataverse".to_string())?;
 
-            println!("Key: {}, implemented: {:?}", key, implemented);
+            // println!("Key: {}, implemented: {:?}", key, implemented);
         }
 
         entities.push(entity);
