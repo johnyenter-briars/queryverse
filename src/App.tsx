@@ -20,7 +20,13 @@ import { Entity } from "./binding/model/Entity";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
 import { Connection } from "./binding/model/Connection";
 import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
-import { executeSql, listConnections, listEntityDefinitions, previewFetchXml } from "./binding/function";
+import {
+    executeSql,
+    listConnections,
+    listEntityDefinitions,
+    previewFetchXml,
+    setConnection,
+} from "./binding/function";
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
 import { EntityDefinition } from "./binding/model/EntityDefinition";
@@ -141,7 +147,7 @@ export default function App() {
         }
 
         try {
-            const response = await executeSql(targetTab.query, selectedConnection.id);
+            const response = await executeSql(targetTab.query);
             if (!response.success) {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
@@ -257,8 +263,15 @@ export default function App() {
                         onOpenConnection={async (connection) => {
                             openTab(connection);
                             setSelectedConnection(connection);
-                            
-                            const response = await listEntityDefinitions(connection.id!);
+
+                            if (!connection.id) {
+                                setIsMenuOpen(false);
+                                return;
+                            }
+
+                            await setConnection(connection.id);
+
+                            const response = await listEntityDefinitions();
                             //TODO: handle failure here
                             setEntityDefinitions(response.value);
 

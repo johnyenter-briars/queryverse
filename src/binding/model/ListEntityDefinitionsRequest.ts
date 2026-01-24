@@ -1,3 +1,1 @@
-export interface ListEntityDefinitionsRequest {
-    connectionId: string;
-}
+export interface ListEntityDefinitionsRequest {}

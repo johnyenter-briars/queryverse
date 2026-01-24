@@ -8,7 +8,6 @@ use crate::{
         dataverse::entity::Entity,
         dataverse::entitydefinition::EntityDefinition,
         executesqlrequest::ExecuteSqlRequest,
-        listentitydefinitionsrequest::ListEntityDefinitionsRequest,
         response::MultipleResponse,
     },
     dataverse::queryengine::QueryEngine,
@@ -41,16 +40,24 @@ pub async fn parse_sql_to_fetchxml(
 pub async fn execute_sql(
     _window: tauri::Window,
     request: ExecuteSqlRequest,
-    _database: tauri::State<'_, Database>,
+    database: tauri::State<'_, Database>,
 ) -> Result<MultipleResponse<Entity>, String> {
     let parsed = sql::sql_to_fetchxml(&request.sql).map_err(|e| e.to_string())?;
+
+    let connection_id = {
+        let selected = database
+            .selected_connection_id
+            .lock()
+            .map_err(|_| "Failed to lock connection state".to_string())?;
+        selected.ok_or("No connection selected")?
+    };
 
     let connections = load_connections()?;
     let connection = connections
         .into_iter()
         .find(|connection| match connection {
             Connection::ClientCredentials { id, .. }
-            | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&request.connection_id),
+            | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&connection_id),
         })
         .ok_or("Connection not found")?;
 
@@ -99,14 +106,22 @@ pub async fn execute_sql(
 #[tauri::command]
 pub async fn list_entity_definitions(
     _window: tauri::Window,
-    request: ListEntityDefinitionsRequest,
+    database: tauri::State<'_, Database>,
 ) -> Result<MultipleResponse<EntityDefinition>, String> {
+    let connection_id = {
+        let selected = database
+            .selected_connection_id
+            .lock()
+            .map_err(|_| "Failed to lock connection state".to_string())?;
+        selected.ok_or("No connection selected")?
+    };
+
     let connections = load_connections()?;
     let connection = connections
         .into_iter()
         .find(|connection| match connection {
             Connection::ClientCredentials { id, .. }
-            | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&request.connection_id),
+            | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&connection_id),
         })
         .ok_or("Connection not found")?;
 

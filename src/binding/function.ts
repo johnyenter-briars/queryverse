@@ -8,17 +8,15 @@ import { Entity } from "./model/Entity";
 import { FetchXmlPreview } from "./model/FetchXmlPreview";
 import { ListConnectionsResponse } from "./model/ListConnectionsResponse";
 import { ExecuteSqlRequest } from "./model/ExecuteSqlRequest";
-import { ListEntityDefinitionsRequest } from "./model/ListEntityDefinitionsRequest";
 import { EntityDefinition } from "./model/EntityDefinition";
+import { SetConnectionRequest } from "./model/SetConnectionRequest";
 
 export const executeSql = async (
-    sql: string,
-    connectionId: string
+    sql: string
 ): Promise<MultipleResponse<Entity>> => {
     const response: MultipleResponse<Entity> = await invoke("execute_sql", {
         request: {
             sql,
-            connectionId,
         } satisfies ExecuteSqlRequest,
     });
 
@@ -69,16 +67,19 @@ export const updateConnection = async (
     return response;
 };
 
-export const listEntityDefinitions = async (
-    connectionId: string
-): Promise<MultipleResponse<EntityDefinition>> => {
+export const setConnection = async (connectionId: string): Promise<void> => {
+    await invoke("set_connection", {
+        request: {
+            connectionId,
+        } satisfies SetConnectionRequest,
+    });
+};
+
+export const listEntityDefinitions = async (): Promise<
+    MultipleResponse<EntityDefinition>
+> => {
     const response: MultipleResponse<EntityDefinition> = await invoke(
-        "list_entity_definitions",
-        {
-            request: {
-                connectionId,
-            } satisfies ListEntityDefinitionsRequest,
-        }
+        "list_entity_definitions"
     );
 
     console.log(response);
