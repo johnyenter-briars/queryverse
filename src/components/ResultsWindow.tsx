@@ -12,6 +12,11 @@ import {
     webDarkTheme,
 } from "@fluentui/react-components";
 import { Entity, Value } from "../binding/model/Entity";
+import { EntityDefinition } from "../binding/model/EntityDefinition";
+import {
+    getOrderedAttributesForResults,
+    getPrimaryIdAttributeForQuery,
+} from "../utility/resultsColumns";
 
 const DEFAULT_COL_WIDTH = 300;
 
@@ -22,26 +27,39 @@ function renderValue(value: Value): React.ReactNode {
 
 export interface IResultsWindowProps {
     data: Entity[];
+    entityDefinitions: EntityDefinition[];
+    query: string;
 }
 
-// TODO: determine the primary id via a look-ahead metadata request 
-function getEntityRowId(entity: Entity): string {
+function getEntityRowId(entity: Entity, primaryIdAttribute?: string): string {
     const keys = Object.keys(entity.attributes);
     if (keys.length === 0) return "empty-row";
-    const primaryKey = keys.find((key) => key.endsWith("id")) ?? keys[0];
+    const primaryKey =
+        (primaryIdAttribute && keys.includes(primaryIdAttribute)
+            ? primaryIdAttribute
+            : undefined) ??
+        keys.find((key) => key.endsWith("id")) ??
+        keys[0];
     const value = entity.attributes[primaryKey];
     return value !== null && value !== undefined
         ? String(value)
         : JSON.stringify(entity.attributes);
 }
 
-export const ResultsWindow = React.memo(({ data }: IResultsWindowProps) => {
+export const ResultsWindow = React.memo(
+    ({ data, entityDefinitions, query }: IResultsWindowProps) => {
     const dataGridScrollRef = useRef<HTMLDivElement>(null);
 
     const columns = useMemo<TableColumnDefinition<Entity>[]>(() => {
         if (data.length === 0) return [];
 
-        return Object.keys(data[0].attributes).map((attribute) =>
+        const orderedAttributes = getOrderedAttributesForResults(
+            data,
+            entityDefinitions,
+            query
+        );
+
+        return orderedAttributes.map((attribute) =>
             createTableColumn<Entity>({
                 columnId: attribute,
                 renderHeaderCell: () => attribute,
@@ -52,7 +70,12 @@ export const ResultsWindow = React.memo(({ data }: IResultsWindowProps) => {
                 ),
             })
         );
-    }, [data]);
+    }, [data, entityDefinitions, query]);
+
+    const primaryIdAttribute = useMemo(
+        () => getPrimaryIdAttributeForQuery(entityDefinitions, query),
+        [entityDefinitions, query]
+    );
 
     const totalWidth = columns.length * DEFAULT_COL_WIDTH;
 
@@ -69,7 +92,7 @@ export const ResultsWindow = React.memo(({ data }: IResultsWindowProps) => {
                 columns={columns}
                 sortable
                 getRowId={
-                    (entity: Entity) => getEntityRowId(entity)
+                    (entity: Entity) => getEntityRowId(entity, primaryIdAttribute)
                 }
                 style={{ minWidth: totalWidth }}
             >

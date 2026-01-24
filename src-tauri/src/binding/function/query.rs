@@ -88,14 +88,6 @@ pub async fn execute_sql(
 
     let query_engine = QueryEngine::new(&d365_url, &token);
 
-    let metadata = query_engine
-        .get_entity_metadata(&parsed.entity_logical)
-        .await?;
-
-    if let Some(primary_id_attribute) = metadata.primary_id_attribute {
-        println!("PrimaryIdAttribute: {}", primary_id_attribute);
-    }
-
     let resp = query_engine
         .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
         .await?;

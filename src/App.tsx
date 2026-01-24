@@ -271,6 +271,7 @@ export default function App() {
 
                             await setConnection(connection.id);
 
+                            debugger;
                             const response = await listEntityDefinitions();
                             //TODO: handle failure here
                             setEntityDefinitions(response.value);
@@ -350,7 +351,11 @@ export default function App() {
                                             {activeTab.executeError}
                                         </div>
                                     )}
-                                    <ResultsWindow data={activeTab.results} />
+                                    <ResultsWindow
+                                        data={activeTab.results}
+                                        entityDefinitions={entityDefinitions}
+                                        query={activeTab.query}
+                                    />
                                 </>
                             ) : null}
                         </div>

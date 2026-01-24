@@ -11,12 +11,6 @@ struct ODataList<T> {
     value: Vec<T>,
 }
 
-#[derive(Debug)]
-enum ValueTypeImplented {
-    True,
-    False,
-}
-
 pub struct QueryEngine {
     client: Client,
     base_url: std::string::String,
@@ -71,7 +65,7 @@ impl QueryEngine {
         parse_multiple_response(json)
     }
 
-    pub async fn get_entity_metadata(
+    pub async fn _get_entity_metadata(
         &self,
         entity_logical: &str,
     ) -> Result<EntityDefinition, std::string::String> {
@@ -139,7 +133,7 @@ impl QueryEngine {
         &self,
     ) -> Result<Vec<EntityDefinition>, std::string::String> {
         let url = format!(
-            "{}/api/data/v9.2/EntityDefinitions?$select=LogicalName,SchemaName,DisplayName,EntitySetName,IsCustomEntity",
+            "{}/api/data/v9.2/EntityDefinitions?$select=LogicalName,SchemaName,DisplayName,EntitySetName,IsCustomEntity,PrimaryIdAttribute",
             self.base_url
         );
 
@@ -172,15 +166,15 @@ fn add_attribute(
     entity: &mut Entity,
     key: &str,
     value: &Value,
-) -> Result<ValueTypeImplented, std::string::String> {
+) -> Result<bool, std::string::String> {
     if value.is_null() {
         entity.attributes.insert(key.to_string(), Null);
 
-        return Ok(ValueTypeImplented::True);
+        return Ok(true);
     }
 
     if !value.is_i64() && !value.is_string() && !value.is_boolean() {
-        return Ok(ValueTypeImplented::False);
+        return Ok(true);
     }
 
     //TODO: yea i know this sucks
@@ -191,7 +185,7 @@ fn add_attribute(
 
         entity.attributes.insert(key.to_string(), Int(i));
 
-        return Ok(ValueTypeImplented::True);
+        return Ok(true);
     }
 
     if value.is_string() {
@@ -203,7 +197,7 @@ fn add_attribute(
             .attributes
             .insert(key.to_string(), String(i.to_string())); //TODO: should be this be a string or an &Str?
 
-        return Ok(ValueTypeImplented::True);
+        return Ok(true);
     }
 
     if value.is_boolean() {
@@ -213,10 +207,10 @@ fn add_attribute(
 
         entity.attributes.insert(key.to_string(), Boolean(i));
 
-        return Ok(ValueTypeImplented::True);
+        return Ok(true);
     }
 
-    return Ok(ValueTypeImplented::False);
+    return Ok(true);
 }
 
 fn parse_multiple_response(json: Value) -> Result<MultipleResponse<Entity>, std::string::String> {
@@ -243,7 +237,7 @@ fn parse_multiple_response(json: Value) -> Result<MultipleResponse<Entity>, std:
             let implemented = add_attribute(&mut entity, key, value)
                 .map_err(|_| "Invalid response from Dataverse".to_string())?;
 
-            if (!implemented) {
+            if !implemented {
                 println!("Key: {}, implemented: {:?}", key, implemented);
             }
         }
