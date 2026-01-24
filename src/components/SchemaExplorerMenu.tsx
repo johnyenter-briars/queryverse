@@ -4,9 +4,6 @@ import {
     Spinner,
     Text,
     Title3,
-    makeStyles,
-    shorthands,
-    tokens,
 } from "@fluentui/react-components";
 import { Table24Filled } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
@@ -15,47 +12,16 @@ import { Connection } from "../binding/model/Connection";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { listEntityDefinitions } from "../binding/function";
 import { useState } from "react";
+import { useSchemaExplorerMenuStyles } from "../styles/SchemaExplorerMenuStyles";
 
 export interface ISchemaExplorerMenuProps {
     isOpen: boolean;
     currentConnection: Connection | null;
 }
 
-const useSchemaExplorerStyles = makeStyles({
-    body: {
-        display: "flex",
-        flexDirection: "column",
-        gap: tokens.spacingVerticalS,
-    },
-    tableList: {
-        display: "flex",
-        flexDirection: "column",
-        gap: tokens.spacingVerticalXS,
-    },
-    tableRow: {
-        display: "flex",
-        alignItems: "center",
-        gap: tokens.spacingHorizontalXS,
-        padding: tokens.spacingVerticalXS,
-        ...shorthands.borderRadius(tokens.borderRadiusMedium),
-        ...shorthands.border(`1px solid ${tokens.colorNeutralStroke2}`),
-    },
-    tableText: {
-        display: "flex",
-        flexDirection: "column",
-        gap: tokens.spacingVerticalXXS,
-    },
-    tableMeta: {
-        color: tokens.colorNeutralForeground2,
-    },
-    errorText: {
-        color: tokens.colorPaletteRedForeground1,
-    },
-});
-
 export function SchemaExplorerMenu({ isOpen, currentConnection }: ISchemaExplorerMenuProps) {
     const styles = useConnectionsMenuStyles();
-    const localStyles = useSchemaExplorerStyles();
+    const localStyles = useSchemaExplorerMenuStyles();
     const flyoutClasses = combineClasses(
         styles.flyoutBase,
         isOpen && styles.flyoutOpen
@@ -65,7 +31,7 @@ export function SchemaExplorerMenu({ isOpen, currentConnection }: ISchemaExplore
     const [isLoading, setIsLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const getDisplayName = (displayName: EntityDefinition["displayName"]) => {
+    const getDisplayName = (displayName: EntityDefinition["DisplayName"]) => {
         if (!displayName || typeof displayName !== "object") {
             return null;
         }
@@ -126,14 +92,19 @@ export function SchemaExplorerMenu({ isOpen, currentConnection }: ISchemaExplore
                             </Button>
                         ) : (
                             <div className={localStyles.tableList}>
-                                {tables.map((table) => {
+                                {tables.map((table, index) => {
                                     const displayName =
-                                        getDisplayName(table.displayName) ??
-                                        table.schemaName ??
-                                        table.logicalName;
+                                        getDisplayName(table.DisplayName) ??
+                                        table.SchemaName ??
+                                        table.LogicalName;
+                                    const tableKey =
+                                        table.LogicalName ??
+                                        table.SchemaName ??
+                                        table.EntitySetName ??
+                                        `table-${index}`;
                                     return (
                                         <div
-                                            key={table.logicalName}
+                                            key={tableKey}
                                             className={localStyles.tableRow}
                                         >
                                             <Table24Filled />
@@ -143,7 +114,7 @@ export function SchemaExplorerMenu({ isOpen, currentConnection }: ISchemaExplore
                                                     size={200}
                                                     className={localStyles.tableMeta}
                                                 >
-                                                    {table.logicalName} • {table.entitySetName}
+                                                    {table.LogicalName} • {table.EntitySetName}
                                                 </Text>
                                             </div>
                                         </div>

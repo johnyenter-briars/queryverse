@@ -1,8 +1,8 @@
 export type EntityDefinition = {
-    logicalName: string;
-    schemaName: string;
-    displayName?: unknown;
-    entitySetName: string;
-    isCustomEntity: boolean;
+    LogicalName: string;
+    SchemaName: string;
+    DisplayName?: unknown;
+    EntitySetName: string;
+    IsCustomEntity: boolean;
     primaryIdAttribute?: string;
 };
