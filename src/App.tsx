@@ -259,7 +259,10 @@ export default function App() {
                             setIsMenuOpen(false);
                         }}
                     />
-                    <SchemaExplorerMenu isOpen={schemaEnabled} />
+                    <SchemaExplorerMenu
+                        isOpen={schemaEnabled}
+                        currentConnection={selectedConnection}
+                    />
 
                     <div className={contentClasses}>
                         <div className={styles.top}>

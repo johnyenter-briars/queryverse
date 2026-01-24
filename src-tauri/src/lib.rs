@@ -7,7 +7,7 @@ use tauri::Manager;
 
 use crate::binding::function::{
     connection::{create_connection, list_connections, update_connection},
-    query::{execute_sql, parse_sql_to_fetchxml},
+    query::{execute_sql, list_entity_definitions, parse_sql_to_fetchxml},
 };
 
 pub struct Database;
@@ -22,6 +22,7 @@ pub fn run() {
             list_connections,
             update_connection,
             execute_sql,
+            list_entity_definitions,
             parse_sql_to_fetchxml
         ])
         .setup(|app| {

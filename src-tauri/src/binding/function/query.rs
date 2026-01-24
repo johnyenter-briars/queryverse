@@ -1,12 +1,18 @@
 use serde::Serialize;
 
 use crate::{
-    Database, auth::{connection::load_connections, credentials::fetch_client_credentials_token}, binding::model::{
+    Database,
+    auth::{connection::load_connections, credentials::fetch_client_credentials_token},
+    binding::model::{
         connection::Connection,
         dataverse::entity::Entity,
+        dataverse::entitydefinitionsummary::EntityDefinitionSummary,
         executesqlrequest::ExecuteSqlRequest,
+        listentitydefinitionsrequest::ListEntityDefinitionsRequest,
         response::MultipleResponse,
-    }, dataverse::queryengine::QueryEngine, sql
+    },
+    dataverse::queryengine::QueryEngine,
+    sql,
 };
 
 #[derive(Debug, Serialize)]
@@ -86,4 +92,53 @@ pub async fn execute_sql(
         .await?;
 
     Ok(resp)
+}
+
+#[tauri::command]
+pub async fn list_entity_definitions(
+    _window: tauri::Window,
+    request: ListEntityDefinitionsRequest,
+) -> Result<MultipleResponse<EntityDefinitionSummary>, String> {
+    let connections = load_connections()?;
+    let connection = connections
+        .into_iter()
+        .find(|connection| match connection {
+            Connection::ClientCredentials { id, .. }
+            | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&request.connection_id),
+        })
+        .ok_or("Connection not found")?;
+
+    let (token, d365_url) = match connection {
+        Connection::ClientCredentials {
+            client_id,
+            client_secret,
+            tenant_id,
+            scope,
+            d365_url,
+            ..
+        } => {
+            let token =
+                fetch_client_credentials_token(&client_id, &client_secret, &tenant_id, &scope)
+                    .await?;
+            (token, d365_url)
+        }
+        Connection::AuthorizationCode {
+            access_token,
+            d365_url,
+            ..
+        } => (access_token, d365_url),
+    };
+
+    if d365_url.trim().is_empty() {
+        return Err("Connection is missing a D365 URL".to_string());
+    }
+
+    let query_engine = QueryEngine::new(&d365_url, &token);
+    let value = query_engine.list_entity_definitions().await?;
+
+    Ok(MultipleResponse {
+        message: "Metadata retrieved.".to_string(),
+        success: true,
+        value,
+    })
 }
