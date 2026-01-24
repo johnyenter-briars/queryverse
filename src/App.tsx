@@ -56,6 +56,7 @@ export default function App() {
     const [activeTabId, setActiveTabId] = useState(0);
     const nextTabId = useRef(1);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
+    const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
 
     const styles = useAppStyles();
 
@@ -79,13 +80,19 @@ export default function App() {
     };
 
     const openTab = (connection?: Connection | null) => {
+        const effectiveConnection = connection ?? selectedConnection;
         const newId = nextTabId.current++;
         const newTab = {
             ...createTab(newId),
-            title: connection?.name ? `Query - ${connection.name}` : `Query ${newId}`,
-            connectionId: connection?.id ?? null,
+            title: effectiveConnection?.name
+                ? `Query - ${effectiveConnection.name}`
+                : `Query ${newId}`,
+            connectionId: effectiveConnection?.id ?? null,
         };
 
+        if (connection) {
+            setSelectedConnection(connection);
+        }
         setTabs((prev) => [...prev, newTab]);
         setActiveTabId(newId);
     };
@@ -95,6 +102,10 @@ export default function App() {
     };
 
     const handleAddTabWithFirstConnection = async () => {
+        if (selectedConnection) {
+            openTab(selectedConnection);
+            return;
+        }
         try {
             const response = await listConnections();
             const firstConnection = response.success ? response.value[0] : undefined;
@@ -125,12 +136,12 @@ export default function App() {
     const handleExecuteActiveTab = async () => {
         if (activeTabId === 0) return;
         const targetTab = tabs.find((tab) => tab.id === activeTabId);
-        if (!targetTab?.connectionId) {
+        if (!selectedConnection?.id) {
             return;
         }
 
         try {
-            const response = await executeSql(targetTab.query, targetTab.connectionId);
+            const response = await executeSql(targetTab.query, selectedConnection.id);
             if (!response.success) {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
@@ -207,8 +218,9 @@ export default function App() {
                     }}
                     onExecuteSql={handleExecuteActiveTab}
                     onPreviewFetchXml={handlePreviewActiveTab}
-                    canExecute={Boolean(activeTab?.connectionId)}
+                    canExecute={Boolean(selectedConnection?.id)}
                     onShowShortcuts={() => setShortcutsOpen(true)}
+                    currentConnection={selectedConnection}
                 />
                 <ShortcutManager
                     handlers={{
@@ -217,7 +229,7 @@ export default function App() {
                         "new-tab": handleAddTabWithFirstConnection,
                     }}
                     isEnabled={(id: ShortcutActionId) =>
-                        id === "execute" ? Boolean(activeTab?.connectionId) : true
+                        id === "execute" ? Boolean(selectedConnection?.id) : true
                     }
                 />
                 <ModalDialog
@@ -244,6 +256,7 @@ export default function App() {
                         isOpen={connectionsEnabled}
                         onOpenConnection={(connection) => {
                             openTab(connection);
+                            setIsMenuOpen(false);
                         }}
                     />
                     <SchemaExplorerMenu isOpen={schemaEnabled} />
