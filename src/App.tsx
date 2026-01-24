@@ -20,9 +20,10 @@ import { Entity } from "./binding/model/Entity";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
 import { Connection } from "./binding/model/Connection";
 import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
-import { executeSql, listConnections, previewFetchXml } from "./binding/function";
+import { executeSql, listConnections, listEntityDefinitions, previewFetchXml } from "./binding/function";
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
+import { EntityDefinition } from "./binding/model/EntityDefinition";
 
 const DEFAULT_QUERY = "select top 20 *\nfrom account";
 
@@ -58,6 +59,8 @@ export default function App() {
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
 
+    const [entityDefinitions, setEntityDefinitions] = useState<EntityDefinition[]>([]);
+
     const styles = useAppStyles();
 
     const contentClasses = combineClasses(
@@ -90,9 +93,6 @@ export default function App() {
             connectionId: effectiveConnection?.id ?? null,
         };
 
-        if (connection) {
-            setSelectedConnection(connection);
-        }
         setTabs((prev) => [...prev, newTab]);
         setActiveTabId(newId);
     };
@@ -254,14 +254,20 @@ export default function App() {
                 <div className={styles.wrapper}>
                     <ConnectionsMenu
                         isOpen={connectionsEnabled}
-                        onOpenConnection={(connection) => {
+                        onOpenConnection={async (connection) => {
                             openTab(connection);
+                            setSelectedConnection(connection);
+                            
+                            const response = await listEntityDefinitions(connection.id!);
+                            //TODO: handle failure here
+                            setEntityDefinitions(response.value);
+
                             setIsMenuOpen(false);
                         }}
                     />
                     <SchemaExplorerMenu
                         isOpen={schemaEnabled}
-                        currentConnection={selectedConnection}
+                        entityDefinitions={entityDefinitions}
                     />
 
                     <div className={contentClasses}>
