@@ -6,6 +6,7 @@ pub mod createconnectionresponse;
 pub mod updateconnectionrequest;
 pub mod updateconnectionresponse;
 pub mod executesqlrequest;
+pub mod executesqlresponse;
 pub mod listentitydefinitionsrequest;
 pub mod setconnectionrequest;
 pub mod listconnectionsresponse;

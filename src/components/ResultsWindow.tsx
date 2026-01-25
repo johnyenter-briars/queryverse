@@ -13,6 +13,7 @@ import {
 } from "@fluentui/react-components";
 import { Entity, Value } from "../binding/model/Entity";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
+import { SqlQueryMetadata } from "../binding/model/SqlQueryMetadata";
 import {
     getOrderedAttributesForResults,
     getPrimaryIdAttributeForQuery,
@@ -29,6 +30,7 @@ export interface IResultsWindowProps {
     data: Entity[];
     entityDefinitions: EntityDefinition[];
     query: string;
+    queryMetadata?: SqlQueryMetadata | null;
 }
 
 function getEntityRowId(entity: Entity, primaryIdAttribute?: string): string {
@@ -47,7 +49,7 @@ function getEntityRowId(entity: Entity, primaryIdAttribute?: string): string {
 }
 
 export const ResultsWindow = React.memo(
-    ({ data, entityDefinitions, query }: IResultsWindowProps) => {
+    ({ data, entityDefinitions, query, queryMetadata }: IResultsWindowProps) => {
     const dataGridScrollRef = useRef<HTMLDivElement>(null);
 
     const columns = useMemo<TableColumnDefinition<Entity>[]>(() => {
@@ -56,7 +58,8 @@ export const ResultsWindow = React.memo(
         const orderedAttributes = getOrderedAttributesForResults(
             data,
             entityDefinitions,
-            query
+            query,
+            queryMetadata
         );
 
         return orderedAttributes.map((attribute) =>
@@ -70,7 +73,7 @@ export const ResultsWindow = React.memo(
                 ),
             })
         );
-    }, [data, entityDefinitions, query]);
+    }, [data, entityDefinitions, query, queryMetadata]);
 
     const primaryIdAttribute = useMemo(
         () => getPrimaryIdAttributeForQuery(entityDefinitions, query),

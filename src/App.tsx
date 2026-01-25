@@ -30,6 +30,7 @@ import {
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
 import { EntityDefinition } from "./binding/model/EntityDefinition";
+import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 
 const DEFAULT_QUERY = "select top 20 *\nfrom account";
 
@@ -42,6 +43,7 @@ type EditorTab = {
     fetchPreview: FetchXmlPreview | null;
     previewError: string | null;
     executeError: string | null;
+    queryMetadata: SqlQueryMetadata | null;
 };
 
 const createTab = (id: number): EditorTab => ({
@@ -53,6 +55,7 @@ const createTab = (id: number): EditorTab => ({
     fetchPreview: null,
     previewError: null,
     executeError: null,
+    queryMetadata: null,
 });
 
 export default function App() {
@@ -152,6 +155,7 @@ export default function App() {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
                     results: response.value,
+                    queryMetadata: response.metadata ?? null,
                     executeError: response.message || "Query failed",
                 }));
                 return;
@@ -160,12 +164,14 @@ export default function App() {
             updateTab(targetTab.id, (tab) => ({
                 ...tab,
                 results: response.value,
+                queryMetadata: response.metadata ?? null,
                 executeError: null,
             }));
         } catch (error) {
             updateTab(targetTab.id, (tab) => ({
                 ...tab,
                 executeError: getErrorMessage(error),
+                queryMetadata: null,
             }));
         }
     };
@@ -271,7 +277,6 @@ export default function App() {
 
                             await setConnection(connection.id);
 
-                            debugger;
                             const response = await listEntityDefinitions();
                             //TODO: handle failure here
                             setEntityDefinitions(response.value);
@@ -355,6 +360,7 @@ export default function App() {
                                         data={activeTab.results}
                                         entityDefinitions={entityDefinitions}
                                         query={activeTab.query}
+                                        queryMetadata={activeTab.queryMetadata}
                                     />
                                 </>
                             ) : null}

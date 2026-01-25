@@ -5,9 +5,9 @@ use crate::{
     auth::{connection::load_connections, credentials::fetch_client_credentials_token},
     binding::model::{
         connection::Connection,
-        dataverse::entity::Entity,
         dataverse::entitydefinition::EntityDefinition,
         executesqlrequest::ExecuteSqlRequest,
+        executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
         response::MultipleResponse,
     },
     dataverse::queryengine::QueryEngine,
@@ -41,8 +41,16 @@ pub async fn execute_sql(
     _window: tauri::Window,
     request: ExecuteSqlRequest,
     database: tauri::State<'_, Database>,
-) -> Result<MultipleResponse<Entity>, String> {
-    let parsed = sql::sql_to_fetchxml(&request.sql).map_err(|e| e.to_string())?;
+) -> Result<ExecuteSqlResponse, String> {
+    let stmt = sql::parse(&request.sql).map_err(|e| e.to_string())?;
+    let parsed = sql::to_fetchxml(&stmt).map_err(|e| e.to_string())?;
+    let columns_order = match &stmt.columns {
+        sql::SelectColumns::Columns(columns) => {
+            columns.iter().map(|column| column.name.clone()).collect()
+        }
+        sql::SelectColumns::All => Vec::new(),
+    };
+    let columns_selected = !columns_order.is_empty();
 
     let connection_id = {
         let selected = database
@@ -92,7 +100,15 @@ pub async fn execute_sql(
         .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
         .await?;
 
-    Ok(resp)
+    Ok(ExecuteSqlResponse {
+        message: resp.message,
+        success: resp.success,
+        value: resp.value,
+        metadata: SqlQueryMetadata {
+            columns_selected,
+            columns_order,
+        },
+    })
 }
 
 #[tauri::command]

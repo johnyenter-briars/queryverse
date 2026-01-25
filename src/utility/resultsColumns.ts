@@ -1,5 +1,6 @@
 import { Entity } from "../binding/model/Entity";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
+import { SqlQueryMetadata } from "../binding/model/SqlQueryMetadata";
 
 type AttributeType = "boolean" | "string" | "number" | "unknown";
 
@@ -67,11 +68,20 @@ function getAttributeType(data: Entity[], attribute: string): AttributeType {
 export function getOrderedAttributesForResults(
     data: Entity[],
     entityDefinitions: EntityDefinition[],
-    query: string
+    query: string,
+    queryMetadata?: SqlQueryMetadata | null
 ): string[] {
     if (data.length === 0) return [];
 
     const attributes = Object.keys(data[0].attributes);
+    if (queryMetadata?.columnsOrder?.length) {
+        const ordered = queryMetadata.columnsOrder.filter((attribute) =>
+            attributes.includes(attribute)
+        );
+        const orderedSet = new Set(ordered);
+        const remaining = attributes.filter((attribute) => !orderedSet.has(attribute));
+        return [...ordered, ...remaining];
+    }
     const primaryIdAttribute = getPrimaryIdAttributeForQuery(
         entityDefinitions,
         query

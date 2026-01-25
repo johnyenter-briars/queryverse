@@ -3,18 +3,18 @@ import { CreateConnectionResponse } from "./model/CreateConnectionResponse";
 import { CreateConnectionRequest } from "./model/CreateConnectionRequest";
 import { UpdateConnectionRequest } from "./model/UpdateConnectionRequest";
 import { UpdateConnectionResponse } from "./model/UpdateConnectionResponse";
-import { MultipleResponse } from "./model/MultipleResponse";
-import { Entity } from "./model/Entity";
 import { FetchXmlPreview } from "./model/FetchXmlPreview";
 import { ListConnectionsResponse } from "./model/ListConnectionsResponse";
 import { ExecuteSqlRequest } from "./model/ExecuteSqlRequest";
 import { EntityDefinition } from "./model/EntityDefinition";
 import { SetConnectionRequest } from "./model/SetConnectionRequest";
+import { ExecuteSqlResponse } from "./model/ExecuteSqlResponse";
+import { MultipleResponse } from "./model/MultipleResponse";
 
 export const executeSql = async (
     sql: string
-): Promise<MultipleResponse<Entity>> => {
-    const response: MultipleResponse<Entity> = await invoke("execute_sql", {
+): Promise<ExecuteSqlResponse> => {
+    const response: ExecuteSqlResponse = await invoke("execute_sql", {
         request: {
             sql,
         } satisfies ExecuteSqlRequest,
