@@ -80,8 +80,16 @@ pub enum Connection {
 impl Connection {
     pub fn id(&self) -> Option<Uuid> {
         match self {
-            Connection::ClientCredentials { id, .. }
-            | Connection::AuthorizationCode { id, .. } => id.clone(),
+            Connection::ClientCredentials { id, .. } | Connection::AuthorizationCode { id, .. } => {
+                id.clone()
+            }
+        }
+    }
+
+    pub fn dataverse_url(&self) -> &String {
+        match self {
+            Connection::ClientCredentials { d365_url, .. }
+            | Connection::AuthorizationCode { d365_url, .. } => d365_url,
         }
     }
 }

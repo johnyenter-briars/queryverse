@@ -115,12 +115,7 @@ async fn refresh_token_for_connection(connection: &Connection) -> Result<CachedT
 }
 
 pub async fn prime_token_cache(connection: &Connection, database: &Database) -> Result<(), String> {
-    let id = match connection {
-        Connection::ClientCredentials { id, .. } | Connection::AuthorizationCode { id, .. } => {
-            id.clone()
-        }
-    }
-    .ok_or("Connection missing id")?;
+    let id = connection.id().ok_or("Connection missing id")?;
 
     let token = match connection {
         Connection::ClientCredentials { .. } => refresh_token_for_connection(connection).await?,
@@ -151,16 +146,11 @@ pub async fn get_access_token(
     connection: &Connection,
     database: &Database,
 ) -> Result<String, String> {
-    let id = match connection {
-        Connection::ClientCredentials { id, .. } | Connection::AuthorizationCode { id, .. } => {
-            id.clone()
-        }
-    }
-    .ok_or("Connection missing id")?;
+    let id = connection.id().ok_or("Connection missing id")?;
 
     if let Some(cached) = get_cached_token(database, id)? {
         if !cached.access_token.trim().is_empty() && !is_expiring_soon(cached.expires_at) {
-            println!("Valid token found");
+            println!("Valid token found. Connection: {:?}", connection.id());
             return Ok(cached.access_token);
         }
     }

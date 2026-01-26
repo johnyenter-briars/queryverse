@@ -131,10 +131,7 @@ pub async fn update_connection(
     let target_index = if let Some(request_id) = id {
         connections
             .iter()
-            .position(|connection| match connection {
-                Connection::ClientCredentials { id, .. }
-                | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&request_id),
-            })
+            .position(|connection| connection.id().as_ref() == Some(&request_id))
             .ok_or("Connection not found")?
     } else {
         if index >= connections.len() {

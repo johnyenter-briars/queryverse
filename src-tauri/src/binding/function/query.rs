@@ -64,23 +64,18 @@ pub async fn execute_sql(
     let connections = load_connections()?;
     let connection = connections
         .into_iter()
-        .find(|connection| match connection {
-            Connection::ClientCredentials { id, .. }
-            | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&connection_id),
-        })
+        .find(|connection| connection.id().as_ref() == Some(&connection_id))
         .ok_or("Connection not found")?;
 
     let token = get_access_token(&connection, &database).await?;
-    let d365_url = match connection {
-        Connection::ClientCredentials { d365_url, .. }
-        | Connection::AuthorizationCode { d365_url, .. } => d365_url,
-    };
 
-    if d365_url.trim().is_empty() {
+    let dataverse_url = connection.dataverse_url();
+
+    if dataverse_url.trim().is_empty() {
         return Err("Connection is missing a D365 URL".to_string());
     }
 
-    let query_engine = QueryEngine::new(&d365_url, &token);
+    let query_engine = QueryEngine::new(&dataverse_url, &token);
 
     let resp = query_engine
         .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
@@ -113,23 +108,18 @@ pub async fn list_entity_definitions(
     let connections = load_connections()?;
     let connection = connections
         .into_iter()
-        .find(|connection| match connection {
-            Connection::ClientCredentials { id, .. }
-            | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&connection_id),
-        })
+        .find(|connection| connection.id().as_ref() == Some(&connection_id))
         .ok_or("Connection not found")?;
 
     let token = get_access_token(&connection, &database).await?;
-    let d365_url = match connection {
-        Connection::ClientCredentials { d365_url, .. }
-        | Connection::AuthorizationCode { d365_url, .. } => d365_url,
-    };
 
-    if d365_url.trim().is_empty() {
+    let dataverse_url = connection.dataverse_url();
+
+    if dataverse_url.trim().is_empty() {
         return Err("Connection is missing a D365 URL".to_string());
     }
 
-    let query_engine = QueryEngine::new(&d365_url, &token);
+    let query_engine = QueryEngine::new(&dataverse_url, &token);
     let value = query_engine.list_entity_definitions().await?;
 
     Ok(MultipleResponse {
