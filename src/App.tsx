@@ -80,6 +80,7 @@ export default function App() {
     const [tabs, setTabs] = useState<EditorTab[]>([]);
     const [activeTabId, setActiveTabId] = useState(0);
     const nextTabId = useRef(1);
+    const cliInitRef = useRef(false);
     const tabContextMenuRef = useRef<HTMLDivElement | null>(null);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
@@ -170,6 +171,9 @@ export default function App() {
     };
 
     useEffect(() => {
+        if (cliInitRef.current) return;
+        cliInitRef.current = true;
+
         const initializeFromCli = async () => {
             try {
                 const context = await getLaunchContext();
