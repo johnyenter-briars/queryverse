@@ -43,6 +43,7 @@ type EditorTab = {
     fetchPreview: FetchXmlPreview | null;
     previewError: string | null;
     executeError: string | null;
+    isExecuting: boolean;
     queryMetadata: SqlQueryMetadata | null;
 };
 
@@ -55,6 +56,7 @@ const createTab = (id: number): EditorTab => ({
     fetchPreview: null,
     previewError: null,
     executeError: null,
+    isExecuting: false,
     queryMetadata: null,
 });
 
@@ -149,14 +151,21 @@ export default function App() {
             return;
         }
 
+        updateTab(targetTab.id, (tab) => ({
+            ...tab,
+            isExecuting: true,
+            executeError: null,
+        }));
+
         try {
             const response = await executeSql(targetTab.query);
             if (!response.success) {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
-                    results: response.value,
-                    queryMetadata: response.metadata ?? null,
+                    results: [],
+                    queryMetadata: null,
                     executeError: response.message || "Query failed",
+                    isExecuting: false,
                 }));
                 return;
             }
@@ -166,12 +175,15 @@ export default function App() {
                 results: response.value,
                 queryMetadata: response.metadata ?? null,
                 executeError: null,
+                isExecuting: false,
             }));
         } catch (error) {
             updateTab(targetTab.id, (tab) => ({
                 ...tab,
+                results: [],
                 executeError: getErrorMessage(error),
                 queryMetadata: null,
+                isExecuting: false,
             }));
         }
     };
@@ -351,16 +363,13 @@ export default function App() {
                                         previewError={activeTab.previewError}
                                         onClear={handleClearPreview}
                                     />
-                                    {activeTab.executeError && (
-                                        <div className={styles.executeError}>
-                                            {activeTab.executeError}
-                                        </div>
-                                    )}
                                     <ResultsWindow
                                         data={activeTab.results}
                                         entityDefinitions={entityDefinitions}
                                         query={activeTab.query}
                                         queryMetadata={activeTab.queryMetadata}
+                                        isLoading={activeTab.isExecuting}
+                                        errorMessage={activeTab.executeError}
                                     />
                                 </>
                             ) : null}

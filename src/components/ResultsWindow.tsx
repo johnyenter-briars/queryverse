@@ -9,6 +9,7 @@ import {
     DataGridCell,
     createTableColumn,
     TableColumnDefinition,
+    Spinner,
     webDarkTheme,
 } from "@fluentui/react-components";
 import { Entity, Value } from "../binding/model/Entity";
@@ -31,6 +32,8 @@ export interface IResultsWindowProps {
     entityDefinitions: EntityDefinition[];
     query: string;
     queryMetadata?: SqlQueryMetadata | null;
+    isLoading: boolean;
+    errorMessage?: string | null;
 }
 
 function getEntityRowId(entity: Entity, primaryIdAttribute?: string): string {
@@ -49,7 +52,14 @@ function getEntityRowId(entity: Entity, primaryIdAttribute?: string): string {
 }
 
 export const ResultsWindow = React.memo(
-    ({ data, entityDefinitions, query, queryMetadata }: IResultsWindowProps) => {
+    ({
+        data,
+        entityDefinitions,
+        query,
+        queryMetadata,
+        isLoading,
+        errorMessage,
+    }: IResultsWindowProps) => {
     const dataGridScrollRef = useRef<HTMLDivElement>(null);
 
     const columns = useMemo<TableColumnDefinition<Entity>[]>(() => {
@@ -81,6 +91,39 @@ export const ResultsWindow = React.memo(
     );
 
     const totalWidth = columns.length * DEFAULT_COL_WIDTH;
+
+    if (isLoading) {
+        return (
+            <div
+                style={{
+                    height: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                }}
+            >
+                <Spinner label="Running query..." />
+            </div>
+        );
+    }
+
+    if (errorMessage) {
+        return (
+            <div
+                style={{
+                    height: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "16px",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                }}
+            >
+                {errorMessage}
+            </div>
+        );
+    }
 
     return (
         <div
