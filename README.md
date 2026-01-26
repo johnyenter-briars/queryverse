@@ -29,5 +29,8 @@ QueryVerse is a [Dataverse](https://www.microsoft.com/en-us/power-platform/datav
   - Copy to JSON
   - Open JSON in a new window
 
+## AI Disclosure
+Portions of this project were developed with the assistance of AI tools; all changes are reviewed and tested by maintainers.
+
 ## Acknowledgements
 QueryVerse is lovingly inspired by the [SQL4CDS](https://www.xrmtoolbox.com/plugins/MarkMpn.SQL4CDS/) project. <3
