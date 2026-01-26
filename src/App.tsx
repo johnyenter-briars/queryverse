@@ -20,9 +20,17 @@ import { Entity } from "./binding/model/Entity";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
 import { Connection } from "./binding/model/Connection";
 import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
-import { executeSql, listConnections, previewFetchXml } from "./binding/function";
+import {
+    executeSql,
+    listConnections,
+    listEntityDefinitions,
+    previewFetchXml,
+    setConnection,
+} from "./binding/function";
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
+import { EntityDefinition } from "./binding/model/EntityDefinition";
+import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 
 const DEFAULT_QUERY = "select top 20 *\nfrom account";
 
@@ -35,6 +43,8 @@ type EditorTab = {
     fetchPreview: FetchXmlPreview | null;
     previewError: string | null;
     executeError: string | null;
+    isExecuting: boolean;
+    queryMetadata: SqlQueryMetadata | null;
 };
 
 const createTab = (id: number): EditorTab => ({
@@ -46,6 +56,8 @@ const createTab = (id: number): EditorTab => ({
     fetchPreview: null,
     previewError: null,
     executeError: null,
+    isExecuting: false,
+    queryMetadata: null,
 });
 
 export default function App() {
@@ -56,6 +68,9 @@ export default function App() {
     const [activeTabId, setActiveTabId] = useState(0);
     const nextTabId = useRef(1);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
+    const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
+
+    const [entityDefinitions, setEntityDefinitions] = useState<EntityDefinition[]>([]);
 
     const styles = useAppStyles();
 
@@ -79,11 +94,14 @@ export default function App() {
     };
 
     const openTab = (connection?: Connection | null) => {
+        const effectiveConnection = connection ?? selectedConnection;
         const newId = nextTabId.current++;
         const newTab = {
             ...createTab(newId),
-            title: connection?.name ? `Query - ${connection.name}` : `Query ${newId}`,
-            connectionId: connection?.id ?? null,
+            title: effectiveConnection?.name
+                ? `Query - ${effectiveConnection.name}`
+                : `Query ${newId}`,
+            connectionId: effectiveConnection?.id ?? null,
         };
 
         setTabs((prev) => [...prev, newTab]);
@@ -95,6 +113,10 @@ export default function App() {
     };
 
     const handleAddTabWithFirstConnection = async () => {
+        if (selectedConnection) {
+            openTab(selectedConnection);
+            return;
+        }
         try {
             const response = await listConnections();
             const firstConnection = response.success ? response.value[0] : undefined;
@@ -125,17 +147,25 @@ export default function App() {
     const handleExecuteActiveTab = async () => {
         if (activeTabId === 0) return;
         const targetTab = tabs.find((tab) => tab.id === activeTabId);
-        if (!targetTab?.connectionId) {
+        if (!targetTab || !selectedConnection?.id) {
             return;
         }
 
+        updateTab(targetTab.id, (tab) => ({
+            ...tab,
+            isExecuting: true,
+            executeError: null,
+        }));
+
         try {
-            const response = await executeSql(targetTab.query, targetTab.connectionId);
+            const response = await executeSql(targetTab.query);
             if (!response.success) {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
-                    results: response.value,
+                    results: [],
+                    queryMetadata: null,
                     executeError: response.message || "Query failed",
+                    isExecuting: false,
                 }));
                 return;
             }
@@ -143,12 +173,17 @@ export default function App() {
             updateTab(targetTab.id, (tab) => ({
                 ...tab,
                 results: response.value,
+                queryMetadata: response.metadata ?? null,
                 executeError: null,
+                isExecuting: false,
             }));
         } catch (error) {
             updateTab(targetTab.id, (tab) => ({
                 ...tab,
+                results: [],
                 executeError: getErrorMessage(error),
+                queryMetadata: null,
+                isExecuting: false,
             }));
         }
     };
@@ -207,8 +242,9 @@ export default function App() {
                     }}
                     onExecuteSql={handleExecuteActiveTab}
                     onPreviewFetchXml={handlePreviewActiveTab}
-                    canExecute={Boolean(activeTab?.connectionId)}
+                    canExecute={Boolean(selectedConnection?.id)}
                     onShowShortcuts={() => setShortcutsOpen(true)}
+                    currentConnection={selectedConnection}
                 />
                 <ShortcutManager
                     handlers={{
@@ -217,7 +253,7 @@ export default function App() {
                         "new-tab": handleAddTabWithFirstConnection,
                     }}
                     isEnabled={(id: ShortcutActionId) =>
-                        id === "execute" ? Boolean(activeTab?.connectionId) : true
+                        id === "execute" ? Boolean(selectedConnection?.id) : true
                     }
                 />
                 <ModalDialog
@@ -242,11 +278,28 @@ export default function App() {
                 <div className={styles.wrapper}>
                     <ConnectionsMenu
                         isOpen={connectionsEnabled}
-                        onOpenConnection={(connection) => {
+                        onOpenConnection={async (connection) => {
                             openTab(connection);
+                            setSelectedConnection(connection);
+
+                            if (!connection.id) {
+                                setIsMenuOpen(false);
+                                return;
+                            }
+
+                            await setConnection(connection.id);
+
+                            const response = await listEntityDefinitions();
+                            //TODO: handle failure here
+                            setEntityDefinitions(response.value);
+
+                            setIsMenuOpen(false);
                         }}
                     />
-                    <SchemaExplorerMenu isOpen={schemaEnabled} />
+                    <SchemaExplorerMenu
+                        isOpen={schemaEnabled}
+                        entityDefinitions={entityDefinitions}
+                    />
 
                     <div className={contentClasses}>
                         <div className={styles.top}>
@@ -310,12 +363,14 @@ export default function App() {
                                         previewError={activeTab.previewError}
                                         onClear={handleClearPreview}
                                     />
-                                    {activeTab.executeError && (
-                                        <div className={styles.executeError}>
-                                            {activeTab.executeError}
-                                        </div>
-                                    )}
-                                    <ResultsWindow data={activeTab.results} />
+                                    <ResultsWindow
+                                        data={activeTab.results}
+                                        entityDefinitions={entityDefinitions}
+                                        query={activeTab.query}
+                                        queryMetadata={activeTab.queryMetadata}
+                                        isLoading={activeTab.isExecuting}
+                                        errorMessage={activeTab.executeError}
+                                    />
                                 </>
                             ) : null}
                         </div>

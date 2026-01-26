@@ -8,9 +8,11 @@ use crate::binding::model::{
     createconnectionrequest::CreateConnectionRequest,
     createconnectionresponse::CreateConnectionResponse,
     listconnectionsresponse::ListConnectionsResponse,
+    setconnectionrequest::SetConnectionRequest,
     updateconnectionrequest::UpdateConnectionRequest,
     updateconnectionresponse::UpdateConnectionResponse,
 };
+use crate::Database;
 
 #[tauri::command]
 pub async fn create_connection(
@@ -84,6 +86,30 @@ pub async fn create_connection(
 pub async fn list_connections(_window: tauri::Window) -> Result<ListConnectionsResponse, String> {
     let connections = load_connections()?;
     Ok(ListConnectionsResponse::success(connections))
+}
+
+#[tauri::command]
+pub async fn set_connection(
+    _window: tauri::Window,
+    request: SetConnectionRequest,
+    database: tauri::State<'_, Database>,
+) -> Result<(), String> {
+    let connections = load_connections()?;
+    let found = connections.iter().any(|connection| match connection {
+        Connection::ClientCredentials { id, .. }
+        | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&request.connection_id),
+    });
+
+    if !found {
+        return Err("Connection not found".to_string());
+    }
+
+    let mut selected = database
+        .selected_connection_id
+        .lock()
+        .map_err(|_| "Failed to lock connection state".to_string())?;
+    *selected = Some(request.connection_id);
+    Ok(())
 }
 
 #[tauri::command]

@@ -1,14 +1,14 @@
 use reqwest::Client;
 use serde_json::Value;
 
-use crate::binding::model::entity::Entity;
-use crate::binding::model::entity::Value::{Boolean, Int, Null, String};
+use crate::binding::model::dataverse::entity::Entity;
+use crate::binding::model::dataverse::entity::Value::{Boolean, Int, Null, String};
+use crate::binding::model::dataverse::entitydefinition::EntityDefinition;
 use crate::binding::model::response::MultipleResponse;
 
-#[derive(Debug)]
-enum ValueTypeImplented {
-    True,
-    False,
+#[derive(Debug, serde::Deserialize)]
+struct ODataList<T> {
+    value: Vec<T>,
 }
 
 pub struct QueryEngine {
@@ -65,6 +65,37 @@ impl QueryEngine {
         parse_multiple_response(json)
     }
 
+    pub async fn _get_entity_metadata(
+        &self,
+        entity_logical: &str,
+    ) -> Result<EntityDefinition, std::string::String> {
+        let logical = entity_logical.replace('\'', "''");
+        let url = format!(
+            "{}/api/data/v9.2/EntityDefinitions(LogicalName='{}')",
+            self.base_url, logical
+        );
+
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.token)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {e}"))?;
+
+        let status = resp.status();
+
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("Dataverse API error ({}): {}", status, body));
+        }
+
+        resp.json::<EntityDefinition>()
+            .await
+            .map_err(|e| format!("Failed to parse JSON: {e}"))
+    }
+
     pub async fn retrieve_multiple_fetchxml(
         &self,
         entity: &str,
@@ -97,56 +128,92 @@ impl QueryEngine {
 
         parse_multiple_response(json)
     }
+
+    pub async fn list_entity_definitions(
+        &self,
+    ) -> Result<Vec<EntityDefinition>, std::string::String> {
+        let url = format!(
+            "{}/api/data/v9.2/EntityDefinitions?$select=LogicalName,SchemaName,DisplayName,EntitySetName,IsCustomEntity,PrimaryIdAttribute",
+            self.base_url
+        );
+
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.token)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {e}"))?;
+
+        let status = resp.status();
+
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("Dataverse API error ({}): {}", status, body));
+        }
+
+        let parsed: ODataList<EntityDefinition> = resp
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse JSON: {e}"))?;
+
+        Ok(parsed.value)
+    }
 }
 
 fn add_attribute(
     entity: &mut Entity,
     key: &str,
     value: &Value,
-) -> Result<ValueTypeImplented, std::string::String> {
+) -> Result<bool, std::string::String> {
     if value.is_null() {
         entity.attributes.insert(key.to_string(), Null);
 
-        return Ok(ValueTypeImplented::True);
+        return Ok(true);
     }
 
     if !value.is_i64() && !value.is_string() && !value.is_boolean() {
-        return Ok(ValueTypeImplented::False);
+        return Ok(true);
     }
 
     //TODO: yea i know this sucks
     if value.is_i64() {
-        let i = value.as_i64().ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
+        let i = value
+            .as_i64()
+            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
 
         entity.attributes.insert(key.to_string(), Int(i));
 
-        return Ok(ValueTypeImplented::True);
+        return Ok(true);
     }
 
     if value.is_string() {
-        let i = value.as_str().ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
+        let i = value
+            .as_str()
+            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
 
         entity
             .attributes
             .insert(key.to_string(), String(i.to_string())); //TODO: should be this be a string or an &Str?
 
-        return Ok(ValueTypeImplented::True);
+        return Ok(true);
     }
 
     if value.is_boolean() {
-        let i = value.as_bool().ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
+        let i = value
+            .as_bool()
+            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
 
         entity.attributes.insert(key.to_string(), Boolean(i));
 
-        return Ok(ValueTypeImplented::True);
+        return Ok(true);
     }
 
-    return Ok(ValueTypeImplented::False);
+    return Ok(true);
 }
 
-fn parse_multiple_response(
-    json: Value,
-) -> Result<MultipleResponse<Entity>, std::string::String> {
+fn parse_multiple_response(json: Value) -> Result<MultipleResponse<Entity>, std::string::String> {
     let response_object = json
         .as_object()
         .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
@@ -170,7 +237,9 @@ fn parse_multiple_response(
             let implemented = add_attribute(&mut entity, key, value)
                 .map_err(|_| "Invalid response from Dataverse".to_string())?;
 
-            println!("Key: {}, implemented: {:?}", key, implemented);
+            if !implemented {
+                println!("Key: {}, implemented: {:?}", key, implemented);
+            }
         }
 
         entities.push(entity);

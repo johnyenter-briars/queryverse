@@ -1,30 +1,38 @@
 import {
     Divider,
+    Text,
     Title3,
-    Tree,
-    TreeItem,
-    TreeItemLayout,
 } from "@fluentui/react-components";
-import { FolderOpen24Filled, Table24Filled } from "@fluentui/react-icons";
+import { Table24Filled } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
 import { useConnectionsMenuStyles } from "../styles/ConnectionsMenuStyles";
+import { EntityDefinition } from "../binding/model/EntityDefinition";
+import { useSchemaExplorerMenuStyles } from "../styles/SchemaExplorerMenuStyles";
 
 export interface ISchemaExplorerMenuProps {
     isOpen: boolean;
+    entityDefinitions: EntityDefinition[];
 }
 
-export function SchemaExplorerMenu({ isOpen }: ISchemaExplorerMenuProps) {
+export function SchemaExplorerMenu({ isOpen, entityDefinitions }: ISchemaExplorerMenuProps) {
     const styles = useConnectionsMenuStyles();
+    const localStyles = useSchemaExplorerMenuStyles();
     const flyoutClasses = combineClasses(
         styles.flyoutBase,
         isOpen && styles.flyoutOpen
     );
 
-    const mockSchema = [
-        { name: "d365 dev", tables: ["systemuser", "account", "contact", "incident"] },
-        { name: "d365 qa", tables: ["systemuser", "account", "contact", "incident"] },
-        { name: "d365 prod", tables: ["systemuser", "account", "contact", "incident"] },
-    ];
+    const getDisplayName = (displayName: EntityDefinition["DisplayName"]) => {
+        if (!displayName || typeof displayName !== "object") {
+            return null;
+        }
+        const label =
+            (displayName as { UserLocalizedLabel?: { Label?: string } })
+                ?.UserLocalizedLabel?.Label ??
+            (displayName as { LocalizedLabels?: Array<{ Label?: string }> })
+                ?.LocalizedLabels?.[0]?.Label;
+        return label ?? null;
+    };
 
     return (
         <div
@@ -39,20 +47,39 @@ export function SchemaExplorerMenu({ isOpen }: ISchemaExplorerMenuProps) {
                         </div>
                     </div>
                     <Divider className={styles.sectionDivider} />
-                    <Tree size="small" aria-label="Database Schema">
-                        {mockSchema.map((db, dbIndex) => (
-                            <TreeItem key={`db-${dbIndex}`} itemType="branch">
-                                <TreeItemLayout><FolderOpen24Filled /> {db.name}</TreeItemLayout>
-                                <Tree>
-                                    {db.tables.map((table, tableIndex) => (
-                                        <TreeItem key={`table-${dbIndex}-${tableIndex}`} itemType="leaf">
-                                            <TreeItemLayout><Table24Filled /> {table}</TreeItemLayout>
-                                        </TreeItem>
-                                    ))}
-                                </Tree>
-                            </TreeItem>
-                        ))}
-                    </Tree>
+                    <div className={localStyles.body}>
+
+                        <div className={localStyles.tableList}>
+                            {entityDefinitions.map((table, index) => {
+                                const displayName =
+                                    getDisplayName(table.DisplayName) ??
+                                    table.SchemaName ??
+                                    table.LogicalName;
+                                const tableKey =
+                                    table.LogicalName ??
+                                    table.SchemaName ??
+                                    table.EntitySetName ??
+                                    `table-${index}`;
+                                return (
+                                    <div
+                                        key={tableKey}
+                                        className={localStyles.tableRow}
+                                    >
+                                        <Table24Filled />
+                                        <div className={localStyles.tableText}>
+                                            <Text>{displayName}</Text>
+                                            <Text
+                                                size={200}
+                                                className={localStyles.tableMeta}
+                                            >
+                                                {table.LogicalName} • {table.EntitySetName}
+                                            </Text>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

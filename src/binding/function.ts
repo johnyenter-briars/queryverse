@@ -3,20 +3,20 @@ import { CreateConnectionResponse } from "./model/CreateConnectionResponse";
 import { CreateConnectionRequest } from "./model/CreateConnectionRequest";
 import { UpdateConnectionRequest } from "./model/UpdateConnectionRequest";
 import { UpdateConnectionResponse } from "./model/UpdateConnectionResponse";
-import { MultipleResponse } from "./model/MultipleResponse";
-import { Entity } from "./model/Entity";
 import { FetchXmlPreview } from "./model/FetchXmlPreview";
 import { ListConnectionsResponse } from "./model/ListConnectionsResponse";
 import { ExecuteSqlRequest } from "./model/ExecuteSqlRequest";
+import { EntityDefinition } from "./model/EntityDefinition";
+import { SetConnectionRequest } from "./model/SetConnectionRequest";
+import { ExecuteSqlResponse } from "./model/ExecuteSqlResponse";
+import { MultipleResponse } from "./model/MultipleResponse";
 
 export const executeSql = async (
-    sql: string,
-    connectionId: string
-): Promise<MultipleResponse<Entity>> => {
-    const response: MultipleResponse<Entity> = await invoke("execute_sql", {
+    sql: string
+): Promise<ExecuteSqlResponse> => {
+    const response: ExecuteSqlResponse = await invoke("execute_sql", {
         request: {
             sql,
-            connectionId,
         } satisfies ExecuteSqlRequest,
     });
 
@@ -61,6 +61,26 @@ export const updateConnection = async (
     const response: UpdateConnectionResponse = await invoke("update_connection", {
         connectionRequest: connectionRequest,
     });
+
+    console.log(response);
+
+    return response;
+};
+
+export const setConnection = async (connectionId: string): Promise<void> => {
+    await invoke("set_connection", {
+        request: {
+            connectionId,
+        } satisfies SetConnectionRequest,
+    });
+};
+
+export const listEntityDefinitions = async (): Promise<
+    MultipleResponse<EntityDefinition>
+> => {
+    const response: MultipleResponse<EntityDefinition> = await invoke(
+        "list_entity_definitions"
+    );
 
     console.log(response);
 

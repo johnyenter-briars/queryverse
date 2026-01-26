@@ -4,7 +4,7 @@ mod fetchxml;
 mod lexer;
 mod parser;
 
-pub use ast::{Expr, Literal, SelectStmt};
+pub use ast::{Expr, Literal, SelectColumns, SelectStmt};
 pub use errors::{ParseError, SqlError, TranslationError};
 
 #[derive(Debug, Clone)]

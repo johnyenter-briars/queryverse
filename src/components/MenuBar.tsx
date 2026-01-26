@@ -1,4 +1,6 @@
 import {
+    Text,
+    makeStyles,
     shorthands,
     tokens,
     Toolbar,
@@ -13,7 +15,26 @@ import {
     DocumentText24Regular,
     Keyboard24Regular,
     Table24Regular,
+    Link24Filled,
 } from "@fluentui/react-icons";
+import { Connection } from "../binding/model/Connection";
+
+const useMenuBarStyles = makeStyles({
+    connectionInfo: {
+        marginLeft: "auto",
+        display: "flex",
+        alignItems: "center",
+        gap: tokens.spacingHorizontalXS,
+        color: tokens.colorNeutralForeground2,
+        ...shorthands.padding(0, tokens.spacingHorizontalS),
+    },
+    connectionName: {
+        color: tokens.colorNeutralForeground1,
+    },
+    connectionIcon: {
+        color: tokens.colorPaletteGreenForeground1,
+    },
+});
 export interface IMenuBarProps {
     vimEnabled: boolean;
     onToggleVimEnabled: () => void;
@@ -25,6 +46,7 @@ export interface IMenuBarProps {
     onPreviewFetchXml: () => void;
     canExecute: boolean;
     onShowShortcuts: () => void;
+    currentConnection: Connection | null;
 }
 
 export function MenuBar({
@@ -38,7 +60,14 @@ export function MenuBar({
     onPreviewFetchXml,
     canExecute,
     onShowShortcuts,
+    currentConnection,
 }: IMenuBarProps) {
+    const styles = useMenuBarStyles();
+    const connectionLabel = currentConnection?.name ?? "No connection";
+    const connectionTitle = currentConnection?.d365Url
+        ? `Connected to ${currentConnection.d365Url}`
+        : "No connection selected";
+
     return (
         <Toolbar
             size="medium"
@@ -97,6 +126,13 @@ export function MenuBar({
             >
                 Vim Mode
             </ToolbarButton>
+            <div className={styles.connectionInfo} title={connectionTitle}>
+                <Link24Filled className={styles.connectionIcon} />
+                <Text size={200}>Connection:</Text>
+                <Text size={200} className={styles.connectionName}>
+                    {connectionLabel}
+                </Text>
+            </div>
         </Toolbar>
     );
 }
