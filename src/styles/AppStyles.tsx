@@ -114,6 +114,45 @@ export const useAppStyles = makeStyles({
         overflowY: "auto",
         padding: tokens.spacingHorizontalM,
     },
+    connectionPicker: {
+        display: "grid",
+        gap: tokens.spacingVerticalXS,
+    },
+    connectionPickerModal: {
+        width: "280px",
+        maxWidth: "100%",
+    },
+    connectionPickerItem: {
+        justifyContent: "flex-start",
+        gap: tokens.spacingHorizontalS,
+    },
+    connectionPickerIcon: {
+        color: tokens.colorPaletteGreenForeground1,
+    },
+    tabContextMenu: {
+        position: "fixed",
+        minWidth: "180px",
+        backgroundColor: webDarkTheme.colorNeutralBackground2,
+        border: `1px solid ${tokens.colorNeutralStroke1}`,
+        boxShadow: tokens.shadow16,
+        borderRadius: tokens.borderRadiusMedium,
+        padding: tokens.spacingVerticalXS,
+        zIndex: 1000,
+    },
+    tabContextMenuItem: {
+        display: "block",
+        width: "100%",
+        textAlign: "left",
+        background: "transparent",
+        border: "none",
+        color: webDarkTheme.colorNeutralForeground1,
+        padding: tokens.spacingVerticalXS,
+        cursor: "pointer",
+        borderRadius: tokens.borderRadiusSmall,
+        "&:hover": {
+            backgroundColor: tokens.colorNeutralBackground1Hover,
+        },
+    },
 
     // BASE Flyout Style (ALWAYS applied - handles hidden state/transition)
     flyoutBase: {

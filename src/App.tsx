@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     FluentProvider,
     webDarkTheme,
@@ -6,7 +6,7 @@ import {
     Tab,
     Button,
 } from "@fluentui/react-components";
-import { Add24Regular } from "@fluentui/react-icons";
+import { Add24Regular, Link24Filled } from "@fluentui/react-icons";
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor } from "./components/CustomEditor";
 import { ShortcutManager } from "./components/ShortcutManager";
@@ -78,8 +78,20 @@ export default function App() {
     const [tabs, setTabs] = useState<EditorTab[]>([]);
     const [activeTabId, setActiveTabId] = useState(0);
     const nextTabId = useRef(1);
+    const tabContextMenuRef = useRef<HTMLDivElement | null>(null);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
+    const [tabContextMenu, setTabContextMenu] = useState<{
+        open: boolean;
+        x: number;
+        y: number;
+        tabId: number | null;
+    }>({ open: false, x: 0, y: 0, tabId: null });
+    const [connectionPickerOpen, setConnectionPickerOpen] = useState(false);
+    const [connectionPickerTabId, setConnectionPickerTabId] = useState<number | null>(null);
+    const [connectionPickerLoading, setConnectionPickerLoading] = useState(false);
+    const [connectionPickerError, setConnectionPickerError] = useState<string | null>(null);
+    const [connectionOptions, setConnectionOptions] = useState<Connection[]>([]);
 
     const [entityDefinitions, setEntityDefinitions] = useState<EntityDefinition[]>([]);
 
@@ -97,6 +109,57 @@ export default function App() {
             prev.map((tab) => (tab.id === tabId ? updater(tab) : tab))
         );
     };
+
+    useEffect(() => {
+        if (!tabContextMenu.open) return;
+
+        const handleClick = (event: MouseEvent) => {
+            if (tabContextMenuRef.current?.contains(event.target as Node)) {
+                return;
+            }
+            setTabContextMenu((prev) => ({ ...prev, open: false }));
+        };
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setTabContextMenu((prev) => ({ ...prev, open: false }));
+            }
+        };
+
+        window.addEventListener("click", handleClick, true);
+        window.addEventListener("contextmenu", handleClick, true);
+        window.addEventListener("keydown", handleKeyDown, true);
+        return () => {
+            window.removeEventListener("click", handleClick, true);
+            window.removeEventListener("contextmenu", handleClick, true);
+            window.removeEventListener("keydown", handleKeyDown, true);
+        };
+    }, [tabContextMenu.open]);
+
+    useEffect(() => {
+        if (!connectionPickerOpen) return;
+
+        const loadConnections = async () => {
+            setConnectionPickerLoading(true);
+            setConnectionPickerError(null);
+            try {
+                const response = await listConnections();
+                if (response.success) {
+                    setConnectionOptions(response.value);
+                } else {
+                    setConnectionOptions([]);
+                    setConnectionPickerError(response.message || "Failed to load connections.");
+                }
+            } catch (error) {
+                setConnectionOptions([]);
+                setConnectionPickerError(getErrorMessage(error));
+            } finally {
+                setConnectionPickerLoading(false);
+            }
+        };
+
+        loadConnections();
+    }, [connectionPickerOpen]);
 
     const getErrorMessage = (error: unknown): string => {
         if (error instanceof Error) return error.message;
@@ -294,6 +357,40 @@ export default function App() {
         }
     };
 
+    const handleOpenSetConnection = (tabId: number) => {
+        setTabContextMenu((prev) => ({ ...prev, open: false }));
+        setConnectionPickerTabId(tabId);
+        setConnectionPickerOpen(true);
+    };
+
+    const handleSelectConnectionForTab = async (connection: Connection) => {
+        if (connectionPickerTabId === null) return;
+        const targetTabId = connectionPickerTabId;
+        setConnectionPickerOpen(false);
+        setConnectionPickerTabId(null);
+
+        const connectionName = connection.name ?? "No connection";
+        updateTab(targetTabId, (tab) => ({
+            ...tab,
+            connectionId: connection.id ?? null,
+            title: tab.fileName
+                ? `${tab.fileName} - ${connectionName}`
+                : `Query - ${connectionName}`,
+        }));
+        setSelectedConnection(connection);
+        if (connection.id) {
+            await setConnection(connection.id);
+            try {
+                const response = await listEntityDefinitions();
+                if (response.success) {
+                    setEntityDefinitions(response.value);
+                }
+            } catch (error) {
+                console.error("Failed to load entity definitions", error);
+            }
+        }
+    };
+
     return (
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
@@ -354,6 +451,41 @@ export default function App() {
                         ))}
                     </div>
                 </ModalDialog>
+                <ModalDialog
+                    open={connectionPickerOpen}
+                    title="Set Connection"
+                    onClose={() => {
+                        setConnectionPickerOpen(false);
+                        setConnectionPickerTabId(null);
+                    }}
+                    closeLabel="Cancel"
+                >
+                    <div className={styles.connectionPickerModal}>
+                        <div className={styles.connectionPicker}>
+                        {connectionPickerLoading ? (
+                            <div>Loading connections...</div>
+                        ) : connectionPickerError ? (
+                            <div>{connectionPickerError}</div>
+                        ) : connectionOptions.length === 0 ? (
+                            <div>No connections available.</div>
+                        ) : (
+                            connectionOptions.map((connection) => (
+                                <Button
+                                    key={connection.id ?? connection.name}
+                                    appearance="subtle"
+                                    icon={<Link24Filled className={styles.connectionPickerIcon} />}
+                                    className={styles.connectionPickerItem}
+                                    onClick={() => {
+                                        handleSelectConnectionForTab(connection);
+                                    }}
+                                >
+                                    {connection.name ?? "Unnamed connection"}
+                                </Button>
+                            ))
+                        )}
+                        </div>
+                    </div>
+                </ModalDialog>
                 <TabSwitcher
                     tabs={tabs.map(({ id, title }) => ({ id, title }))}
                     activeTabId={activeTabId}
@@ -399,7 +531,21 @@ export default function App() {
                                     }}
                                 >
                                     {tabs.map((tab) => (
-                                        <Tab key={tab.id} value={tab.id}>
+                                        <Tab
+                                            key={tab.id}
+                                            value={tab.id}
+                                            onContextMenu={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                setActiveTabId(tab.id);
+                                                setTabContextMenu({
+                                                    open: true,
+                                                    x: event.clientX,
+                                                    y: event.clientY,
+                                                    tabId: tab.id,
+                                                });
+                                            }}
+                                        >
                                             <span className={styles.tabLabel}>
                                                 <span>{tab.title}</span>
                                                 <span
@@ -465,6 +611,22 @@ export default function App() {
                         </div>
                     </div>
                 </div>
+                {tabContextMenu.open && tabContextMenu.tabId !== null ? (
+                        <div
+                            ref={tabContextMenuRef}
+                            className={styles.tabContextMenu}
+                            style={{ top: tabContextMenu.y, left: tabContextMenu.x }}
+                            role="menu"
+                        >
+                            <button
+                                className={styles.tabContextMenuItem}
+                                type="button"
+                                onClick={() => handleOpenSetConnection(tabContextMenu.tabId as number)}
+                            >
+                            Set connection
+                        </button>
+                    </div>
+                ) : null}
             </div>
         </FluentProvider>
     );
