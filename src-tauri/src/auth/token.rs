@@ -50,10 +50,13 @@ fn get_cached_token(database: &Database, id: Uuid) -> Result<Option<CachedToken>
         .token_cache
         .lock()
         .map_err(|_| "Failed to lock token cache".to_string())?;
+
     Ok(cache.get(&id).cloned())
 }
 
 async fn refresh_token_for_connection(connection: &Connection) -> Result<CachedToken, String> {
+    println!("Refreshing token");
+
     match connection {
         Connection::ClientCredentials {
             client_id,
@@ -69,6 +72,7 @@ async fn refresh_token_for_connection(connection: &Connection) -> Result<CachedT
                 scope,
             )
             .await?;
+
             Ok(CachedToken {
                 access_token: token.access_token,
                 expires_at: Some(token.expires_at),
@@ -82,6 +86,8 @@ async fn refresh_token_for_connection(connection: &Connection) -> Result<CachedT
             refresh_token,
             ..
         } => {
+            todo!("#11");
+
             if client_id.trim().is_empty()
                 || client_secret.trim().is_empty()
                 || tenant_id.trim().is_empty()
@@ -99,6 +105,7 @@ async fn refresh_token_for_connection(connection: &Connection) -> Result<CachedT
                 refresh_token,
             )
             .await?;
+
             Ok(CachedToken {
                 access_token: token.access_token,
                 expires_at: Some(token.expires_at),
