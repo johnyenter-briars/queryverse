@@ -48,7 +48,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         redirectUri: "",
         username: "",
         password: "",
-        d365Url: "",
+        dataverseUrl: "",
     });
     const [editFormState, setEditFormState] = useState({
         method: "ClientCredentials" as "ClientCredentials" | "AuthorizationCode",
@@ -61,7 +61,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         redirectUri: "",
         username: "",
         password: "",
-        d365Url: "",
+        dataverseUrl: "",
     });
 
     const deriveScopeFromUrl = (value: string) => {
@@ -112,7 +112,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
             redirectUri: "",
             username: "",
             password: "",
-            d365Url: "",
+            dataverseUrl: "",
         });
         setCreateMethod("ClientCredentials");
         setCreateStatus(null);
@@ -150,7 +150,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                 redirectUri: "",
                 username: "",
                 password: "",
-                d365Url: conn.d365Url ?? "",
+                dataverseUrl: conn.dataverseUrl ?? "",
             });
         } else {
             setEditFormState({
@@ -164,7 +164,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                 redirectUri: "",
                 username: "",
                 password: "",
-                d365Url: conn.d365Url ?? "",
+                dataverseUrl: conn.dataverseUrl ?? "",
             });
         }
 
@@ -174,7 +174,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
     const handleCreateConnection = async () => {
         setCreateStatus(null);
 
-        const derivedScope = deriveScopeFromUrl(formState.d365Url);
+        const derivedScope = deriveScopeFromUrl(formState.dataverseUrl);
         const payload =
             createMethod === "ClientCredentials"
                 ? {
@@ -184,7 +184,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                     clientSecret: formState.clientSecret,
                     tenantId: formState.tenantId.trim(),
                     scope: derivedScope,
-                    d365Url: formState.d365Url.trim(),
+                    dataverseUrl: formState.dataverseUrl.trim(),
                 }
                 : {
                     method: "AuthorizationCode" as const,
@@ -197,7 +197,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                     redirectUri: formState.redirectUri.trim(),
                     username: formState.username.trim(),
                     password: formState.password,
-                    d365Url: formState.d365Url.trim(),
+                    dataverseUrl: formState.dataverseUrl.trim(),
                 };
 
         try {
@@ -231,8 +231,8 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
             return "Connection name is required.";
         }
 
-        if (!editFormState.d365Url.trim()) {
-            return "D365 URL is required.";
+        if (!editFormState.dataverseUrl.trim()) {
+            return "Dataverse URL is required.";
         }
 
         if (editFormState.method === "ClientCredentials") {
@@ -305,7 +305,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                     clientSecret: editFormState.clientSecret,
                     tenantId: editFormState.tenantId.trim(),
                     scope: editFormState.scope.trim(),
-                    d365Url: editFormState.d365Url.trim(),
+                    dataverseUrl: editFormState.dataverseUrl.trim(),
                 }
                 : {
                     method: "AuthorizationCode" as const,
@@ -318,7 +318,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                     redirectUri: editFormState.redirectUri.trim(),
                     username: editFormState.username.trim(),
                     password: editFormState.password,
-                    d365Url: editFormState.d365Url.trim(),
+                    dataverseUrl: editFormState.dataverseUrl.trim(),
                 };
 
         try {
@@ -354,7 +354,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         !formState.clientSecret.trim() ||
         !formState.tenantId.trim() ||
         !formState.scope.trim() ||
-        !formState.d365Url.trim() ||
+        !formState.dataverseUrl.trim() ||
         (createMethod === "AuthorizationCode" &&
             (!formState.redirectUri.trim() ||
                 !formState.username.trim() ||
@@ -459,13 +459,13 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                             onChange={(_, data) => setFormState((prev) => ({ ...prev, tenantId: data.value }))}
                         />
                     </Field>
-                    <Field label="D365 URL">
+                    <Field label="Datavere URL">
                         <Input
-                            value={formState.d365Url}
+                            value={formState.dataverseUrl}
                             onChange={(_, data) =>
                                 setFormState((prev) => ({
                                     ...prev,
-                                    d365Url: data.value,
+                                    dataverseUrl: data.value,
                                     scope: deriveScopeFromUrl(data.value),
                                 }))
                             }
@@ -638,10 +638,10 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                         </>
                     )}
 
-                    <Field label="D365 URL">
+                    <Field label="Dataverse URL">
                         <Input
-                            value={editFormState.d365Url}
-                            onChange={(_, data) => setEditFormState((prev) => ({ ...prev, d365Url: data.value }))}
+                            value={editFormState.dataverseUrl}
+                            onChange={(_, data) => setEditFormState((prev) => ({ ...prev, dataverseUrl: data.value }))}
                         />
                     </Field>
 

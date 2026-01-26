@@ -27,7 +27,7 @@ pub async fn create_connection(
             client_secret,
             tenant_id,
             scope,
-            d365_url,
+            dataverse_url,
         } => {
             validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope).await?;
 
@@ -38,7 +38,7 @@ pub async fn create_connection(
                 client_secret,
                 tenant_id,
                 scope,
-                d365_url,
+                dataverse_url,
                 generated_on: utc_timestamp(),
             }
         }
@@ -52,7 +52,7 @@ pub async fn create_connection(
             redirect_uri,
             username,
             password,
-            d365_url,
+            dataverse_url,
         } => {
             todo!("#11");
             let token = exchange_authorization_code(
@@ -77,7 +77,7 @@ pub async fn create_connection(
                 access_token: token.access_token,
                 refresh_token: token.refresh_token,
                 expires_at: token.expires_at.to_string(),
-                d365_url,
+                dataverse_url,
                 generated_on: utc_timestamp(),
             }
         }
@@ -149,7 +149,7 @@ pub async fn update_connection(
             client_secret,
             tenant_id,
             scope,
-            d365_url,
+            dataverse_url,
         } => {
             validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope).await?;
 
@@ -160,7 +160,7 @@ pub async fn update_connection(
                 client_secret,
                 tenant_id,
                 scope,
-                d365_url,
+                dataverse_url,
                 generated_on: utc_timestamp(),
             }
         }
@@ -174,7 +174,7 @@ pub async fn update_connection(
             redirect_uri,
             username,
             password,
-            d365_url,
+            dataverse_url,
         } => {
             todo!("#11");
             let token = exchange_authorization_code(
@@ -199,7 +199,7 @@ pub async fn update_connection(
                 access_token: token.access_token,
                 refresh_token: token.refresh_token,
                 expires_at: token.expires_at.to_string(),
-                d365_url,
+                dataverse_url,
                 generated_on: utc_timestamp(),
             }
         }

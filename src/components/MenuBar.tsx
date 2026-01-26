@@ -81,8 +81,8 @@ export function MenuBar({
 }: IMenuBarProps) {
     const styles = useMenuBarStyles();
     const connectionLabel = currentConnection?.name ?? "No connection";
-    const connectionTitle = currentConnection?.d365Url
-        ? `Connected to ${currentConnection.d365Url}`
+    const connectionTitle = currentConnection?.dataverseUrl
+        ? `Connected to ${currentConnection.dataverseUrl}`
         : "No connection selected";
 
     return (

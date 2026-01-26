@@ -26,8 +26,8 @@ pub enum Connection {
         scope: String,
 
         #[serde(default)]
-        #[serde(rename = "d365Url")]
-        d365_url: String,
+        #[serde(rename = "dataverseUrl")]
+        dataverse_url: String,
 
         #[serde(default)]
         #[serde(rename = "generatedOn")]
@@ -68,8 +68,8 @@ pub enum Connection {
         expires_at: String, // could be chrono::DateTime if you want
 
         #[serde(default)]
-        #[serde(rename = "d365Url")]
-        d365_url: String,
+        #[serde(rename = "dataverseUrl")]
+        dataverse_url: String,
 
         #[serde(default)]
         #[serde(rename = "generatedOn")]
@@ -88,8 +88,8 @@ impl Connection {
 
     pub fn dataverse_url(&self) -> &String {
         match self {
-            Connection::ClientCredentials { d365_url, .. }
-            | Connection::AuthorizationCode { d365_url, .. } => d365_url,
+            Connection::ClientCredentials { dataverse_url, .. }
+            | Connection::AuthorizationCode { dataverse_url, .. } => dataverse_url,
         }
     }
 }

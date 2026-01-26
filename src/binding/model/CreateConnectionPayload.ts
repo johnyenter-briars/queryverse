@@ -9,7 +9,7 @@ export interface ClientCredentialsCreatePayload {
     clientSecret: string;
     tenantId: string;
     scope: string;
-    d365Url: string;
+    dataverseUrl: string;
 }
 
 export interface AuthorizationCodeCreatePayload {
@@ -23,5 +23,5 @@ export interface AuthorizationCodeCreatePayload {
     redirectUri: string;
     username: string;
     password: string;
-    d365Url: string;
+    dataverseUrl: string;
 }

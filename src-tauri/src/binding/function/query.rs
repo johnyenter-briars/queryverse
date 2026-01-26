@@ -72,7 +72,7 @@ pub async fn execute_sql(
     let dataverse_url = connection.dataverse_url();
 
     if dataverse_url.trim().is_empty() {
-        return Err("Connection is missing a D365 URL".to_string());
+        return Err("Connection is missing a Dataverse URL".to_string());
     }
 
     let query_engine = QueryEngine::new(&dataverse_url, &token);
@@ -116,7 +116,7 @@ pub async fn list_entity_definitions(
     let dataverse_url = connection.dataverse_url();
 
     if dataverse_url.trim().is_empty() {
-        return Err("Connection is missing a D365 URL".to_string());
+        return Err("Connection is missing a Dataverse URL".to_string());
     }
 
     let query_engine = QueryEngine::new(&dataverse_url, &token);
