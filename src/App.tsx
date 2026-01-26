@@ -321,6 +321,8 @@ export default function App() {
                     canExecute={Boolean(selectedConnection?.id)}
                     onShowShortcuts={() => setShortcutsOpen(true)}
                     onOpenSqlFile={handleOpenSqlFile}
+                    onSaveSqlFile={handleSaveActiveTab}
+                    canSaveSqlFile={Boolean(activeTab?.filePath)}
                     onSaveSqlFileAs={handleSaveActiveTabAs}
                     currentConnection={selectedConnection}
                 />

@@ -24,6 +24,7 @@ import {
     FolderOpen24Regular,
     Save24Regular,
     Document24Regular,
+    SaveCopy24Regular,
 } from "@fluentui/react-icons";
 import { Connection } from "../binding/model/Connection";
 
@@ -55,6 +56,8 @@ export interface IMenuBarProps {
     canExecute: boolean;
     onShowShortcuts: () => void;
     onOpenSqlFile: () => void;
+    onSaveSqlFile: () => void;
+    canSaveSqlFile: boolean;
     onSaveSqlFileAs: () => void;
     currentConnection: Connection | null;
 }
@@ -71,6 +74,8 @@ export function MenuBar({
     canExecute,
     onShowShortcuts,
     onOpenSqlFile,
+    onSaveSqlFile,
+    canSaveSqlFile,
     onSaveSqlFileAs,
     currentConnection,
 }: IMenuBarProps) {
@@ -97,7 +102,14 @@ export function MenuBar({
                         <MenuItem icon={<FolderOpen24Regular />} onClick={onOpenSqlFile}>
                             Open SQL File
                         </MenuItem>
-                        <MenuItem icon={<Save24Regular />} onClick={onSaveSqlFileAs}>
+                        <MenuItem
+                            icon={<Save24Regular />}
+                            onClick={onSaveSqlFile}
+                            disabled={!canSaveSqlFile}
+                        >
+                            Save
+                        </MenuItem>
+                        <MenuItem icon={<SaveCopy24Regular />} onClick={onSaveSqlFileAs}>
                             Save As
                         </MenuItem>
                     </MenuList>
