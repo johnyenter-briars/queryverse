@@ -5,9 +5,6 @@ import {
     TabList,
     Tab,
     Button,
-    makeStyles,
-    shorthands,
-    tokens,
 } from "@fluentui/react-components";
 import { Add24Regular } from "@fluentui/react-icons";
 import { ResultsWindow } from "./components/ResultsWindow";
@@ -17,58 +14,24 @@ import { ModalDialog } from "./components/ModalDialog";
 import { TabSwitcher } from "./components/TabSwitcher";
 import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
+import { SchemaExplorerMenu } from "./components/SchemaExplorerMenu";
 import { combineClasses } from "./utility/class";
 import { Entity } from "./binding/model/Entity";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
-import { executeSql, previewFetchXml } from "./binding/backend";
+import { Connection } from "./binding/model/Connection";
+import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
+import { executeSql, listConnections, previewFetchXml } from "./binding/function";
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
 
-const DEFAULT_QUERY = "select top 20 *\nfrom accounts";
-
-const usePreviewStyles = makeStyles({
-    previewPanel: {
-        display: "flex",
-        flexDirection: "column",
-        backgroundColor: webDarkTheme.colorNeutralBackground2,
-        ...shorthands.border(`1px solid ${tokens.colorNeutralStroke1}`),
-        ...shorthands.borderRadius(tokens.borderRadiusMedium),
-        marginBottom: tokens.spacingVerticalM,
-        minHeight: 0,
-    },
-    previewHeader: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalM),
-        ...shorthands.borderBottom(`1px solid ${tokens.colorNeutralStroke1}`),
-    },
-    previewBody: {
-        fontFamily: "monospace",
-        whiteSpace: "pre-wrap",
-        overflowY: "auto",
-        maxHeight: "200px",
-        ...shorthands.padding(tokens.spacingHorizontalM),
-    },
-    previewError: {
-        color: tokens.colorPaletteRedForeground1,
-    },
-    previewMeta: {
-        color: tokens.colorNeutralForeground2,
-        ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalM),
-        ...shorthands.borderTop(`1px solid ${tokens.colorNeutralStroke1}`),
-    },
-    executeError: {
-        color: tokens.colorPaletteRedForeground1,
-        marginBottom: tokens.spacingVerticalS,
-    },
-});
+const DEFAULT_QUERY = "select top 20 *\nfrom account";
 
 type EditorTab = {
     id: number;
     title: string;
     query: string;
     results: Entity[];
+    connectionId: string | null;
     fetchPreview: FetchXmlPreview | null;
     previewError: string | null;
     executeError: string | null;
@@ -79,6 +42,7 @@ const createTab = (id: number): EditorTab => ({
     title: `Query ${id}`,
     query: DEFAULT_QUERY,
     results: [],
+    connectionId: null,
     fetchPreview: null,
     previewError: null,
     executeError: null,
@@ -86,18 +50,18 @@ const createTab = (id: number): EditorTab => ({
 
 export default function App() {
     const [connectionsEnabled, setIsMenuOpen] = useState(true);
+    const [schemaEnabled, setSchemaEnabled] = useState(false);
     const [vimEnabled, setVimEnabled] = useState(true);
-    const [tabs, setTabs] = useState<EditorTab[]>([createTab(1)]);
-    const [activeTabId, setActiveTabId] = useState(1);
-    const nextTabId = useRef(2);
+    const [tabs, setTabs] = useState<EditorTab[]>([]);
+    const [activeTabId, setActiveTabId] = useState(0);
+    const nextTabId = useRef(1);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
     const styles = useAppStyles();
-    const previewStyles = usePreviewStyles();
 
     const contentClasses = combineClasses(
         styles.contentArea,
-        connectionsEnabled && styles.contentShifted
+        (connectionsEnabled || schemaEnabled) && styles.contentShifted
     );
 
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
@@ -114,12 +78,30 @@ export default function App() {
         return "Unknown error";
     };
 
-    const handleAddTab = () => {
+    const openTab = (connection?: Connection | null) => {
         const newId = nextTabId.current++;
-        const newTab = createTab(newId);
+        const newTab = {
+            ...createTab(newId),
+            title: connection?.name ? `Query - ${connection.name}` : `Query ${newId}`,
+            connectionId: connection?.id ?? null,
+        };
 
         setTabs((prev) => [...prev, newTab]);
         setActiveTabId(newId);
+    };
+
+    const handleAddTab = () => {
+        openTab();
+    };
+
+    const handleAddTabWithFirstConnection = async () => {
+        try {
+            const response = await listConnections();
+            const firstConnection = response.success ? response.value[0] : undefined;
+            openTab(firstConnection ?? null);
+        } catch {
+            openTab(null);
+        }
     };
 
     const handleCloseTab = (id: number) => {
@@ -143,10 +125,12 @@ export default function App() {
     const handleExecuteActiveTab = async () => {
         if (activeTabId === 0) return;
         const targetTab = tabs.find((tab) => tab.id === activeTabId);
-        if (!targetTab) return;
+        if (!targetTab?.connectionId) {
+            return;
+        }
 
         try {
-            const response = await executeSql(targetTab.query);
+            const response = await executeSql(targetTab.query, targetTab.connectionId);
             if (!response.success) {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
@@ -205,21 +189,35 @@ export default function App() {
                 <MenuBar
                     vimEnabled={vimEnabled}
                     connectionsEnabled={connectionsEnabled}
+                    schemaEnabled={schemaEnabled}
                     onToggleVimEnabled={() => setVimEnabled(!vimEnabled)}
-                    onToggleConnections={() => setIsMenuOpen(!connectionsEnabled)}
+                    onToggleConnections={() => {
+                        const next = !connectionsEnabled;
+                        setIsMenuOpen(next);
+                        if (next) {
+                            setSchemaEnabled(false);
+                        }
+                    }}
+                    onToggleSchema={() => {
+                        const next = !schemaEnabled;
+                        setSchemaEnabled(next);
+                        if (next) {
+                            setIsMenuOpen(false);
+                        }
+                    }}
                     onExecuteSql={handleExecuteActiveTab}
                     onPreviewFetchXml={handlePreviewActiveTab}
-                    canExecute={Boolean(activeTab)}
+                    canExecute={Boolean(activeTab?.connectionId)}
                     onShowShortcuts={() => setShortcutsOpen(true)}
                 />
                 <ShortcutManager
                     handlers={{
                         execute: handleExecuteActiveTab,
                         "close-tab": handleCloseActiveTab,
-                        "new-tab": handleAddTab,
+                        "new-tab": handleAddTabWithFirstConnection,
                     }}
                     isEnabled={(id: ShortcutActionId) =>
-                        id === "execute" ? Boolean(activeTab) : true
+                        id === "execute" ? Boolean(activeTab?.connectionId) : true
                     }
                 />
                 <ModalDialog
@@ -242,7 +240,13 @@ export default function App() {
                 />
 
                 <div className={styles.wrapper}>
-                    <ConnectionsMenu isOpen={connectionsEnabled} />
+                    <ConnectionsMenu
+                        isOpen={connectionsEnabled}
+                        onOpenConnection={(connection) => {
+                            openTab(connection);
+                        }}
+                    />
+                    <SchemaExplorerMenu isOpen={schemaEnabled} />
 
                     <div className={contentClasses}>
                         <div className={styles.top}>
@@ -301,38 +305,13 @@ export default function App() {
                         <div className={styles.bottom}>
                             {activeTab ? (
                                 <>
-                                    {(activeTab.fetchPreview || activeTab.previewError) && (
-                                        <div className={previewStyles.previewPanel}>
-                                            <div className={previewStyles.previewHeader}>
-                                                <span>FetchXML Preview</span>
-                                                <Button
-                                                    appearance="subtle"
-                                                    size="small"
-                                                    onClick={handleClearPreview}
-                                                >
-                                                    Clear
-                                                </Button>
-                                            </div>
-                                            <pre
-                                                className={combineClasses(
-                                                    previewStyles.previewBody,
-                                                    activeTab.previewError
-                                                        ? previewStyles.previewError
-                                                        : undefined
-                                                )}
-                                            >
-                                                {activeTab.previewError ??
-                                                    activeTab.fetchPreview?.fetchXml}
-                                            </pre>
-                                            {activeTab.fetchPreview?.entityLogical && (
-                                                <div className={previewStyles.previewMeta}>
-                                                    Entity: {activeTab.fetchPreview.entityLogical} (set: {activeTab.fetchPreview.entitySet})
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                    <FetchXmlPreviewPanel
+                                        fetchPreview={activeTab.fetchPreview}
+                                        previewError={activeTab.previewError}
+                                        onClear={handleClearPreview}
+                                    />
                                     {activeTab.executeError && (
-                                        <div className={previewStyles.executeError}>
+                                        <div className={styles.executeError}>
                                             {activeTab.executeError}
                                         </div>
                                     )}

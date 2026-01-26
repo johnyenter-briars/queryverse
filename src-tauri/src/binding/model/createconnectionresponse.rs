@@ -10,4 +10,12 @@ impl CreateConnectionResponse  {
             value: connection,
         }
     }
+
+    pub fn validated(connection: Connection) -> Self {
+        QVResponse {
+            message: "Connection validated.".to_string(),
+            success: true,
+            value: connection,
+        }
+    }
 }

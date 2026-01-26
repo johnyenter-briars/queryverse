@@ -1,4 +1,3 @@
-import * as React from "react";
 import { useEffect, useRef } from "react";
 //@ts-expect-error monaco-vim has no type declarations
 import { initVimMode } from "monaco-vim";
@@ -19,6 +18,7 @@ export function CustomEditor({ vimEnabled, value, onChange }: ICustomEditor) {
 
     const handleEditorMount: OnMount = (editor) => {
         editorRef.current = editor;
+        editor.focus();
         if (vimEnabled && statusBarRef.current) {
             vimModeRef.current = initVimMode(editor, statusBarRef.current);
         }
