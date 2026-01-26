@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     FluentProvider,
     webDarkTheme,
@@ -6,7 +6,7 @@ import {
     Tab,
     Button,
 } from "@fluentui/react-components";
-import { Add24Regular } from "@fluentui/react-icons";
+import { Add24Regular, Link24Filled } from "@fluentui/react-icons";
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor } from "./components/CustomEditor";
 import { ShortcutManager } from "./components/ShortcutManager";
@@ -24,7 +24,10 @@ import {
     executeSql,
     listConnections,
     listEntityDefinitions,
+    openSqlFile,
     previewFetchXml,
+    saveSqlFile,
+    saveSqlFileAs,
     setConnection,
 } from "./binding/function";
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
@@ -38,6 +41,10 @@ type EditorTab = {
     id: number;
     title: string;
     query: string;
+    filePath: string | null;
+    fileName: string | null;
+    lastSavedQuery: string;
+    isDirty: boolean;
     results: Entity[];
     connectionId: string | null;
     fetchPreview: FetchXmlPreview | null;
@@ -51,6 +58,10 @@ const createTab = (id: number): EditorTab => ({
     id,
     title: `Query ${id}`,
     query: DEFAULT_QUERY,
+    filePath: null,
+    fileName: null,
+    lastSavedQuery: DEFAULT_QUERY,
+    isDirty: false,
     results: [],
     connectionId: null,
     fetchPreview: null,
@@ -67,8 +78,20 @@ export default function App() {
     const [tabs, setTabs] = useState<EditorTab[]>([]);
     const [activeTabId, setActiveTabId] = useState(0);
     const nextTabId = useRef(1);
+    const tabContextMenuRef = useRef<HTMLDivElement | null>(null);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
+    const [tabContextMenu, setTabContextMenu] = useState<{
+        open: boolean;
+        x: number;
+        y: number;
+        tabId: number | null;
+    }>({ open: false, x: 0, y: 0, tabId: null });
+    const [connectionPickerOpen, setConnectionPickerOpen] = useState(false);
+    const [connectionPickerTabId, setConnectionPickerTabId] = useState<number | null>(null);
+    const [connectionPickerLoading, setConnectionPickerLoading] = useState(false);
+    const [connectionPickerError, setConnectionPickerError] = useState<string | null>(null);
+    const [connectionOptions, setConnectionOptions] = useState<Connection[]>([]);
 
     const [entityDefinitions, setEntityDefinitions] = useState<EntityDefinition[]>([]);
 
@@ -86,6 +109,57 @@ export default function App() {
             prev.map((tab) => (tab.id === tabId ? updater(tab) : tab))
         );
     };
+
+    useEffect(() => {
+        if (!tabContextMenu.open) return;
+
+        const handleClick = (event: MouseEvent) => {
+            if (tabContextMenuRef.current?.contains(event.target as Node)) {
+                return;
+            }
+            setTabContextMenu((prev) => ({ ...prev, open: false }));
+        };
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setTabContextMenu((prev) => ({ ...prev, open: false }));
+            }
+        };
+
+        window.addEventListener("click", handleClick, true);
+        window.addEventListener("contextmenu", handleClick, true);
+        window.addEventListener("keydown", handleKeyDown, true);
+        return () => {
+            window.removeEventListener("click", handleClick, true);
+            window.removeEventListener("contextmenu", handleClick, true);
+            window.removeEventListener("keydown", handleKeyDown, true);
+        };
+    }, [tabContextMenu.open]);
+
+    useEffect(() => {
+        if (!connectionPickerOpen) return;
+
+        const loadConnections = async () => {
+            setConnectionPickerLoading(true);
+            setConnectionPickerError(null);
+            try {
+                const response = await listConnections();
+                if (response.success) {
+                    setConnectionOptions(response.value);
+                } else {
+                    setConnectionOptions([]);
+                    setConnectionPickerError(response.message || "Failed to load connections.");
+                }
+            } catch (error) {
+                setConnectionOptions([]);
+                setConnectionPickerError(getErrorMessage(error));
+            } finally {
+                setConnectionPickerLoading(false);
+            }
+        };
+
+        loadConnections();
+    }, [connectionPickerOpen]);
 
     const getErrorMessage = (error: unknown): string => {
         if (error instanceof Error) return error.message;
@@ -218,6 +292,105 @@ export default function App() {
         }));
     };
 
+    const handleOpenSqlFile = async () => {
+        try {
+            const response = await openSqlFile();
+            if (!response) return;
+
+            const connectionName = selectedConnection?.name ?? "No connection";
+            const newId = nextTabId.current++;
+            const newTab = {
+                ...createTab(newId),
+                title: `${response.fileName} - ${connectionName}`,
+                query: response.contents,
+                filePath: response.path,
+                fileName: response.fileName,
+                lastSavedQuery: response.contents,
+                isDirty: false,
+                connectionId: selectedConnection?.id ?? null,
+            };
+
+            setTabs((prev) => [...prev, newTab]);
+            setActiveTabId(newId);
+        } catch (error) {
+            console.error("Failed to open SQL file", error);
+        }
+    };
+
+    const handleSaveActiveTab = async () => {
+        if (!activeTab?.filePath) return;
+        try {
+            await saveSqlFile({
+                path: activeTab.filePath,
+                contents: activeTab.query,
+            });
+            updateTab(activeTab.id, (tab) => ({
+                ...tab,
+                lastSavedQuery: tab.query,
+                isDirty: false,
+            }));
+        } catch (error) {
+            console.error("Failed to save SQL file", error);
+        }
+    };
+
+    const handleSaveActiveTabAs = async () => {
+        if (!activeTab) return;
+        try {
+            const response = await saveSqlFileAs({
+                contents: activeTab.query,
+                fileName: activeTab.fileName ?? "query.sql",
+            });
+            if (!response) return;
+
+            const connectionName = selectedConnection?.name ?? "No connection";
+            updateTab(activeTab.id, (tab) => ({
+                ...tab,
+                filePath: response.path,
+                fileName: response.fileName,
+                title: `${response.fileName} - ${connectionName}`,
+                lastSavedQuery: tab.query,
+                isDirty: false,
+            }));
+        } catch (error) {
+            console.error("Failed to save SQL file as", error);
+        }
+    };
+
+    const handleOpenSetConnection = (tabId: number) => {
+        setTabContextMenu((prev) => ({ ...prev, open: false }));
+        setConnectionPickerTabId(tabId);
+        setConnectionPickerOpen(true);
+    };
+
+    const handleSelectConnectionForTab = async (connection: Connection) => {
+        if (connectionPickerTabId === null) return;
+        const targetTabId = connectionPickerTabId;
+        setConnectionPickerOpen(false);
+        setConnectionPickerTabId(null);
+
+        const connectionName = connection.name ?? "No connection";
+        updateTab(targetTabId, (tab) => ({
+            ...tab,
+            connectionId: connection.id ?? null,
+            title: tab.fileName
+                ? `${tab.fileName} - ${connectionName}`
+                : `Query - ${connectionName}`,
+        }));
+        setSelectedConnection(connection);
+        if (connection.id) {
+            await setConnection(connection.id);
+            try {
+                const response = await listEntityDefinitions();
+                if (response.success) {
+                    setEntityDefinitions(response.value);
+                }
+            } catch (error) {
+                console.error("Failed to load entity definitions", error);
+            }
+        }
+    };
+
     return (
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
@@ -244,6 +417,10 @@ export default function App() {
                     onPreviewFetchXml={handlePreviewActiveTab}
                     canExecute={Boolean(selectedConnection?.id)}
                     onShowShortcuts={() => setShortcutsOpen(true)}
+                    onOpenSqlFile={handleOpenSqlFile}
+                    onSaveSqlFile={handleSaveActiveTab}
+                    canSaveSqlFile={Boolean(activeTab?.filePath)}
+                    onSaveSqlFileAs={handleSaveActiveTabAs}
                     currentConnection={selectedConnection}
                 />
                 <ShortcutManager
@@ -251,9 +428,14 @@ export default function App() {
                         execute: handleExecuteActiveTab,
                         "close-tab": handleCloseActiveTab,
                         "new-tab": handleAddTabWithFirstConnection,
+                        "save-file": handleSaveActiveTab,
                     }}
                     isEnabled={(id: ShortcutActionId) =>
-                        id === "execute" ? Boolean(selectedConnection?.id) : true
+                        id === "execute"
+                            ? Boolean(selectedConnection?.id)
+                            : id === "save-file"
+                            ? Boolean(activeTab?.filePath)
+                            : true
                     }
                 />
                 <ModalDialog
@@ -267,6 +449,42 @@ export default function App() {
                                 {shortcut.keyLabel} - {shortcut.label}
                             </div>
                         ))}
+                    </div>
+                </ModalDialog>
+                <ModalDialog
+                    open={connectionPickerOpen}
+                    title="Set Connection"
+                    onClose={() => {
+                        setConnectionPickerOpen(false);
+                        setConnectionPickerTabId(null);
+                    }}
+                    closeLabel="Cancel"
+                    width="300px"
+                >
+                    <div className={styles.connectionPickerModal}>
+                        <div className={styles.connectionPicker}>
+                        {connectionPickerLoading ? (
+                            <div>Loading connections...</div>
+                        ) : connectionPickerError ? (
+                            <div>{connectionPickerError}</div>
+                        ) : connectionOptions.length === 0 ? (
+                            <div>No connections available.</div>
+                        ) : (
+                            connectionOptions.map((connection) => (
+                                <Button
+                                    key={connection.id ?? connection.name}
+                                    appearance="subtle"
+                                    icon={<Link24Filled className={styles.connectionPickerIcon} />}
+                                    className={styles.connectionPickerItem}
+                                    onClick={() => {
+                                        handleSelectConnectionForTab(connection);
+                                    }}
+                                >
+                                    {connection.name ?? "Unnamed connection"}
+                                </Button>
+                            ))
+                        )}
+                        </div>
                     </div>
                 </ModalDialog>
                 <TabSwitcher
@@ -314,11 +532,28 @@ export default function App() {
                                     }}
                                 >
                                     {tabs.map((tab) => (
-                                        <Tab key={tab.id} value={tab.id}>
+                                        <Tab
+                                            key={tab.id}
+                                            value={tab.id}
+                                            onContextMenu={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                setActiveTabId(tab.id);
+                                                setTabContextMenu({
+                                                    open: true,
+                                                    x: event.clientX,
+                                                    y: event.clientY,
+                                                    tabId: tab.id,
+                                                });
+                                            }}
+                                        >
                                             <span className={styles.tabLabel}>
                                                 <span>{tab.title}</span>
                                                 <span
-                                                    className={styles.tabClose}
+                                                    className={combineClasses(
+                                                        styles.tabClose,
+                                                        tab.isDirty && styles.tabCloseDirty
+                                                    )}
                                                     role="button"
                                                     aria-label={`Close ${tab.title}`}
                                                     onClick={(event) => {
@@ -349,6 +584,7 @@ export default function App() {
                                         updateTab(activeTab.id, (tab) => ({
                                             ...tab,
                                             query: value,
+                                            isDirty: value !== tab.lastSavedQuery,
                                         }));
                                     }}
                                 />
@@ -376,6 +612,22 @@ export default function App() {
                         </div>
                     </div>
                 </div>
+                {tabContextMenu.open && tabContextMenu.tabId !== null ? (
+                        <div
+                            ref={tabContextMenuRef}
+                            className={styles.tabContextMenu}
+                            style={{ top: tabContextMenu.y, left: tabContextMenu.x }}
+                            role="menu"
+                        >
+                            <button
+                                className={styles.tabContextMenuItem}
+                                type="button"
+                                onClick={() => handleOpenSetConnection(tabContextMenu.tabId as number)}
+                            >
+                            Set connection
+                        </button>
+                    </div>
+                ) : null}
             </div>
         </FluentProvider>
     );

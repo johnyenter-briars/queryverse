@@ -5,6 +5,11 @@ import {
     tokens,
     Toolbar,
     ToolbarButton,
+    Menu,
+    MenuTrigger,
+    MenuPopover,
+    MenuList,
+    MenuItem,
 } from "@fluentui/react-components";
 
 import {
@@ -16,6 +21,10 @@ import {
     Keyboard24Regular,
     Table24Regular,
     Link24Filled,
+    FolderOpen24Regular,
+    Save24Regular,
+    Document24Regular,
+    SaveCopy24Regular,
 } from "@fluentui/react-icons";
 import { Connection } from "../binding/model/Connection";
 
@@ -46,6 +55,10 @@ export interface IMenuBarProps {
     onPreviewFetchXml: () => void;
     canExecute: boolean;
     onShowShortcuts: () => void;
+    onOpenSqlFile: () => void;
+    onSaveSqlFile: () => void;
+    canSaveSqlFile: boolean;
+    onSaveSqlFileAs: () => void;
     currentConnection: Connection | null;
 }
 
@@ -60,6 +73,10 @@ export function MenuBar({
     onPreviewFetchXml,
     canExecute,
     onShowShortcuts,
+    onOpenSqlFile,
+    onSaveSqlFile,
+    canSaveSqlFile,
+    onSaveSqlFileAs,
     currentConnection,
 }: IMenuBarProps) {
     const styles = useMenuBarStyles();
@@ -74,6 +91,30 @@ export function MenuBar({
             //@ts-ignore TODO: fix this
             style={{ ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalS) }}
         >
+            <Menu>
+                <MenuTrigger disableButtonEnhancement>
+                    <ToolbarButton icon={<Document24Regular />} title="File">
+                        File
+                    </ToolbarButton>
+                </MenuTrigger>
+                <MenuPopover>
+                    <MenuList>
+                        <MenuItem icon={<FolderOpen24Regular />} onClick={onOpenSqlFile}>
+                            Open SQL File
+                        </MenuItem>
+                        <MenuItem
+                            icon={<Save24Regular />}
+                            onClick={onSaveSqlFile}
+                            disabled={!canSaveSqlFile}
+                        >
+                            Save
+                        </MenuItem>
+                        <MenuItem icon={<SaveCopy24Regular />} onClick={onSaveSqlFileAs}>
+                            Save As
+                        </MenuItem>
+                    </MenuList>
+                </MenuPopover>
+            </Menu>
             <ToolbarButton
                 icon={<PlugConnected24Regular />}
                 onClick={onToggleConnections}

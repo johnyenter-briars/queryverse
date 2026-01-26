@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::binding::function::{
     connection::{create_connection, list_connections, set_connection, update_connection},
+    file::{open_sql_file, save_sql_file, save_sql_file_as},
     query::{execute_sql, list_entity_definitions, parse_sql_to_fetchxml},
 };
 
@@ -36,7 +37,10 @@ pub fn run() {
             update_connection,
             execute_sql,
             list_entity_definitions,
-            parse_sql_to_fetchxml
+            parse_sql_to_fetchxml,
+            open_sql_file,
+            save_sql_file,
+            save_sql_file_as
         ])
         .setup(|app| {
             let windows = app.webview_windows();

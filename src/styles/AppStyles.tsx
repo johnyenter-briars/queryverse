@@ -81,6 +81,25 @@ export const useAppStyles = makeStyles({
             backgroundColor: tokens.colorNeutralBackground1Pressed,
         },
     },
+    tabCloseDirty: {
+        color: "transparent",
+        position: "relative",
+        "&::before": {
+            content: '""',
+            position: "absolute",
+            width: "8px",
+            height: "8px",
+            borderRadius: tokens.borderRadiusCircular,
+            backgroundColor: tokens.colorPaletteRedForeground1,
+            boxShadow: `0 0 0 2px ${webDarkTheme.colorNeutralBackground1}`,
+        },
+        "&:hover": {
+            color: tokens.colorNeutralForeground1,
+        },
+        "&:hover::before": {
+            opacity: 0,
+        },
+    },
     tabsList: {
         flex: 1,
         minWidth: 0,
@@ -94,6 +113,45 @@ export const useAppStyles = makeStyles({
         flex: 1,
         overflowY: "auto",
         padding: tokens.spacingHorizontalM,
+    },
+    connectionPicker: {
+        display: "grid",
+        gap: tokens.spacingVerticalXS,
+    },
+    connectionPickerModal: {
+        width: "280px",
+        maxWidth: "100%",
+    },
+    connectionPickerItem: {
+        justifyContent: "flex-start",
+        gap: tokens.spacingHorizontalS,
+    },
+    connectionPickerIcon: {
+        color: tokens.colorPaletteGreenForeground1,
+    },
+    tabContextMenu: {
+        position: "fixed",
+        minWidth: "180px",
+        backgroundColor: webDarkTheme.colorNeutralBackground2,
+        border: `1px solid ${tokens.colorNeutralStroke1}`,
+        boxShadow: tokens.shadow16,
+        borderRadius: tokens.borderRadiusMedium,
+        padding: tokens.spacingVerticalXS,
+        zIndex: 1000,
+    },
+    tabContextMenuItem: {
+        display: "block",
+        width: "100%",
+        textAlign: "left",
+        background: "transparent",
+        border: "none",
+        color: webDarkTheme.colorNeutralForeground1,
+        padding: tokens.spacingVerticalXS,
+        cursor: "pointer",
+        borderRadius: tokens.borderRadiusSmall,
+        "&:hover": {
+            backgroundColor: tokens.colorNeutralBackground1Hover,
+        },
     },
 
     // BASE Flyout Style (ALWAYS applied - handles hidden state/transition)
