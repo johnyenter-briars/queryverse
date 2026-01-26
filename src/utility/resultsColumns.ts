@@ -2,22 +2,6 @@ import { Entity } from "../binding/model/Entity";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { SqlQueryMetadata } from "../binding/model/SqlQueryMetadata";
 
-type AttributeType = "boolean" | "string" | "number" | "unknown";
-
-const ATTRIBUTE_TYPE_ORDER: AttributeType[] = [
-    "boolean",
-    "string",
-    "number",
-    "unknown",
-];
-
-const ATTRIBUTE_TYPE_LOOKUP: Record<AttributeType, AttributeType> = {
-    boolean: "boolean",
-    string: "string",
-    number: "number",
-    unknown: "unknown",
-};
-
 function normalizeEntityName(name: string): string {
     const cleaned = name.replace(/[\[\]"`]/g, "").trim();
     const parts = cleaned.split(".");
@@ -53,61 +37,54 @@ export function getPrimaryIdAttributeForQuery(
         ?.PrimaryIdAttribute;
 }
 
-function getAttributeType(data: Entity[], attribute: string): AttributeType {
-    for (const entity of data) {
-        const value = entity.attributes[attribute];
-        if (value === null || value === undefined) continue;
-        const valueType = typeof value;
-        if (valueType === "boolean") return ATTRIBUTE_TYPE_LOOKUP.boolean;
-        if (valueType === "string") return ATTRIBUTE_TYPE_LOOKUP.string;
-        if (valueType === "number") return ATTRIBUTE_TYPE_LOOKUP.number;
-    }
-    return ATTRIBUTE_TYPE_LOOKUP.unknown;
-}
-
 export function getOrderedAttributesForResults(
     data: Entity[],
     entityDefinitions: EntityDefinition[],
     query: string,
     queryMetadata?: SqlQueryMetadata | null
-): string[] {
+): { key: string; attribute: string }[] {
     if (data.length === 0) return [];
 
     const attributes = Object.keys(data[0].attributes);
+    const buildOrderedColumns = (orderedAttributes: string[]) => {
+        const usedKeys = new Set<string>();
+        const counts = new Map<string, number>();
+
+        return orderedAttributes.map((attribute) => {
+            let key = attribute;
+            let count = counts.get(attribute) ?? 0;
+
+            if (usedKeys.has(key)) {
+                do {
+                    count += 1;
+                    key = `${attribute}__${count}`;
+                } while (usedKeys.has(key));
+            } else {
+                count = 1;
+            }
+
+            counts.set(attribute, count);
+            usedKeys.add(key);
+            return { key, attribute };
+        });
+    };
+
     if (queryMetadata?.columnsOrder?.length) {
         const ordered = queryMetadata.columnsOrder.filter((attribute) =>
             attributes.includes(attribute)
         );
-        const orderedSet = new Set(ordered);
-        const remaining = attributes.filter((attribute) => !orderedSet.has(attribute));
-        return [...ordered, ...remaining];
+        return buildOrderedColumns(ordered);
     }
     const primaryIdAttribute = getPrimaryIdAttributeForQuery(
         entityDefinitions,
         query
     );
-
-    const grouped: Record<AttributeType, string[]> = {
-        boolean: [],
-        string: [],
-        number: [],
-        unknown: [],
-    };
-
-    for (const attribute of attributes) {
-        if (primaryIdAttribute && attribute === primaryIdAttribute) continue;
-        const attributeType = getAttributeType(data, attribute);
-        grouped[attributeType].push(attribute);
+    const sorted = attributes.slice().sort((a, b) => a.localeCompare(b));
+    if (primaryIdAttribute && sorted.includes(primaryIdAttribute)) {
+        return buildOrderedColumns([
+            primaryIdAttribute,
+            ...sorted.filter((attribute) => attribute !== primaryIdAttribute),
+        ]);
     }
-
-    const orderedAttributes: string[] = [];
-    if (primaryIdAttribute && attributes.includes(primaryIdAttribute)) {
-        orderedAttributes.push(primaryIdAttribute);
-    }
-
-    for (const type of ATTRIBUTE_TYPE_ORDER) {
-        orderedAttributes.push(...grouped[type]);
-    }
-
-    return orderedAttributes;
+    return buildOrderedColumns(sorted);
 }

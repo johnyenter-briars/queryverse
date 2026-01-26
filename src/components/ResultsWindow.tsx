@@ -62,9 +62,9 @@ export const ResultsWindow = React.memo(
             queryMetadata
         );
 
-        return orderedAttributes.map((attribute) =>
+        return orderedAttributes.map(({ key, attribute }) =>
             createTableColumn<Entity>({
-                columnId: attribute,
+                columnId: key,
                 renderHeaderCell: () => attribute,
                 renderCell: (entity) => (
                     <div style={{ whiteSpace: "nowrap" }}>
