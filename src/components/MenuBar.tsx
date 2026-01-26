@@ -5,6 +5,11 @@ import {
     tokens,
     Toolbar,
     ToolbarButton,
+    Menu,
+    MenuTrigger,
+    MenuPopover,
+    MenuList,
+    MenuItem,
 } from "@fluentui/react-components";
 
 import {
@@ -18,6 +23,7 @@ import {
     Link24Filled,
     FolderOpen24Regular,
     Save24Regular,
+    Document24Regular,
 } from "@fluentui/react-icons";
 import { Connection } from "../binding/model/Connection";
 
@@ -80,6 +86,23 @@ export function MenuBar({
             //@ts-ignore TODO: fix this
             style={{ ...shorthands.padding(tokens.spacingHorizontalM, tokens.spacingHorizontalS) }}
         >
+            <Menu>
+                <MenuTrigger disableButtonEnhancement>
+                    <ToolbarButton icon={<Document24Regular />} title="File">
+                        File
+                    </ToolbarButton>
+                </MenuTrigger>
+                <MenuPopover>
+                    <MenuList>
+                        <MenuItem icon={<FolderOpen24Regular />} onClick={onOpenSqlFile}>
+                            Open SQL File
+                        </MenuItem>
+                        <MenuItem icon={<Save24Regular />} onClick={onSaveSqlFileAs}>
+                            Save As
+                        </MenuItem>
+                    </MenuList>
+                </MenuPopover>
+            </Menu>
             <ToolbarButton
                 icon={<PlugConnected24Regular />}
                 onClick={onToggleConnections}
@@ -95,20 +118,6 @@ export function MenuBar({
                 title="Toggle Schema Explorer"
             >
                 Schema
-            </ToolbarButton>
-            <ToolbarButton
-                icon={<FolderOpen24Regular />}
-                title="Open SQL File"
-                onClick={onOpenSqlFile}
-            >
-                Open SQL File
-            </ToolbarButton>
-            <ToolbarButton
-                icon={<Save24Regular />}
-                title="Save SQL File As"
-                onClick={onSaveSqlFileAs}
-            >
-                Save As
             </ToolbarButton>
             <ToolbarButton
                 icon={<Play24Filled />}
