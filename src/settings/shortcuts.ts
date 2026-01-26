@@ -17,8 +17,9 @@ export const SHORTCUTS: ShortcutDefinition[] = [
     {
         id: "execute",
         label: "Execute current query",
-        keyLabel: "F5",
-        matches: (event) => event.key === "F5",
+        keyLabel: "F5 / Ctrl+Enter",
+        matches: (event) =>
+            event.key === "F5" || (event.ctrlKey && event.key === "Enter"),
     },
     {
         id: "close-tab",
