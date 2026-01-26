@@ -101,10 +101,9 @@ pub async fn set_connection(
     database: tauri::State<'_, Database>,
 ) -> Result<(), String> {
     let connections = load_connections()?;
-    let selected_connection = connections.iter().find(|connection| match connection {
-        Connection::ClientCredentials { id, .. }
-        | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&request.connection_id),
-    });
+    let selected_connection = connections
+        .iter()
+        .find(|connection| connection.id().as_ref() == Some(&request.connection_id));
 
     let Some(selected_connection) = selected_connection else {
         return Err("Connection not found".to_string());
@@ -144,9 +143,7 @@ pub async fn update_connection(
         index
     };
 
-    let existing_id = match &connections[target_index] {
-        Connection::ClientCredentials { id, .. } | Connection::AuthorizationCode { id, .. } => id.clone(),
-    };
+    let existing_id = connections[target_index].id();
 
     let updated_connection = match payload {
         CreateConnectionPayload::ClientCredentials {

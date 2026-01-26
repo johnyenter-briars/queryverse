@@ -3,9 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 use crate::{
-    auth::credentials::{
-        fetch_client_credentials_token_with_expiry, refresh_authorization_token,
-    },
+    auth::credentials::{fetch_client_credentials_token_with_expiry, refresh_authorization_token},
     binding::model::connection::Connection,
     Database,
 };
@@ -55,7 +53,7 @@ fn get_cached_token(database: &Database, id: Uuid) -> Result<Option<CachedToken>
 }
 
 async fn refresh_token_for_connection(connection: &Connection) -> Result<CachedToken, String> {
-    println!("Refreshing token");
+    println!("Refreshing token. Connection: {:?}", connection.id());
 
     match connection {
         Connection::ClientCredentials {
@@ -93,8 +91,10 @@ async fn refresh_token_for_connection(connection: &Connection) -> Result<CachedT
                 || tenant_id.trim().is_empty()
                 || scope.trim().is_empty()
             {
-                return Err("Authorization code connection cannot refresh without client credentials."
-                    .to_string());
+                return Err(
+                    "Authorization code connection cannot refresh without client credentials."
+                        .to_string(),
+                );
             }
 
             let token = refresh_authorization_token(
@@ -116,8 +116,9 @@ async fn refresh_token_for_connection(connection: &Connection) -> Result<CachedT
 
 pub async fn prime_token_cache(connection: &Connection, database: &Database) -> Result<(), String> {
     let id = match connection {
-        Connection::ClientCredentials { id, .. }
-        | Connection::AuthorizationCode { id, .. } => id.clone(),
+        Connection::ClientCredentials { id, .. } | Connection::AuthorizationCode { id, .. } => {
+            id.clone()
+        }
     }
     .ok_or("Connection missing id")?;
 
@@ -151,8 +152,9 @@ pub async fn get_access_token(
     database: &Database,
 ) -> Result<String, String> {
     let id = match connection {
-        Connection::ClientCredentials { id, .. }
-        | Connection::AuthorizationCode { id, .. } => id.clone(),
+        Connection::ClientCredentials { id, .. } | Connection::AuthorizationCode { id, .. } => {
+            id.clone()
+        }
     }
     .ok_or("Connection missing id")?;
 

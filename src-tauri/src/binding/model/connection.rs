@@ -76,3 +76,12 @@ pub enum Connection {
         generated_on: String,
     },
 }
+
+impl Connection {
+    pub fn id(&self) -> Option<Uuid> {
+        match self {
+            Connection::ClientCredentials { id, .. }
+            | Connection::AuthorizationCode { id, .. } => id.clone(),
+        }
+    }
+}
