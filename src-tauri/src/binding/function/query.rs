@@ -2,7 +2,8 @@ use serde::Serialize;
 
 use crate::{
     Database,
-    auth::{connection::load_connections, credentials::fetch_client_credentials_token},
+    auth::connection::load_connections,
+    auth::token_manager::get_access_token,
     binding::model::{
         connection::Connection,
         dataverse::entitydefinition::EntityDefinition,
@@ -69,25 +70,10 @@ pub async fn execute_sql(
         })
         .ok_or("Connection not found")?;
 
-    let (token, d365_url) = match connection {
-        Connection::ClientCredentials {
-            client_id,
-            client_secret,
-            tenant_id,
-            scope,
-            d365_url,
-            ..
-        } => {
-            let token =
-                fetch_client_credentials_token(&client_id, &client_secret, &tenant_id, &scope)
-                    .await?;
-            (token, d365_url)
-        }
-        Connection::AuthorizationCode {
-            access_token,
-            d365_url,
-            ..
-        } => (access_token, d365_url),
+    let token = get_access_token(&connection, &database).await?;
+    let d365_url = match connection {
+        Connection::ClientCredentials { d365_url, .. }
+        | Connection::AuthorizationCode { d365_url, .. } => d365_url,
     };
 
     if d365_url.trim().is_empty() {
@@ -133,25 +119,10 @@ pub async fn list_entity_definitions(
         })
         .ok_or("Connection not found")?;
 
-    let (token, d365_url) = match connection {
-        Connection::ClientCredentials {
-            client_id,
-            client_secret,
-            tenant_id,
-            scope,
-            d365_url,
-            ..
-        } => {
-            let token =
-                fetch_client_credentials_token(&client_id, &client_secret, &tenant_id, &scope)
-                    .await?;
-            (token, d365_url)
-        }
-        Connection::AuthorizationCode {
-            access_token,
-            d365_url,
-            ..
-        } => (access_token, d365_url),
+    let token = get_access_token(&connection, &database).await?;
+    let d365_url = match connection {
+        Connection::ClientCredentials { d365_url, .. }
+        | Connection::AuthorizationCode { d365_url, .. } => d365_url,
     };
 
     if d365_url.trim().is_empty() {

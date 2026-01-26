@@ -2,6 +2,7 @@ use uuid::Uuid;
 
 use crate::auth::connection::{load_connections, save_connection, save_connections, utc_timestamp};
 use crate::auth::credentials::{exchange_authorization_code, validate_client_credentials};
+use crate::auth::token_manager::prime_token_cache;
 use crate::binding::model::{
     connection::Connection,
     createconnectionpayload::CreateConnectionPayload,
@@ -68,9 +69,13 @@ pub async fn create_connection(
             Connection::AuthorizationCode {
                 id: Some(Uuid::new_v4()),
                 name,
+                client_id,
+                client_secret,
+                tenant_id,
+                scope,
                 access_token: token.access_token,
                 refresh_token: token.refresh_token,
-                expires_at: token.expires_at,
+                expires_at: token.expires_at.to_string(),
                 d365_url,
                 generated_on: utc_timestamp(),
             }
@@ -95,20 +100,23 @@ pub async fn set_connection(
     database: tauri::State<'_, Database>,
 ) -> Result<(), String> {
     let connections = load_connections()?;
-    let found = connections.iter().any(|connection| match connection {
+    let selected_connection = connections.iter().find(|connection| match connection {
         Connection::ClientCredentials { id, .. }
         | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&request.connection_id),
     });
 
-    if !found {
+    let Some(selected_connection) = selected_connection else {
         return Err("Connection not found".to_string());
-    }
+    };
 
-    let mut selected = database
-        .selected_connection_id
-        .lock()
-        .map_err(|_| "Failed to lock connection state".to_string())?;
-    *selected = Some(request.connection_id);
+    {
+        let mut selected = database
+            .selected_connection_id
+            .lock()
+            .map_err(|_| "Failed to lock connection state".to_string())?;
+        *selected = Some(request.connection_id);
+    }
+    prime_token_cache(selected_connection, &database).await?;
     Ok(())
 }
 
@@ -188,9 +196,13 @@ pub async fn update_connection(
             Connection::AuthorizationCode {
                 id: existing_id,
                 name,
+                client_id,
+                client_secret,
+                tenant_id,
+                scope,
                 access_token: token.access_token,
                 refresh_token: token.refresh_token,
-                expires_at: token.expires_at,
+                expires_at: token.expires_at.to_string(),
                 d365_url,
                 generated_on: utc_timestamp(),
             }

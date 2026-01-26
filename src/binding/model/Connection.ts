@@ -18,6 +18,10 @@ export type AuthorizationCodeConnection = {
     method: ConnectionMethod;
     id: string | null;
     name: string;
+    clientId: string;
+    clientSecret: string;
+    tenantId: string;
+    scope: string;
     accessToken: string;
     refreshToken: string;
     expiresAt: string; 

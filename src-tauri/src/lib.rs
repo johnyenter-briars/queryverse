@@ -3,6 +3,7 @@ pub mod dataverse;
 pub mod auth;
 pub mod sql;
 
+use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::Manager;
 use uuid::Uuid;
@@ -13,9 +14,11 @@ use crate::binding::function::{
     launch::get_launch_context,
     query::{execute_sql, list_entity_definitions, parse_sql_to_fetchxml},
 };
+use crate::auth::token_manager::CachedToken;
 
 pub struct Database {
     pub selected_connection_id: Mutex<Option<Uuid>>,
+    pub token_cache: Mutex<HashMap<Uuid, CachedToken>>,
 }
 
 #[derive(Default, serde::Serialize)]
@@ -29,6 +32,7 @@ impl Default for Database {
     fn default() -> Self {
         Self {
             selected_connection_id: Mutex::new(None),
+            token_cache: Mutex::new(HashMap::new()),
         }
     }
 }

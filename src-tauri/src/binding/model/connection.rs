@@ -42,6 +42,22 @@ pub enum Connection {
         #[serde(rename = "name")]
         name: String,
 
+        #[serde(default)]
+        #[serde(rename = "clientId")]
+        client_id: String,
+
+        #[serde(default)]
+        #[serde(rename = "clientSecret")]
+        client_secret: String,
+
+        #[serde(default)]
+        #[serde(rename = "tenantId")]
+        tenant_id: String,
+
+        #[serde(default)]
+        #[serde(rename = "scope")]
+        scope: String,
+
         #[serde(rename = "accessToken")]
         access_token: String,
 
