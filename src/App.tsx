@@ -22,9 +22,11 @@ import { Connection } from "./binding/model/Connection";
 import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
 import {
     executeSql,
+    getLaunchContext,
     listConnections,
     listEntityDefinitions,
     openSqlFile,
+    openSqlFilePath,
     previewFetchXml,
     saveSqlFile,
     saveSqlFileAs,
@@ -38,6 +40,7 @@ import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 const DEFAULT_QUERY = "select top 20 *\nfrom account";
 
 type EditorTab = {
+    kind: "query" | "fetchxml";
     id: number;
     title: string;
     query: string;
@@ -54,7 +57,8 @@ type EditorTab = {
     queryMetadata: SqlQueryMetadata | null;
 };
 
-const createTab = (id: number): EditorTab => ({
+const createQueryTab = (id: number): EditorTab => ({
+    kind: "query",
     id,
     title: `Query ${id}`,
     query: DEFAULT_QUERY,
@@ -71,6 +75,29 @@ const createTab = (id: number): EditorTab => ({
     queryMetadata: null,
 });
 
+const createFetchXmlTab = (
+    id: number,
+    title: string,
+    fetchXml: string,
+    connectionId: string | null
+): EditorTab => ({
+    kind: "fetchxml",
+    id,
+    title,
+    query: fetchXml,
+    filePath: null,
+    fileName: null,
+    lastSavedQuery: fetchXml,
+    isDirty: false,
+    results: [],
+    connectionId,
+    fetchPreview: null,
+    previewError: null,
+    executeError: null,
+    isExecuting: false,
+    queryMetadata: null,
+});
+
 export default function App() {
     const [connectionsEnabled, setIsMenuOpen] = useState(true);
     const [schemaEnabled, setSchemaEnabled] = useState(false);
@@ -78,6 +105,7 @@ export default function App() {
     const [tabs, setTabs] = useState<EditorTab[]>([]);
     const [activeTabId, setActiveTabId] = useState(0);
     const nextTabId = useRef(1);
+    const cliInitRef = useRef(false);
     const tabContextMenuRef = useRef<HTMLDivElement | null>(null);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
@@ -167,11 +195,113 @@ export default function App() {
         return "Unknown error";
     };
 
+    const formatFetchXml = (value: string): string => {
+        const trimmed = value.trim();
+        if (!trimmed) return "";
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(trimmed, "application/xml");
+            if (doc.getElementsByTagName("parsererror").length > 0) {
+                return trimmed;
+            }
+            const serialized = new XMLSerializer().serializeToString(doc);
+            return prettyPrintXml(serialized);
+        } catch {
+            return trimmed;
+        }
+    };
+
+    const prettyPrintXml = (xml: string): string => {
+        const lines = xml.replace(/>\s*</g, ">\n<").trim().split("\n");
+        let indent = 0;
+        const indentSize = 2;
+
+        return lines
+            .filter(Boolean)
+            .map((line) => {
+                const isClosingTag = /^<\/\w/.test(line);
+                const isOpeningTag =
+                    /^<[^!?/][^>]*>$/.test(line) &&
+                    !/\/>$/.test(line) &&
+                    !line.includes("</");
+
+                if (isClosingTag) {
+                    indent = Math.max(indent - 1, 0);
+                }
+
+                const padded = `${" ".repeat(indent * indentSize)}${line}`;
+
+                if (isOpeningTag) {
+                    indent += 1;
+                }
+
+                return padded;
+            })
+            .join("\n");
+    };
+
+    useEffect(() => {
+        if (cliInitRef.current) return;
+        cliInitRef.current = true;
+
+        const initializeFromCli = async () => {
+            try {
+                const context = await getLaunchContext();
+                let connectionToUse: Connection | null = null;
+
+                if (context.connectionName) {
+                    const connections = await listConnections();
+                    if (connections.success) {
+                        const match = connections.value.find(
+                            (connection) =>
+                                connection.name?.toLowerCase() ===
+                                context.connectionName?.toLowerCase()
+                        );
+                        if (match) {
+                            connectionToUse = match;
+                            setSelectedConnection(match);
+                            if (match.id) {
+                                await setConnection(match.id);
+                                const response = await listEntityDefinitions();
+                                if (response.success) {
+                                    setEntityDefinitions(response.value);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (context.sqlFilePath) {
+                    const file = await openSqlFilePath(context.sqlFilePath);
+                    const connectionName = connectionToUse?.name ?? "No connection";
+                    const newId = nextTabId.current++;
+                    const newTab = {
+                        ...createQueryTab(newId),
+                        title: `${file.fileName} - ${connectionName}`,
+                        query: file.contents,
+                        filePath: file.path,
+                        fileName: file.fileName,
+                        lastSavedQuery: file.contents,
+                        isDirty: false,
+                        connectionId: connectionToUse?.id ?? null,
+                    };
+
+                    setTabs((prev) => [...prev, newTab]);
+                    setActiveTabId(newId);
+                }
+            } catch (error) {
+                console.error("Failed to initialize from CLI args", error);
+            }
+        };
+
+        initializeFromCli();
+    }, []);
+
     const openTab = (connection?: Connection | null) => {
         const effectiveConnection = connection ?? selectedConnection;
         const newId = nextTabId.current++;
         const newTab = {
-            ...createTab(newId),
+            ...createQueryTab(newId),
             title: effectiveConnection?.name
                 ? `Query - ${effectiveConnection.name}`
                 : `Query ${newId}`,
@@ -221,7 +351,7 @@ export default function App() {
     const handleExecuteActiveTab = async () => {
         if (activeTabId === 0) return;
         const targetTab = tabs.find((tab) => tab.id === activeTabId);
-        if (!targetTab || !selectedConnection?.id) {
+        if (!targetTab || targetTab.kind !== "query" || !selectedConnection?.id) {
             return;
         }
 
@@ -265,13 +395,24 @@ export default function App() {
     const handlePreviewActiveTab = async () => {
         if (activeTabId === 0) return;
         const targetTab = tabs.find((tab) => tab.id === activeTabId);
-        if (!targetTab) return;
+        if (!targetTab || targetTab.kind !== "query") return;
 
         try {
             const response = await previewFetchXml(targetTab.query);
+            const formattedFetchXml = formatFetchXml(response.fetchXml);
+            const previewId = nextTabId.current++;
+            const previewTitle = `FetchXML - ${targetTab.title}`;
+            const previewTab = createFetchXmlTab(
+                previewId,
+                previewTitle,
+                formattedFetchXml,
+                targetTab.connectionId
+            );
+            setTabs((prev) => [...prev, previewTab]);
+            setActiveTabId(previewId);
             updateTab(targetTab.id, (tab) => ({
                 ...tab,
-                fetchPreview: response,
+                fetchPreview: null,
                 previewError: null,
             }));
         } catch (error) {
@@ -300,7 +441,7 @@ export default function App() {
             const connectionName = selectedConnection?.name ?? "No connection";
             const newId = nextTabId.current++;
             const newTab = {
-                ...createTab(newId),
+                ...createQueryTab(newId),
                 title: `${response.fileName} - ${connectionName}`,
                 query: response.contents,
                 filePath: response.path,
@@ -358,6 +499,10 @@ export default function App() {
     };
 
     const handleOpenSetConnection = (tabId: number) => {
+        const targetTab = tabs.find((tab) => tab.id === tabId);
+        if (!targetTab || targetTab.kind !== "query") {
+            return;
+        }
         setTabContextMenu((prev) => ({ ...prev, open: false }));
         setConnectionPickerTabId(tabId);
         setConnectionPickerOpen(true);
@@ -415,7 +560,8 @@ export default function App() {
                     }}
                     onExecuteSql={handleExecuteActiveTab}
                     onPreviewFetchXml={handlePreviewActiveTab}
-                    canExecute={Boolean(selectedConnection?.id)}
+                    canExecute={Boolean(selectedConnection?.id && activeTab?.kind === "query")}
+                    canPreview={Boolean(activeTab?.kind === "query")}
                     onShowShortcuts={() => setShortcutsOpen(true)}
                     onOpenSqlFile={handleOpenSqlFile}
                     onSaveSqlFile={handleSaveActiveTab}
@@ -432,7 +578,7 @@ export default function App() {
                     }}
                     isEnabled={(id: ShortcutActionId) =>
                         id === "execute"
-                            ? Boolean(selectedConnection?.id)
+                            ? Boolean(selectedConnection?.id && activeTab?.kind === "query")
                             : id === "save-file"
                             ? Boolean(activeTab?.filePath)
                             : true
@@ -578,9 +724,13 @@ export default function App() {
                             </div>
                             {activeTab ? (
                                 <CustomEditor
-                                    vimEnabled={vimEnabled}
+                                    key={`${activeTab.kind}-${activeTab.id}`}
+                                    vimEnabled={vimEnabled && activeTab.kind === "query"}
                                     value={activeTab.query}
+                                    language={activeTab.kind === "fetchxml" ? "xml" : "sql"}
+                                    readOnly={activeTab.kind === "fetchxml"}
                                     onChange={(value) => {
+                                        if (activeTab.kind !== "query") return;
                                         updateTab(activeTab.id, (tab) => ({
                                             ...tab,
                                             query: value,
@@ -592,7 +742,7 @@ export default function App() {
                         </div>
 
                         <div className={styles.bottom}>
-                            {activeTab ? (
+                            {activeTab && activeTab.kind === "query" ? (
                                 <>
                                     <FetchXmlPreviewPanel
                                         fetchPreview={activeTab.fetchPreview}

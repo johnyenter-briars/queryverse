@@ -54,6 +54,7 @@ export interface IMenuBarProps {
     onExecuteSql: () => void;
     onPreviewFetchXml: () => void;
     canExecute: boolean;
+    canPreview: boolean;
     onShowShortcuts: () => void;
     onOpenSqlFile: () => void;
     onSaveSqlFile: () => void;
@@ -72,6 +73,7 @@ export function MenuBar({
     onExecuteSql,
     onPreviewFetchXml,
     canExecute,
+    canPreview,
     onShowShortcuts,
     onOpenSqlFile,
     onSaveSqlFile,
@@ -81,8 +83,8 @@ export function MenuBar({
 }: IMenuBarProps) {
     const styles = useMenuBarStyles();
     const connectionLabel = currentConnection?.name ?? "No connection";
-    const connectionTitle = currentConnection?.d365Url
-        ? `Connected to ${currentConnection.d365Url}`
+    const connectionTitle = currentConnection?.dataverseUrl
+        ? `Connected to ${currentConnection.dataverseUrl}`
         : "No connection selected";
 
     return (
@@ -145,6 +147,7 @@ export function MenuBar({
             <ToolbarButton
                 icon={<DocumentText24Regular />}
                 title="Preview FetchXML"
+                disabled={!canPreview}
                 onClick={onPreviewFetchXml}
             >
                 Preview FetchXML

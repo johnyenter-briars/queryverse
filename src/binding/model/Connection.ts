@@ -3,24 +3,28 @@ export type Connection = ClientCredentialsConnection | AuthorizationCodeConnecti
 export type ConnectionMethod = 'ClientCredentials' | 'AuthorizationCode'
 
 export type ClientCredentialsConnection = {
-    method: ConnectionMethod;
+    method: "ClientCredentials";
     id: string | null;
     name: string;
     clientId: string;
     clientSecret: string;
     tenantId: string;
     scope: string;
-    d365Url: string;
+    dataverseUrl: string;
     generatedOn: string;
 }
 
 export type AuthorizationCodeConnection = {
-    method: ConnectionMethod;
+    method: "AuthorizationCode";
     id: string | null;
     name: string;
+    clientId: string;
+    clientSecret: string;
+    tenantId: string;
+    scope: string;
     accessToken: string;
     refreshToken: string;
     expiresAt: string; 
-    d365Url: string;
+    dataverseUrl: string;
     generatedOn: string;
 }

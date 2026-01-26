@@ -14,6 +14,7 @@ import { OpenSqlFileResponse } from "./model/OpenSqlFileResponse";
 import { SaveSqlFileRequest } from "./model/SaveSqlFileRequest";
 import { SaveSqlFileAsRequest } from "./model/SaveSqlFileAsRequest";
 import { SaveSqlFileAsResponse } from "./model/SaveSqlFileAsResponse";
+import { LaunchContext } from "./model/LaunchContext";
 
 export const executeSql = async (
     sql: string
@@ -99,6 +100,16 @@ export const openSqlFile = async (): Promise<OpenSqlFileResponse | null> => {
     return response;
 };
 
+export const openSqlFilePath = async (path: string): Promise<OpenSqlFileResponse> => {
+    const response: OpenSqlFileResponse = await invoke("open_sql_file_path", {
+        path,
+    });
+
+    console.log(response);
+
+    return response;
+};
+
 export const saveSqlFile = async (
     request: SaveSqlFileRequest
 ): Promise<void> => {
@@ -111,6 +122,14 @@ export const saveSqlFileAs = async (
     const response: SaveSqlFileAsResponse | null = await invoke("save_sql_file_as", {
         request,
     });
+
+    console.log(response);
+
+    return response;
+};
+
+export const getLaunchContext = async (): Promise<LaunchContext> => {
+    const response: LaunchContext = await invoke("get_launch_context");
 
     console.log(response);
 

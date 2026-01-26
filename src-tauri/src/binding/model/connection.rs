@@ -26,8 +26,8 @@ pub enum Connection {
         scope: String,
 
         #[serde(default)]
-        #[serde(rename = "d365Url")]
-        d365_url: String,
+        #[serde(rename = "dataverseUrl")]
+        dataverse_url: String,
 
         #[serde(default)]
         #[serde(rename = "generatedOn")]
@@ -42,6 +42,22 @@ pub enum Connection {
         #[serde(rename = "name")]
         name: String,
 
+        #[serde(default)]
+        #[serde(rename = "clientId")]
+        client_id: String,
+
+        #[serde(default)]
+        #[serde(rename = "clientSecret")]
+        client_secret: String,
+
+        #[serde(default)]
+        #[serde(rename = "tenantId")]
+        tenant_id: String,
+
+        #[serde(default)]
+        #[serde(rename = "scope")]
+        scope: String,
+
         #[serde(rename = "accessToken")]
         access_token: String,
 
@@ -52,11 +68,28 @@ pub enum Connection {
         expires_at: String, // could be chrono::DateTime if you want
 
         #[serde(default)]
-        #[serde(rename = "d365Url")]
-        d365_url: String,
+        #[serde(rename = "dataverseUrl")]
+        dataverse_url: String,
 
         #[serde(default)]
         #[serde(rename = "generatedOn")]
         generated_on: String,
     },
+}
+
+impl Connection {
+    pub fn id(&self) -> Option<Uuid> {
+        match self {
+            Connection::ClientCredentials { id, .. } | Connection::AuthorizationCode { id, .. } => {
+                id.clone()
+            }
+        }
+    }
+
+    pub fn dataverse_url(&self) -> &String {
+        match self {
+            Connection::ClientCredentials { dataverse_url, .. }
+            | Connection::AuthorizationCode { dataverse_url, .. } => dataverse_url,
+        }
+    }
 }

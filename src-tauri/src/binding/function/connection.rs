@@ -2,6 +2,7 @@ use uuid::Uuid;
 
 use crate::auth::connection::{load_connections, save_connection, save_connections, utc_timestamp};
 use crate::auth::credentials::{exchange_authorization_code, validate_client_credentials};
+use crate::auth::token::prime_token_cache;
 use crate::binding::model::{
     connection::Connection,
     createconnectionpayload::CreateConnectionPayload,
@@ -26,9 +27,14 @@ pub async fn create_connection(
             client_secret,
             tenant_id,
             scope,
-            d365_url,
+            dataverse_url,
         } => {
-            validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope).await?;
+            validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope)
+                .await
+                .map_err(|error| {
+                    println!("create_connection validate_client_credentials failed: {error}");
+                    error
+                })?;
 
             Connection::ClientCredentials {
                 id: Some(Uuid::new_v4()),
@@ -37,7 +43,7 @@ pub async fn create_connection(
                 client_secret,
                 tenant_id,
                 scope,
-                d365_url,
+                dataverse_url,
                 generated_on: utc_timestamp(),
             }
         }
@@ -51,8 +57,9 @@ pub async fn create_connection(
             redirect_uri,
             username,
             password,
-            d365_url,
+            dataverse_url,
         } => {
+            todo!("#11");
             let token = exchange_authorization_code(
                 &client_id,
                 &client_secret,
@@ -63,21 +70,32 @@ pub async fn create_connection(
                 &username,
                 &password,
             )
-            .await?;
+            .await
+            .map_err(|error| {
+                println!("create_connection exchange_authorization_code failed: {error}");
+                error
+            })?;
 
             Connection::AuthorizationCode {
                 id: Some(Uuid::new_v4()),
                 name,
+                client_id,
+                client_secret,
+                tenant_id,
+                scope,
                 access_token: token.access_token,
                 refresh_token: token.refresh_token,
-                expires_at: token.expires_at,
-                d365_url,
+                expires_at: token.expires_at.to_string(),
+                dataverse_url,
                 generated_on: utc_timestamp(),
             }
         }
     };
 
-    save_connection(&connection)?;
+    save_connection(&connection).map_err(|error| {
+        println!("create_connection save_connection failed: {error}");
+        error
+    })?;
 
     Ok(CreateConnectionResponse::validated(connection))
 }
@@ -95,20 +113,22 @@ pub async fn set_connection(
     database: tauri::State<'_, Database>,
 ) -> Result<(), String> {
     let connections = load_connections()?;
-    let found = connections.iter().any(|connection| match connection {
-        Connection::ClientCredentials { id, .. }
-        | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&request.connection_id),
-    });
+    let selected_connection = connections
+        .iter()
+        .find(|connection| connection.id().as_ref() == Some(&request.connection_id));
 
-    if !found {
+    let Some(selected_connection) = selected_connection else {
         return Err("Connection not found".to_string());
-    }
+    };
 
-    let mut selected = database
-        .selected_connection_id
-        .lock()
-        .map_err(|_| "Failed to lock connection state".to_string())?;
-    *selected = Some(request.connection_id);
+    {
+        let mut selected = database
+            .selected_connection_id
+            .lock()
+            .map_err(|_| "Failed to lock connection state".to_string())?;
+        *selected = Some(request.connection_id);
+    }
+    prime_token_cache(selected_connection, &database).await?;
     Ok(())
 }
 
@@ -123,10 +143,7 @@ pub async fn update_connection(
     let target_index = if let Some(request_id) = id {
         connections
             .iter()
-            .position(|connection| match connection {
-                Connection::ClientCredentials { id, .. }
-                | Connection::AuthorizationCode { id, .. } => id.as_ref() == Some(&request_id),
-            })
+            .position(|connection| connection.id().as_ref() == Some(&request_id))
             .ok_or("Connection not found")?
     } else {
         if index >= connections.len() {
@@ -135,9 +152,7 @@ pub async fn update_connection(
         index
     };
 
-    let existing_id = match &connections[target_index] {
-        Connection::ClientCredentials { id, .. } | Connection::AuthorizationCode { id, .. } => id.clone(),
-    };
+    let existing_id = connections[target_index].id();
 
     let updated_connection = match payload {
         CreateConnectionPayload::ClientCredentials {
@@ -146,9 +161,14 @@ pub async fn update_connection(
             client_secret,
             tenant_id,
             scope,
-            d365_url,
+            dataverse_url,
         } => {
-            validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope).await?;
+            validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope)
+                .await
+                .map_err(|error| {
+                    println!("update_connection validate_client_credentials failed: {error}");
+                    error
+                })?;
 
             Connection::ClientCredentials {
                 id: existing_id,
@@ -157,7 +177,7 @@ pub async fn update_connection(
                 client_secret,
                 tenant_id,
                 scope,
-                d365_url,
+                dataverse_url,
                 generated_on: utc_timestamp(),
             }
         }
@@ -171,8 +191,9 @@ pub async fn update_connection(
             redirect_uri,
             username,
             password,
-            d365_url,
+            dataverse_url,
         } => {
+            todo!("#11");
             let token = exchange_authorization_code(
                 &client_id,
                 &client_secret,
@@ -183,22 +204,33 @@ pub async fn update_connection(
                 &username,
                 &password,
             )
-            .await?;
+            .await
+            .map_err(|error| {
+                println!("update_connection exchange_authorization_code failed: {error}");
+                error
+            })?;
 
             Connection::AuthorizationCode {
                 id: existing_id,
                 name,
+                client_id,
+                client_secret,
+                tenant_id,
+                scope,
                 access_token: token.access_token,
                 refresh_token: token.refresh_token,
-                expires_at: token.expires_at,
-                d365_url,
+                expires_at: token.expires_at.to_string(),
+                dataverse_url,
                 generated_on: utc_timestamp(),
             }
         }
     };
 
     connections[target_index] = updated_connection.clone();
-    save_connections(&connections)?;
+    save_connections(&connections).map_err(|error| {
+        println!("update_connection save_connections failed: {error}");
+        error
+    })?;
 
     Ok(UpdateConnectionResponse {
         message: "Connection validated.".to_string(),

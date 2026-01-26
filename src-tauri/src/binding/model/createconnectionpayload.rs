@@ -20,8 +20,8 @@ pub enum CreateConnectionPayload {
         #[serde(rename = "scope")]
         scope: String,
 
-        #[serde(rename = "d365Url")]
-        d365_url: String,
+        #[serde(rename = "dataverseUrl")]
+        dataverse_url: String,
     },
 
     #[serde(rename = "AuthorizationCode", alias = "OAuth")]
@@ -53,7 +53,7 @@ pub enum CreateConnectionPayload {
         #[serde(rename = "password")]
         password: String,
 
-        #[serde(rename = "d365Url")]
-        d365_url: String,
+        #[serde(rename = "dataverseUrl")]
+        dataverse_url: String,
     },
 }
