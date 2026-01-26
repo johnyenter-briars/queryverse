@@ -12,6 +12,8 @@ import { ExecuteSqlResponse } from "./model/ExecuteSqlResponse";
 import { MultipleResponse } from "./model/MultipleResponse";
 import { OpenSqlFileResponse } from "./model/OpenSqlFileResponse";
 import { SaveSqlFileRequest } from "./model/SaveSqlFileRequest";
+import { SaveSqlFileAsRequest } from "./model/SaveSqlFileAsRequest";
+import { SaveSqlFileAsResponse } from "./model/SaveSqlFileAsResponse";
 
 export const executeSql = async (
     sql: string
@@ -101,4 +103,16 @@ export const saveSqlFile = async (
     request: SaveSqlFileRequest
 ): Promise<void> => {
     await invoke("save_sql_file", { request });
+};
+
+export const saveSqlFileAs = async (
+    request: SaveSqlFileAsRequest
+): Promise<SaveSqlFileAsResponse | null> => {
+    const response: SaveSqlFileAsResponse | null = await invoke("save_sql_file_as", {
+        request,
+    });
+
+    console.log(response);
+
+    return response;
 };

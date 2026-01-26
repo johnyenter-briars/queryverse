@@ -27,6 +27,7 @@ import {
     openSqlFile,
     previewFetchXml,
     saveSqlFile,
+    saveSqlFileAs,
     setConnection,
 } from "./binding/function";
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
@@ -270,6 +271,29 @@ export default function App() {
         }
     };
 
+    const handleSaveActiveTabAs = async () => {
+        if (!activeTab) return;
+        try {
+            const response = await saveSqlFileAs({
+                contents: activeTab.query,
+                fileName: activeTab.fileName ?? "query.sql",
+            });
+            if (!response) return;
+
+            const connectionName = selectedConnection?.name ?? "No connection";
+            updateTab(activeTab.id, (tab) => ({
+                ...tab,
+                filePath: response.path,
+                fileName: response.fileName,
+                title: `${response.fileName} - ${connectionName}`,
+                lastSavedQuery: tab.query,
+                isDirty: false,
+            }));
+        } catch (error) {
+            console.error("Failed to save SQL file as", error);
+        }
+    };
+
     return (
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
@@ -297,6 +321,7 @@ export default function App() {
                     canExecute={Boolean(selectedConnection?.id)}
                     onShowShortcuts={() => setShortcutsOpen(true)}
                     onOpenSqlFile={handleOpenSqlFile}
+                    onSaveSqlFileAs={handleSaveActiveTabAs}
                     currentConnection={selectedConnection}
                 />
                 <ShortcutManager
