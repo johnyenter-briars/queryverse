@@ -22,9 +22,11 @@ import { Connection } from "./binding/model/Connection";
 import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
 import {
     executeSql,
+    getLaunchContext,
     listConnections,
     listEntityDefinitions,
     openSqlFile,
+    openSqlFilePath,
     previewFetchXml,
     saveSqlFile,
     saveSqlFileAs,
@@ -166,6 +168,60 @@ export default function App() {
         if (typeof error === "string") return error;
         return "Unknown error";
     };
+
+    useEffect(() => {
+        const initializeFromCli = async () => {
+            try {
+                const context = await getLaunchContext();
+                let connectionToUse: Connection | null = null;
+
+                if (context.connectionName) {
+                    const connections = await listConnections();
+                    if (connections.success) {
+                        const match = connections.value.find(
+                            (connection) =>
+                                connection.name?.toLowerCase() ===
+                                context.connectionName?.toLowerCase()
+                        );
+                        if (match) {
+                            connectionToUse = match;
+                            setSelectedConnection(match);
+                            if (match.id) {
+                                await setConnection(match.id);
+                                const response = await listEntityDefinitions();
+                                if (response.success) {
+                                    setEntityDefinitions(response.value);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (context.sqlFilePath) {
+                    const file = await openSqlFilePath(context.sqlFilePath);
+                    const connectionName = connectionToUse?.name ?? "No connection";
+                    const newId = nextTabId.current++;
+                    const newTab = {
+                        ...createTab(newId),
+                        title: `${file.fileName} - ${connectionName}`,
+                        query: file.contents,
+                        filePath: file.path,
+                        fileName: file.fileName,
+                        lastSavedQuery: file.contents,
+                        isDirty: false,
+                        connectionId: connectionToUse?.id ?? null,
+                    };
+
+                    setTabs((prev) => [...prev, newTab]);
+                    setActiveTabId(newId);
+                }
+            } catch (error) {
+                console.error("Failed to initialize from CLI args", error);
+            }
+        };
+
+        initializeFromCli();
+    }, []);
 
     const openTab = (connection?: Connection | null) => {
         const effectiveConnection = connection ?? selectedConnection;

@@ -33,6 +33,25 @@ pub async fn open_sql_file(_window: tauri::Window) -> Result<Option<OpenSqlFileR
 }
 
 #[tauri::command]
+pub async fn open_sql_file_path(
+    _window: tauri::Window,
+    path: String,
+) -> Result<OpenSqlFileResponse, String> {
+    let contents = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let file_name = std::path::Path::new(&path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("query.sql")
+        .to_string();
+
+    Ok(OpenSqlFileResponse {
+        path,
+        file_name,
+        contents,
+    })
+}
+
+#[tauri::command]
 pub async fn save_sql_file(
     _window: tauri::Window,
     request: SaveSqlFileRequest,
