@@ -724,6 +724,7 @@ export default function App() {
                             </div>
                             {activeTab ? (
                                 <CustomEditor
+                                    key={`${activeTab.kind}-${activeTab.id}`}
                                     vimEnabled={vimEnabled && activeTab.kind === "query"}
                                     value={activeTab.query}
                                     language={activeTab.kind === "fetchxml" ? "xml" : "sql"}
