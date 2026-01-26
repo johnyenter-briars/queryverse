@@ -15,7 +15,7 @@ import { Entity, Value } from "../binding/model/Entity";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { SqlQueryMetadata } from "../binding/model/SqlQueryMetadata";
 import {
-    getOrderedAttributesForResults,
+    buildResultColumnDescriptors,
     getPrimaryIdAttributeForQuery,
 } from "../utility/resultsColumns";
 
@@ -55,20 +55,20 @@ export const ResultsWindow = React.memo(
     const columns = useMemo<TableColumnDefinition<Entity>[]>(() => {
         if (data.length === 0) return [];
 
-        const orderedAttributes = getOrderedAttributesForResults(
+        const orderedAttributes = buildResultColumnDescriptors(
             data,
             entityDefinitions,
             query,
             queryMetadata
         );
 
-        return orderedAttributes.map(({ key, attribute }) =>
+        return orderedAttributes.map(({ key, attribute, dataKey }) =>
             createTableColumn<Entity>({
                 columnId: key,
                 renderHeaderCell: () => attribute,
                 renderCell: (entity) => (
                     <div style={{ whiteSpace: "nowrap" }}>
-                        {renderValue(entity.attributes[attribute])}
+                        {renderValue(entity.attributes[dataKey])}
                     </div>
                 ),
             })
