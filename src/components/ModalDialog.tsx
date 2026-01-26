@@ -15,6 +15,7 @@ interface ModalDialogProps {
     onClose: () => void;
     children: ReactNode;
     closeLabel?: string;
+    width?: string;
 }
 
 export function ModalDialog({
@@ -23,10 +24,11 @@ export function ModalDialog({
     onClose,
     children,
     closeLabel = "Close",
+    width,
 }: ModalDialogProps) {
     return (
         <Dialog open={open} onOpenChange={(_, data) => (data.open ? null : onClose())}>
-            <DialogSurface>
+            <DialogSurface style={width ? { width } : undefined}>
                 <DialogBody>
                     <DialogTitle>{title}</DialogTitle>
                     <DialogContent>{children}</DialogContent>

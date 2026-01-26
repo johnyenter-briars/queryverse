@@ -459,6 +459,7 @@ export default function App() {
                         setConnectionPickerTabId(null);
                     }}
                     closeLabel="Cancel"
+                    width="300px"
                 >
                     <div className={styles.connectionPickerModal}>
                         <div className={styles.connectionPicker}>
