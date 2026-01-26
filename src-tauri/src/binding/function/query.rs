@@ -3,7 +3,7 @@ use serde::Serialize;
 use crate::{
     Database,
     auth::connection::load_connections,
-    auth::token_manager::get_access_token,
+    auth::token::get_access_token,
     binding::model::{
         connection::Connection,
         dataverse::entitydefinition::EntityDefinition,

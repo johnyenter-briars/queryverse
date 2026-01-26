@@ -14,7 +14,7 @@ use crate::binding::function::{
     launch::get_launch_context,
     query::{execute_sql, list_entity_definitions, parse_sql_to_fetchxml},
 };
-use crate::auth::token_manager::CachedToken;
+use crate::auth::token::CachedToken;
 
 pub struct Database {
     pub selected_connection_id: Mutex<Option<Uuid>>,

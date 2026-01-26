@@ -1,3 +1,3 @@
 pub mod credentials;
 pub mod connection;
-pub mod token_manager;
+pub mod token;

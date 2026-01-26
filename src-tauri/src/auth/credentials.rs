@@ -181,6 +181,7 @@ pub async fn refresh_authorization_token(
     scope: &str,
     refresh_token: &str,
 ) -> Result<TokenExchange, String> {
+    todo!("#11");
     let client = Client::new();
     let token_url = format!(
         "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
