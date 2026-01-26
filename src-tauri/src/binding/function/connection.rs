@@ -29,7 +29,12 @@ pub async fn create_connection(
             scope,
             dataverse_url,
         } => {
-            validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope).await?;
+            validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope)
+                .await
+                .map_err(|error| {
+                    println!("create_connection validate_client_credentials failed: {error}");
+                    error
+                })?;
 
             Connection::ClientCredentials {
                 id: Some(Uuid::new_v4()),
@@ -65,7 +70,11 @@ pub async fn create_connection(
                 &username,
                 &password,
             )
-            .await?;
+            .await
+            .map_err(|error| {
+                println!("create_connection exchange_authorization_code failed: {error}");
+                error
+            })?;
 
             Connection::AuthorizationCode {
                 id: Some(Uuid::new_v4()),
@@ -83,7 +92,10 @@ pub async fn create_connection(
         }
     };
 
-    save_connection(&connection)?;
+    save_connection(&connection).map_err(|error| {
+        println!("create_connection save_connection failed: {error}");
+        error
+    })?;
 
     Ok(CreateConnectionResponse::validated(connection))
 }
@@ -151,7 +163,12 @@ pub async fn update_connection(
             scope,
             dataverse_url,
         } => {
-            validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope).await?;
+            validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope)
+                .await
+                .map_err(|error| {
+                    println!("update_connection validate_client_credentials failed: {error}");
+                    error
+                })?;
 
             Connection::ClientCredentials {
                 id: existing_id,
@@ -187,7 +204,11 @@ pub async fn update_connection(
                 &username,
                 &password,
             )
-            .await?;
+            .await
+            .map_err(|error| {
+                println!("update_connection exchange_authorization_code failed: {error}");
+                error
+            })?;
 
             Connection::AuthorizationCode {
                 id: existing_id,
@@ -206,7 +227,10 @@ pub async fn update_connection(
     };
 
     connections[target_index] = updated_connection.clone();
-    save_connections(&connections)?;
+    save_connections(&connections).map_err(|error| {
+        println!("update_connection save_connections failed: {error}");
+        error
+    })?;
 
     Ok(UpdateConnectionResponse {
         message: "Connection validated.".to_string(),
