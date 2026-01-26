@@ -54,6 +54,7 @@ export interface IMenuBarProps {
     onExecuteSql: () => void;
     onPreviewFetchXml: () => void;
     canExecute: boolean;
+    canPreview: boolean;
     onShowShortcuts: () => void;
     onOpenSqlFile: () => void;
     onSaveSqlFile: () => void;
@@ -72,6 +73,7 @@ export function MenuBar({
     onExecuteSql,
     onPreviewFetchXml,
     canExecute,
+    canPreview,
     onShowShortcuts,
     onOpenSqlFile,
     onSaveSqlFile,
@@ -145,6 +147,7 @@ export function MenuBar({
             <ToolbarButton
                 icon={<DocumentText24Regular />}
                 title="Preview FetchXML"
+                disabled={!canPreview}
                 onClick={onPreviewFetchXml}
             >
                 Preview FetchXML
