@@ -16,6 +16,7 @@ import {
     Keyboard24Regular,
     Table24Regular,
     Link24Filled,
+    FolderOpen24Regular,
 } from "@fluentui/react-icons";
 import { Connection } from "../binding/model/Connection";
 
@@ -46,6 +47,7 @@ export interface IMenuBarProps {
     onPreviewFetchXml: () => void;
     canExecute: boolean;
     onShowShortcuts: () => void;
+    onOpenSqlFile: () => void;
     currentConnection: Connection | null;
 }
 
@@ -60,6 +62,7 @@ export function MenuBar({
     onPreviewFetchXml,
     canExecute,
     onShowShortcuts,
+    onOpenSqlFile,
     currentConnection,
 }: IMenuBarProps) {
     const styles = useMenuBarStyles();
@@ -89,6 +92,13 @@ export function MenuBar({
                 title="Toggle Schema Explorer"
             >
                 Schema
+            </ToolbarButton>
+            <ToolbarButton
+                icon={<FolderOpen24Regular />}
+                title="Open SQL File"
+                onClick={onOpenSqlFile}
+            >
+                Open SQL File
             </ToolbarButton>
             <ToolbarButton
                 icon={<Play24Filled />}

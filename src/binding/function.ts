@@ -10,6 +10,8 @@ import { EntityDefinition } from "./model/EntityDefinition";
 import { SetConnectionRequest } from "./model/SetConnectionRequest";
 import { ExecuteSqlResponse } from "./model/ExecuteSqlResponse";
 import { MultipleResponse } from "./model/MultipleResponse";
+import { OpenSqlFileResponse } from "./model/OpenSqlFileResponse";
+import { SaveSqlFileRequest } from "./model/SaveSqlFileRequest";
 
 export const executeSql = async (
     sql: string
@@ -85,4 +87,18 @@ export const listEntityDefinitions = async (): Promise<
     console.log(response);
 
     return response;
+};
+
+export const openSqlFile = async (): Promise<OpenSqlFileResponse | null> => {
+    const response: OpenSqlFileResponse | null = await invoke("open_sql_file");
+
+    console.log(response);
+
+    return response;
+};
+
+export const saveSqlFile = async (
+    request: SaveSqlFileRequest
+): Promise<void> => {
+    await invoke("save_sql_file", { request });
 };

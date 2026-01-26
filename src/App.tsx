@@ -24,7 +24,9 @@ import {
     executeSql,
     listConnections,
     listEntityDefinitions,
+    openSqlFile,
     previewFetchXml,
+    saveSqlFile,
     setConnection,
 } from "./binding/function";
 import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
@@ -38,6 +40,10 @@ type EditorTab = {
     id: number;
     title: string;
     query: string;
+    filePath: string | null;
+    fileName: string | null;
+    lastSavedQuery: string;
+    isDirty: boolean;
     results: Entity[];
     connectionId: string | null;
     fetchPreview: FetchXmlPreview | null;
@@ -51,6 +57,10 @@ const createTab = (id: number): EditorTab => ({
     id,
     title: `Query ${id}`,
     query: DEFAULT_QUERY,
+    filePath: null,
+    fileName: null,
+    lastSavedQuery: DEFAULT_QUERY,
+    isDirty: false,
     results: [],
     connectionId: null,
     fetchPreview: null,
@@ -218,6 +228,48 @@ export default function App() {
         }));
     };
 
+    const handleOpenSqlFile = async () => {
+        try {
+            const response = await openSqlFile();
+            if (!response) return;
+
+            const connectionName = selectedConnection?.name ?? "No connection";
+            const newId = nextTabId.current++;
+            const newTab = {
+                ...createTab(newId),
+                title: `${response.fileName} - ${connectionName}`,
+                query: response.contents,
+                filePath: response.path,
+                fileName: response.fileName,
+                lastSavedQuery: response.contents,
+                isDirty: false,
+                connectionId: selectedConnection?.id ?? null,
+            };
+
+            setTabs((prev) => [...prev, newTab]);
+            setActiveTabId(newId);
+        } catch (error) {
+            console.error("Failed to open SQL file", error);
+        }
+    };
+
+    const handleSaveActiveTab = async () => {
+        if (!activeTab?.filePath) return;
+        try {
+            await saveSqlFile({
+                path: activeTab.filePath,
+                contents: activeTab.query,
+            });
+            updateTab(activeTab.id, (tab) => ({
+                ...tab,
+                lastSavedQuery: tab.query,
+                isDirty: false,
+            }));
+        } catch (error) {
+            console.error("Failed to save SQL file", error);
+        }
+    };
+
     return (
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
@@ -244,6 +296,7 @@ export default function App() {
                     onPreviewFetchXml={handlePreviewActiveTab}
                     canExecute={Boolean(selectedConnection?.id)}
                     onShowShortcuts={() => setShortcutsOpen(true)}
+                    onOpenSqlFile={handleOpenSqlFile}
                     currentConnection={selectedConnection}
                 />
                 <ShortcutManager
@@ -251,9 +304,14 @@ export default function App() {
                         execute: handleExecuteActiveTab,
                         "close-tab": handleCloseActiveTab,
                         "new-tab": handleAddTabWithFirstConnection,
+                        "save-file": handleSaveActiveTab,
                     }}
                     isEnabled={(id: ShortcutActionId) =>
-                        id === "execute" ? Boolean(selectedConnection?.id) : true
+                        id === "execute"
+                            ? Boolean(selectedConnection?.id)
+                            : id === "save-file"
+                            ? Boolean(activeTab?.filePath)
+                            : true
                     }
                 />
                 <ModalDialog
@@ -318,7 +376,10 @@ export default function App() {
                                             <span className={styles.tabLabel}>
                                                 <span>{tab.title}</span>
                                                 <span
-                                                    className={styles.tabClose}
+                                                    className={combineClasses(
+                                                        styles.tabClose,
+                                                        tab.isDirty && styles.tabCloseDirty
+                                                    )}
                                                     role="button"
                                                     aria-label={`Close ${tab.title}`}
                                                     onClick={(event) => {
@@ -349,6 +410,7 @@ export default function App() {
                                         updateTab(activeTab.id, (tab) => ({
                                             ...tab,
                                             query: value,
+                                            isDirty: value !== tab.lastSavedQuery,
                                         }));
                                     }}
                                 />

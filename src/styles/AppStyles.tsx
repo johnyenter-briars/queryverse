@@ -81,6 +81,25 @@ export const useAppStyles = makeStyles({
             backgroundColor: tokens.colorNeutralBackground1Pressed,
         },
     },
+    tabCloseDirty: {
+        color: "transparent",
+        position: "relative",
+        "&::before": {
+            content: '""',
+            position: "absolute",
+            width: "8px",
+            height: "8px",
+            borderRadius: tokens.borderRadiusCircular,
+            backgroundColor: tokens.colorPaletteRedForeground1,
+            boxShadow: `0 0 0 2px ${webDarkTheme.colorNeutralBackground1}`,
+        },
+        "&:hover": {
+            color: tokens.colorNeutralForeground1,
+        },
+        "&:hover::before": {
+            opacity: 0,
+        },
+    },
     tabsList: {
         flex: 1,
         minWidth: 0,

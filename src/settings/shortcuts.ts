@@ -1,4 +1,9 @@
-export type ShortcutActionId = "execute" | "close-tab" | "new-tab" | "switch-tab";
+export type ShortcutActionId =
+    | "execute"
+    | "close-tab"
+    | "new-tab"
+    | "switch-tab"
+    | "save-file";
 
 export type ShortcutDefinition = {
     id: ShortcutActionId;
@@ -28,6 +33,13 @@ export const SHORTCUTS: ShortcutDefinition[] = [
         keyLabel: "Ctrl+N",
         matches: (event) =>
             event.ctrlKey && (event.key === "n" || event.key === "N"),
+    },
+    {
+        id: "save-file",
+        label: "Save SQL file",
+        keyLabel: "Ctrl+S",
+        matches: (event) =>
+            event.ctrlKey && (event.key === "s" || event.key === "S"),
     },
     {
         id: "switch-tab",
