@@ -5,7 +5,7 @@ use crate::{
     auth::connection::load_connections,
     auth::token::get_access_token,
     binding::model::{
-        connection::Connection,
+        dataverse::entity::{Entity, ResultRow},
         dataverse::entitydefinition::EntityDefinition,
         executesqlrequest::ExecuteSqlRequest,
         executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
@@ -45,12 +45,7 @@ pub async fn execute_sql(
 ) -> Result<ExecuteSqlResponse, String> {
     let stmt = sql::parse(&request.sql).map_err(|e| e.to_string())?;
     let parsed = sql::to_fetchxml(&stmt).map_err(|e| e.to_string())?;
-    let columns_order = match &stmt.columns {
-        sql::SelectColumns::Columns(columns) => {
-            columns.iter().map(|column| column.name.clone()).collect()
-        }
-        sql::SelectColumns::All => Vec::new(),
-    };
+    let columns_order = parsed.column_outputs.clone();
     let columns_selected = !columns_order.is_empty();
 
     let connection_id = {
@@ -81,10 +76,16 @@ pub async fn execute_sql(
         .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
         .await?;
 
+    let rows: Vec<ResultRow> = resp
+        .value
+        .into_iter()
+        .map(entity_to_result_row)
+        .collect();
+
     Ok(ExecuteSqlResponse {
         message: resp.message,
         success: resp.success,
-        value: resp.value,
+        value: rows,
         metadata: SqlQueryMetadata {
             columns_selected,
             columns_order,
@@ -127,4 +128,10 @@ pub async fn list_entity_definitions(
         success: true,
         value,
     })
+}
+
+fn entity_to_result_row(entity: Entity) -> ResultRow {
+    ResultRow {
+        attributes: entity.attributes,
+    }
 }

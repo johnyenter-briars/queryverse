@@ -1,4 +1,4 @@
-import { Entity } from "../binding/model/Entity";
+import { ResultRow } from "../binding/model/ResultRow";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { SqlQueryMetadata } from "../binding/model/SqlQueryMetadata";
 
@@ -43,7 +43,7 @@ export function getPrimaryIdAttributeForQuery(
  * generating unique column IDs for duplicates.
  */
 export function buildResultColumnDescriptors(
-    data: Entity[],
+    data: ResultRow[],
     entityDefinitions: EntityDefinition[],
     query: string,
     queryMetadata?: SqlQueryMetadata | null

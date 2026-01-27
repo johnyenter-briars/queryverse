@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use reqwest::Client;
 use serde_json::Value;
 
-use crate::binding::model::dataverse::entity::Entity;
-use crate::binding::model::dataverse::entity::Value::{Boolean, Int, Null, String};
+use crate::binding::model::dataverse::entity::{Attribute, Entity, Value as RowValue};
+use crate::binding::model::dataverse::entity::Value::{Boolean, Float, Int, Null, String};
 use crate::binding::model::dataverse::entitydefinition::EntityDefinition;
 use crate::binding::model::response::MultipleResponse;
 
@@ -62,7 +64,7 @@ impl QueryEngine {
             .await
             .map_err(|e| format!("Failed to parse JSON: {e}"))?;
 
-        parse_multiple_response(json)
+        parse_multiple_response_entity(json)
     }
 
     pub async fn _get_entity_metadata(
@@ -126,7 +128,7 @@ impl QueryEngine {
             .await
             .map_err(|e| format!("Failed to parse JSON: {e}"))?;
 
-        parse_multiple_response(json)
+        parse_multiple_response_entity(json)
     }
 
     pub async fn list_entity_definitions(
@@ -162,58 +164,9 @@ impl QueryEngine {
     }
 }
 
-fn add_attribute(
-    entity: &mut Entity,
-    key: &str,
-    value: &Value,
-) -> Result<bool, std::string::String> {
-    if value.is_null() {
-        entity.attributes.insert(key.to_string(), Null);
-
-        return Ok(true);
-    }
-
-    if !value.is_i64() && !value.is_string() && !value.is_boolean() {
-        return Ok(true);
-    }
-
-    //TODO: yea i know this sucks
-    if value.is_i64() {
-        let i = value
-            .as_i64()
-            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
-
-        entity.attributes.insert(key.to_string(), Int(i));
-
-        return Ok(true);
-    }
-
-    if value.is_string() {
-        let i = value
-            .as_str()
-            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
-
-        entity
-            .attributes
-            .insert(key.to_string(), String(i.to_string())); //TODO: should be this be a string or an &Str?
-
-        return Ok(true);
-    }
-
-    if value.is_boolean() {
-        let i = value
-            .as_bool()
-            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
-
-        entity.attributes.insert(key.to_string(), Boolean(i));
-
-        return Ok(true);
-    }
-
-    return Ok(true);
-}
-
-fn parse_multiple_response(json: Value) -> Result<MultipleResponse<Entity>, std::string::String> {
+fn parse_multiple_response_entity(
+    json: Value,
+) -> Result<MultipleResponse<Entity>, std::string::String> {
     let response_object = json
         .as_object()
         .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
@@ -224,17 +177,17 @@ fn parse_multiple_response(json: Value) -> Result<MultipleResponse<Entity>, std:
         .as_array()
         .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
 
-    let mut entities: Vec<Entity> = vec![];
+    let mut rows: Vec<Entity> = vec![];
 
     for record_value in response_array {
-        let mut entity = Entity::new();
+        let mut row = Entity::new();
 
         let record = record_value
             .as_object()
             .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
 
         for (key, value) in record {
-            let implemented = add_attribute(&mut entity, key, value)
+            let implemented = add_attribute_to_map(&mut row.attributes, key, value)
                 .map_err(|_| "Invalid response from Dataverse".to_string())?;
 
             if !implemented {
@@ -242,12 +195,69 @@ fn parse_multiple_response(json: Value) -> Result<MultipleResponse<Entity>, std:
             }
         }
 
-        entities.push(entity);
+        rows.push(row);
     }
 
     let mut multi_resposne = MultipleResponse::new();
 
-    multi_resposne.value = entities;
+    multi_resposne.value = rows;
 
     Ok(multi_resposne)
+}
+
+fn add_attribute_to_map(
+    attributes: &mut HashMap<Attribute, RowValue>,
+    key: &str,
+    value: &Value,
+) -> Result<bool, std::string::String> {
+    if value.is_null() {
+        attributes.insert(key.to_string(), Null);
+        return Ok(true);
+    }
+
+    if value.is_i64() {
+        let i = value
+            .as_i64()
+            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
+        attributes.insert(key.to_string(), Int(i));
+        return Ok(true);
+    }
+
+    if value.is_u64() {
+        let i = value
+            .as_u64()
+            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
+        if let Ok(as_i64) = i64::try_from(i) {
+            attributes.insert(key.to_string(), Int(as_i64));
+        } else {
+            attributes.insert(key.to_string(), Float(i as f64));
+        }
+        return Ok(true);
+    }
+
+    if value.is_f64() {
+        let f = value
+            .as_f64()
+            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
+        attributes.insert(key.to_string(), Float(f));
+        return Ok(true);
+    }
+
+    if value.is_string() {
+        let s = value
+            .as_str()
+            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
+        attributes.insert(key.to_string(), String(s.to_string()));
+        return Ok(true);
+    }
+
+    if value.is_boolean() {
+        let b = value
+            .as_bool()
+            .ok_or(format!("Unable to parse dataverse value: {:?}", value))?;
+        attributes.insert(key.to_string(), Boolean(b));
+        return Ok(true);
+    }
+
+    Ok(true)
 }

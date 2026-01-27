@@ -4,7 +4,10 @@ mod fetchxml;
 mod lexer;
 mod parser;
 
-pub use ast::{Expr, Literal, SelectColumns, SelectStmt};
+pub use ast::{
+    AggregateExpr, AggregateFunction, AggregateTarget, Expr, Literal, SelectColumns, SelectItem,
+    SelectItemKind, SelectStmt,
+};
 pub use errors::{ParseError, SqlError, TranslationError};
 
 #[derive(Debug, Clone)]
@@ -12,6 +15,8 @@ pub struct FetchXmlQuery {
     pub entity_set: String,
     pub entity_logical: String,
     pub fetchxml: String,
+    pub column_outputs: Vec<String>,
+    pub aggregate: bool,
 }
 
 pub fn parse(sql: &str) -> Result<SelectStmt, ParseError> {
@@ -21,11 +26,13 @@ pub fn parse(sql: &str) -> Result<SelectStmt, ParseError> {
 
 pub fn to_fetchxml(stmt: &SelectStmt) -> Result<FetchXmlQuery, TranslationError> {
     let entity_names = entity_names(&stmt.entity);
-    let fetchxml = fetchxml::to_fetchxml(stmt, &entity_names.entity_logical)?;
+    let translation = fetchxml::to_fetchxml(stmt, &entity_names.entity_logical)?;
     Ok(FetchXmlQuery {
         entity_set: entity_names.entity_set,
         entity_logical: entity_names.entity_logical,
-        fetchxml,
+        fetchxml: translation.fetchxml,
+        column_outputs: translation.column_outputs,
+        aggregate: translation.aggregate,
     })
 }
 
@@ -121,7 +128,7 @@ fn ends_with_any(name: &str, suffixes: &[&str]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::sql_to_fetchxml;
+    use super::{parse, sql_to_fetchxml, to_fetchxml};
 
     #[test]
     fn parses_simple_select() {
@@ -150,5 +157,29 @@ mod tests {
         assert_eq!(result.entity_set, "accounts");
         assert_eq!(result.entity_logical, "account");
         assert!(result.fetchxml.contains("<entity name=\"account\">"));
+    }
+
+    #[test]
+    fn translates_count_star_as_aggregate_fetchxml() {
+        let sql = "select count(*) from contact";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+        assert_eq!(result.entity_set, "contacts");
+        assert_eq!(result.entity_logical, "contact");
+        assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
+        assert!(result.fetchxml.contains("aggregate=\"count\""));
+        assert!(result.fetchxml.contains("alias=\"count\""));
+        assert!(result.fetchxml.contains("name=\"contactid\""));
+        assert_eq!(result.column_outputs, vec!["count".to_string()]);
+        assert!(result.aggregate);
+    }
+
+    #[test]
+    fn rejects_mixing_aggregate_and_non_aggregate_columns_without_group_by() {
+        let sql = "select count(*), name from contact";
+        let stmt = parse(sql).expect("parse");
+        let err = to_fetchxml(&stmt).expect_err("expected translation error");
+        assert!(err
+            .to_string()
+            .contains("Mixing aggregate functions with non-aggregate columns"));
     }
 }

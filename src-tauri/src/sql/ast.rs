@@ -11,13 +11,40 @@ pub struct SelectStmt {
 #[derive(Debug, Clone)]
 pub enum SelectColumns {
     All,
-    Columns(Vec<Column>),
+    Columns(Vec<SelectItem>),
 }
 
 #[derive(Debug, Clone)]
-pub struct Column {
-    pub name: String,
+pub struct SelectItem {
+    pub kind: SelectItemKind,
     pub alias: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum SelectItemKind {
+    Attribute(String),
+    Aggregate(AggregateExpr),
+}
+
+#[derive(Debug, Clone)]
+pub struct AggregateExpr {
+    pub function: AggregateFunction,
+    pub target: AggregateTarget,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AggregateFunction {
+    Min,
+    Max,
+    Count,
+    Sum,
+    Avg,
+}
+
+#[derive(Debug, Clone)]
+pub enum AggregateTarget {
+    Star,
+    Column(String),
 }
 
 #[derive(Debug, Clone)]

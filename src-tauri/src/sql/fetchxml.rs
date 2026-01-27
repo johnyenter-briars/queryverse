@@ -1,10 +1,25 @@
 use crate::sql::ast::{
-    CompareOp, Expr, Literal, OrderBy, Predicate, SelectColumns, SelectStmt,
+    AggregateExpr, AggregateFunction, AggregateTarget, CompareOp, Expr, Literal, OrderBy,
+    Predicate, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
 };
 use crate::sql::errors::TranslationError;
 
-pub fn to_fetchxml(stmt: &SelectStmt, entity_name: &str) -> Result<String, TranslationError> {
+#[derive(Debug, Clone)]
+pub struct FetchXmlTranslation {
+    pub fetchxml: String,
+    pub column_outputs: Vec<String>,
+    pub aggregate: bool,
+}
+
+pub fn to_fetchxml(
+    stmt: &SelectStmt,
+    entity_name: &str,
+) -> Result<FetchXmlTranslation, TranslationError> {
     let mut out = String::new();
+    let aggregate_mode = select_has_aggregates(stmt);
+    let column_outputs = projection_output_names(stmt, entity_name)?;
+    let output_aliases: std::collections::HashSet<String> =
+        column_outputs.iter().cloned().collect();
 
     out.push_str("<fetch");
     if let Some(top) = stmt.top {
@@ -13,6 +28,9 @@ pub fn to_fetchxml(stmt: &SelectStmt, entity_name: &str) -> Result<String, Trans
     if stmt.distinct {
         out.push_str(" distinct=\"true\"");
     }
+    if aggregate_mode {
+        out.push_str(" aggregate=\"true\"");
+    }
     out.push_str(">");
 
     out.push_str("<entity name=\"");
@@ -20,16 +38,17 @@ pub fn to_fetchxml(stmt: &SelectStmt, entity_name: &str) -> Result<String, Trans
     out.push_str("\">");
 
     match &stmt.columns {
-        SelectColumns::All => out.push_str("<all-attributes />"),
+        SelectColumns::All => {
+            if aggregate_mode {
+                return Err(TranslationError::new(
+                    "SELECT * cannot be used with aggregate functions",
+                ));
+            }
+            out.push_str("<all-attributes />");
+        }
         SelectColumns::Columns(columns) => {
             for column in columns {
-                out.push_str("<attribute name=\"");
-                out.push_str(&escape_xml(&column.name));
-                if let Some(alias) = &column.alias {
-                    out.push_str("\" alias=\"");
-                    out.push_str(&escape_xml(alias));
-                }
-                out.push_str("\" />");
+                write_attribute(column, entity_name, aggregate_mode, &mut out)?;
             }
         }
     }
@@ -39,18 +58,72 @@ pub fn to_fetchxml(stmt: &SelectStmt, entity_name: &str) -> Result<String, Trans
     }
 
     for order in &stmt.order_by {
-        write_order(order, &mut out);
+        write_order(order, aggregate_mode, &output_aliases, &mut out);
     }
 
     out.push_str("</entity>");
     out.push_str("</fetch>");
 
-    Ok(out)
+    Ok(FetchXmlTranslation {
+        fetchxml: out,
+        column_outputs,
+        aggregate: aggregate_mode,
+    })
 }
 
-fn write_order(order: &OrderBy, out: &mut String) {
-    out.push_str("<order attribute=\"");
-    out.push_str(&escape_xml(&order.column));
+fn write_attribute(
+    item: &SelectItem,
+    entity_name: &str,
+    aggregate_mode: bool,
+    out: &mut String,
+) -> Result<(), TranslationError> {
+    match &item.kind {
+        SelectItemKind::Attribute(name) => {
+            if aggregate_mode {
+                return Err(TranslationError::new(
+                    "Mixing aggregate functions with non-aggregate columns is not supported without GROUP BY",
+                ));
+            }
+
+            out.push_str("<attribute name=\"");
+            out.push_str(&escape_xml(name));
+            if let Some(alias) = &item.alias {
+                out.push_str("\" alias=\"");
+                out.push_str(&escape_xml(alias));
+            }
+            out.push_str("\" />");
+        }
+        SelectItemKind::Aggregate(aggregate) => {
+            let function = aggregate.function;
+            let alias = aggregate_alias(item, entity_name)?;
+            let attribute_name = aggregate_attribute_name(aggregate, entity_name)?;
+
+            out.push_str("<attribute name=\"");
+            out.push_str(&escape_xml(&attribute_name));
+            out.push_str("\" alias=\"");
+            out.push_str(&escape_xml(&alias));
+            out.push_str("\" aggregate=\"");
+            out.push_str(aggregate_function_name(function));
+            out.push_str("\" />");
+        }
+    }
+
+    Ok(())
+}
+
+fn write_order(
+    order: &OrderBy,
+    aggregate_mode: bool,
+    output_aliases: &std::collections::HashSet<String>,
+    out: &mut String,
+) {
+    if aggregate_mode && output_aliases.contains(&order.column) {
+        out.push_str("<order alias=\"");
+        out.push_str(&escape_xml(&order.column));
+    } else {
+        out.push_str("<order attribute=\"");
+        out.push_str(&escape_xml(&order.column));
+    }
     if order.descending {
         out.push_str("\" descending=\"true");
     }
@@ -207,6 +280,80 @@ fn literal_to_string(literal: &Literal) -> String {
             }
         }
         Literal::Null => String::new(),
+    }
+}
+
+fn select_has_aggregates(stmt: &SelectStmt) -> bool {
+    match &stmt.columns {
+        SelectColumns::All => false,
+        SelectColumns::Columns(items) => items
+            .iter()
+            .any(|item| matches!(item.kind, SelectItemKind::Aggregate(_))),
+    }
+}
+
+fn projection_output_names(
+    stmt: &SelectStmt,
+    entity_name: &str,
+) -> Result<Vec<String>, TranslationError> {
+    match &stmt.columns {
+        SelectColumns::All => Ok(Vec::new()),
+        SelectColumns::Columns(items) => items
+            .iter()
+            .map(|item| output_name(item, entity_name))
+            .collect(),
+    }
+}
+
+fn output_name(item: &SelectItem, _entity_name: &str) -> Result<String, TranslationError> {
+    if let Some(alias) = &item.alias {
+        return Ok(alias.clone());
+    }
+
+    match &item.kind {
+        SelectItemKind::Attribute(name) => Ok(name.clone()),
+        SelectItemKind::Aggregate(aggregate) => Ok(default_aggregate_alias(aggregate)),
+    }
+}
+
+fn aggregate_alias(item: &SelectItem, entity_name: &str) -> Result<String, TranslationError> {
+    output_name(item, entity_name)
+}
+
+fn default_aggregate_alias(aggregate: &AggregateExpr) -> String {
+    let function = aggregate_function_name(aggregate.function);
+    match &aggregate.target {
+        AggregateTarget::Star => function.to_string(),
+        AggregateTarget::Column(column) => format!("{}_{}", function, column),
+    }
+}
+
+fn aggregate_attribute_name(
+    aggregate: &AggregateExpr,
+    entity_name: &str,
+) -> Result<String, TranslationError> {
+    match &aggregate.target {
+        AggregateTarget::Column(column) => Ok(column.clone()),
+        AggregateTarget::Star => match aggregate.function {
+            AggregateFunction::Count => Ok(infer_primary_id(entity_name)),
+            _ => Err(TranslationError::new(
+                "Only COUNT(*) is supported for star aggregates",
+            )),
+        },
+    }
+}
+
+fn infer_primary_id(entity_name: &str) -> String {
+    format!("{}id", entity_name)
+}
+
+fn aggregate_function_name(function: AggregateFunction) -> &'static str {
+    match function {
+        AggregateFunction::Min => "min",
+        AggregateFunction::Max => "max",
+        AggregateFunction::Count => "count",
+        AggregateFunction::Sum => "sum",
+        AggregateFunction::Avg => "avg",
     }
 }
 

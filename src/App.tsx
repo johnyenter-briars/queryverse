@@ -17,7 +17,7 @@ import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
 import { SchemaExplorerMenu } from "./components/SchemaExplorerMenu";
 import { combineClasses } from "./utility/class";
-import { Entity } from "./binding/model/Entity";
+import { ResultRow } from "./binding/model/ResultRow";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
 import { Connection } from "./binding/model/Connection";
 import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
@@ -54,7 +54,7 @@ type EditorTab = {
     fileName: string | null;
     lastSavedQuery: string;
     isDirty: boolean;
-    results: Entity[];
+    results: ResultRow[];
     connectionId: string | null;
     fetchPreview: FetchXmlPreview | null;
     previewError: string | null;
