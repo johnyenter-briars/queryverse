@@ -38,6 +38,8 @@ import { EntityDefinition } from "./binding/model/EntityDefinition";
 import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 
 const DEFAULT_QUERY = "select top 20 *\nfrom account";
+// Debouncing editor updates avoids per-keystroke app state writes and UI lag.
+const EDITOR_DEBOUNCE_MS = 200;
 
 type EditorTab = {
     kind: "query" | "fetchxml";
@@ -729,6 +731,7 @@ export default function App() {
                                     value={activeTab.query}
                                     language={activeTab.kind === "fetchxml" ? "xml" : "sql"}
                                     readOnly={activeTab.kind === "fetchxml"}
+                                    debounceMs={EDITOR_DEBOUNCE_MS}
                                     onChange={(value) => {
                                         if (activeTab.kind !== "query") return;
                                         updateTab(activeTab.id, (tab) => ({

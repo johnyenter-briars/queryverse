@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 //@ts-expect-error monaco-vim has no type declarations
 import { initVimMode } from "monaco-vim";
 import Editor, { OnMount } from "@monaco-editor/react";
@@ -10,6 +10,7 @@ interface ICustomEditor {
     onChange: (value: string) => void;
     language?: string;
     readOnly?: boolean;
+    debounceMs?: number;
 }
 
 export function CustomEditor({
@@ -18,15 +19,62 @@ export function CustomEditor({
     onChange,
     language,
     readOnly,
+    debounceMs,
 }: ICustomEditor) {
     const styles = useCustomEditorStyles();
     const vimModeRef = useRef<any>(null);
     const statusBarRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<any>(null);
+    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const effectiveDebounceMs = debounceMs ?? 200;
+
+    // Keep the editor responsive by buffering keystrokes locally and
+    // committing to app state on a short debounce and on blur.
+    const [localValue, setLocalValue] = useState<string>(value);
+
+    useEffect(() => {
+        // Sync when the active tab/value changes externally.
+        setLocalValue(value);
+    }, [value]);
+
+    const flushChange = useCallback(() => {
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = null;
+        }
+        onChange(localValue);
+    }, [localValue, onChange]);
+
+    const scheduleChange = useCallback(
+        (nextValue: string) => {
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
+            }
+            debounceTimerRef.current = setTimeout(() => {
+                debounceTimerRef.current = null;
+                onChange(nextValue);
+            }, effectiveDebounceMs);
+        },
+        [effectiveDebounceMs, onChange]
+    );
 
     const handleEditorMount: OnMount = (editor) => {
         editorRef.current = editor;
         editor.focus();
+        editor.onDidBlurEditorText(() => {
+            // Ensure the latest keystrokes are committed when focus leaves.
+            const modelValue = editor.getModel()?.getValue();
+            if (typeof modelValue === "string") {
+                setLocalValue(modelValue);
+                onChange(modelValue);
+                if (debounceTimerRef.current) {
+                    clearTimeout(debounceTimerRef.current);
+                    debounceTimerRef.current = null;
+                }
+            } else {
+                flushChange();
+            }
+        });
         if (vimEnabled && !readOnly && statusBarRef.current) {
             vimModeRef.current = initVimMode(editor, statusBarRef.current);
         }
@@ -51,6 +99,7 @@ export function CustomEditor({
 
     useEffect(() => {
         return () => {
+            if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
             if (vimModeRef.current) vimModeRef.current.dispose();
         };
     }, []);
@@ -60,10 +109,14 @@ export function CustomEditor({
             <Editor
                 height="100%"
                 language={language ?? "sql"}
-                value={value}
+                value={localValue}
                 theme="vs-dark"
                 onMount={handleEditorMount}
-                onChange={(v) => onChange(v || "")}
+                onChange={(v) => {
+                    const nextValue = v || "";
+                    setLocalValue(nextValue);
+                    scheduleChange(nextValue);
+                }}
                 options={{ readOnly: Boolean(readOnly) }}
             />
             <div ref={statusBarRef} className={styles.statusBar}>
