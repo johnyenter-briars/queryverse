@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useRef, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     DataGrid,
     DataGridHeader,
@@ -7,6 +7,9 @@ import {
     DataGridBody,
     DataGridRow,
     DataGridCell,
+    type RowRenderer,
+} from "@fluentui-contrib/react-data-grid-react-window";
+import {
     createTableColumn,
     TableColumnDefinition,
     Spinner,
@@ -21,6 +24,8 @@ import {
 } from "../utility/resultsColumns";
 
 const DEFAULT_COL_WIDTH = 300;
+const ROW_HEIGHT = 36;
+const HEADER_HEIGHT = 40;
 
 function renderValue(value: Value): React.ReactNode {
     if (value === null || value === undefined) return "";
@@ -60,7 +65,28 @@ export const ResultsWindow = React.memo(
         isLoading,
         errorMessage,
     }: IResultsWindowProps) => {
-    const dataGridScrollRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [containerHeight, setContainerHeight] = useState<number>(800);
+
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+
+        const updateHeight = () => {
+            setContainerHeight(el.clientHeight);
+        };
+
+        updateHeight();
+
+        const observer = new ResizeObserver(() => {
+            updateHeight();
+        });
+        observer.observe(el);
+
+        return () => {
+            observer.disconnect();
+        };
+    }, []);
 
     const columns = useMemo<TableColumnDefinition<Entity>[]>(() => {
         if (data.length === 0) return [];
@@ -91,6 +117,7 @@ export const ResultsWindow = React.memo(
     );
 
     const totalWidth = columns.length * DEFAULT_COL_WIDTH;
+    const bodyHeight = Math.max(200, containerHeight - HEADER_HEIGHT);
 
     if (isLoading) {
         return (
@@ -125,52 +152,57 @@ export const ResultsWindow = React.memo(
         );
     }
 
+    const renderRow: RowRenderer<Entity> = ({ item, rowId }, style) => (
+        <DataGridRow<Entity> key={rowId} style={style}>
+            {({ renderCell }) => (
+                <DataGridCell>
+                    {renderCell(item)}
+                </DataGridCell>
+            )}
+        </DataGridRow>
+    );
+
     return (
         <div
-            ref={dataGridScrollRef}
+            ref={containerRef}
             style={{
-                maxHeight: '100%',
-                overflowY: 'auto'
+                height: "100%",
+                width: "100%",
+                maxWidth: "100%",
+                overflow: "auto",
             }}
         >
-            <DataGrid
-                items={data}
-                columns={columns}
-                sortable
-                getRowId={
-                    (entity: Entity) => getEntityRowId(entity, primaryIdAttribute)
-                }
-                style={{ minWidth: totalWidth }}
-            >
-                <DataGridHeader
-                    style={{
-                        position: "sticky",
-                        top: 0,
-                        background: webDarkTheme.colorNeutralBackground1,
-                        zIndex: 10,
-                    }}
+            <div style={{ minWidth: totalWidth, width: "fit-content" }}>
+                <DataGrid
+                    items={data}
+                    columns={columns}
+                    sortable
+                    getRowId={
+                        (entity: Entity) => getEntityRowId(entity, primaryIdAttribute)
+                    }
                 >
-                    <DataGridRow>
-                        {({ renderHeaderCell }) => (
-                            <DataGridHeaderCell>
-                                {renderHeaderCell()}
-                            </DataGridHeaderCell>
-                        )}
-                    </DataGridRow>
-                </DataGridHeader>
-
-                <DataGridBody>
-                    {({ item, rowId }) => (
-                        <DataGridRow key={rowId}>
-                            {({ renderCell }) => (
-                                <DataGridCell>
-                                    {renderCell(item)}
-                                </DataGridCell>
+                    <DataGridHeader
+                        style={{
+                            position: "sticky",
+                            top: 0,
+                            background: webDarkTheme.colorNeutralBackground1,
+                            zIndex: 10,
+                        }}
+                    >
+                        <DataGridRow>
+                            {({ renderHeaderCell }) => (
+                                <DataGridHeaderCell>
+                                    {renderHeaderCell()}
+                                </DataGridHeaderCell>
                             )}
                         </DataGridRow>
-                    )}
-                </DataGridBody>
-            </DataGrid>
+                    </DataGridHeader>
+
+                    <DataGridBody<Entity> itemSize={ROW_HEIGHT} height={bodyHeight}>
+                        {renderRow}
+                    </DataGridBody>
+                </DataGrid>
+            </div>
         </div>
     );
 });
