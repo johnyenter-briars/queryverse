@@ -11,6 +11,7 @@ import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor } from "./components/CustomEditor";
 import { ShortcutManager } from "./components/ShortcutManager";
 import { ModalDialog } from "./components/ModalDialog";
+import { SettingsModal } from "./components/SettingsModal";
 import { TabSwitcher } from "./components/TabSwitcher";
 import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
@@ -22,6 +23,7 @@ import { Connection } from "./binding/model/Connection";
 import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
 import {
     executeSql,
+    getSettings,
     getLaunchContext,
     listConnections,
     listEntityDefinitions,
@@ -30,14 +32,18 @@ import {
     previewFetchXml,
     saveSqlFile,
     saveSqlFileAs,
+    saveSettings,
     setConnection,
 } from "./binding/function";
-import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
+import { ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
 import { EntityDefinition } from "./binding/model/EntityDefinition";
 import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
+import { DEFAULT_SETTINGS, Settings } from "./binding/model/Settings";
 
 const DEFAULT_QUERY = "select top 20 *\nfrom account";
+// Debouncing editor updates avoids per-keystroke app state writes and UI lag.
+const EDITOR_DEBOUNCE_MS = 200;
 
 type EditorTab = {
     kind: "query" | "fetchxml";
@@ -101,13 +107,14 @@ const createFetchXmlTab = (
 export default function App() {
     const [connectionsEnabled, setIsMenuOpen] = useState(true);
     const [schemaEnabled, setSchemaEnabled] = useState(false);
-    const [vimEnabled, setVimEnabled] = useState(true);
+    const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [settingsSaving, setSettingsSaving] = useState(false);
     const [tabs, setTabs] = useState<EditorTab[]>([]);
     const [activeTabId, setActiveTabId] = useState(0);
     const nextTabId = useRef(1);
     const cliInitRef = useRef(false);
     const tabContextMenuRef = useRef<HTMLDivElement | null>(null);
-    const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
     const [tabContextMenu, setTabContextMenu] = useState<{
         open: boolean;
@@ -130,7 +137,46 @@ export default function App() {
         (connectionsEnabled || schemaEnabled) && styles.contentShifted
     );
 
+    const vimEnabled = settings.vimEnabled;
+    const keyBindingsEnabled = settings.keyBindingsEnabled;
+
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadSettings = async () => {
+            try {
+                const response = await getSettings();
+                if (!cancelled && response.success) {
+                    setSettings(response.value);
+                }
+            } catch (error) {
+                console.error("Failed to load settings", error);
+            }
+        };
+
+        loadSettings();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const persistSettings = async (nextSettings: Settings) => {
+        setSettings(nextSettings);
+        setSettingsSaving(true);
+        try {
+            const response = await saveSettings(nextSettings);
+            if (response.success) {
+                setSettings(response.value);
+            }
+        } catch (error) {
+            console.error("Failed to save settings", error);
+        } finally {
+            setSettingsSaving(false);
+        }
+    };
 
     const updateTab = (tabId: number, updater: (tab: EditorTab) => EditorTab) => {
         setTabs((prev) =>
@@ -540,10 +586,9 @@ export default function App() {
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
                 <MenuBar
-                    vimEnabled={vimEnabled}
                     connectionsEnabled={connectionsEnabled}
                     schemaEnabled={schemaEnabled}
-                    onToggleVimEnabled={() => setVimEnabled(!vimEnabled)}
+                    onOpenSettings={() => setSettingsOpen(true)}
                     onToggleConnections={() => {
                         const next = !connectionsEnabled;
                         setIsMenuOpen(next);
@@ -562,7 +607,6 @@ export default function App() {
                     onPreviewFetchXml={handlePreviewActiveTab}
                     canExecute={Boolean(selectedConnection?.id && activeTab?.kind === "query")}
                     canPreview={Boolean(activeTab?.kind === "query")}
-                    onShowShortcuts={() => setShortcutsOpen(true)}
                     onOpenSqlFile={handleOpenSqlFile}
                     onSaveSqlFile={handleSaveActiveTab}
                     canSaveSqlFile={Boolean(activeTab?.filePath)}
@@ -576,27 +620,25 @@ export default function App() {
                         "new-tab": handleAddTabWithFirstConnection,
                         "save-file": handleSaveActiveTab,
                     }}
-                    isEnabled={(id: ShortcutActionId) =>
-                        id === "execute"
+                    isEnabled={(id: ShortcutActionId) => {
+                        if (!keyBindingsEnabled) return false;
+                        return id === "execute"
                             ? Boolean(selectedConnection?.id && activeTab?.kind === "query")
                             : id === "save-file"
                             ? Boolean(activeTab?.filePath)
-                            : true
-                    }
+                            : true;
+                    }}
                 />
-                <ModalDialog
-                    open={shortcutsOpen}
-                    title="Keyboard Shortcuts"
-                    onClose={() => setShortcutsOpen(false)}
-                >
-                    <div>
-                        {SHORTCUTS.map((shortcut) => (
-                            <div key={shortcut.id}>
-                                {shortcut.keyLabel} - {shortcut.label}
-                            </div>
-                        ))}
-                    </div>
-                </ModalDialog>
+                <SettingsModal
+                    open={settingsOpen}
+                    settings={settings}
+                    isSaving={settingsSaving}
+                    onClose={() => setSettingsOpen(false)}
+                    onSave={async (nextSettings) => {
+                        await persistSettings(nextSettings);
+                        setSettingsOpen(false);
+                    }}
+                />
                 <ModalDialog
                     open={connectionPickerOpen}
                     title="Set Connection"
@@ -729,6 +771,7 @@ export default function App() {
                                     value={activeTab.query}
                                     language={activeTab.kind === "fetchxml" ? "xml" : "sql"}
                                     readOnly={activeTab.kind === "fetchxml"}
+                                    debounceMs={EDITOR_DEBOUNCE_MS}
                                     onChange={(value) => {
                                         if (activeTab.kind !== "query") return;
                                         updateTab(activeTab.id, (tab) => ({

@@ -16,6 +16,7 @@ interface ModalDialogProps {
     children: ReactNode;
     closeLabel?: string;
     width?: string;
+    actions?: ReactNode;
 }
 
 export function ModalDialog({
@@ -25,6 +26,7 @@ export function ModalDialog({
     children,
     closeLabel = "Close",
     width,
+    actions,
 }: ModalDialogProps) {
     return (
         <Dialog open={open} onOpenChange={(_, data) => (data.open ? null : onClose())}>
@@ -32,11 +34,15 @@ export function ModalDialog({
                 <DialogBody>
                     <DialogTitle>{title}</DialogTitle>
                     <DialogContent>{children}</DialogContent>
-                    <DialogActions>
-                        <Button appearance="primary" onClick={onClose}>
-                            {closeLabel}
-                        </Button>
-                    </DialogActions>
+                    {actions ? (
+                        <DialogActions>{actions}</DialogActions>
+                    ) : (
+                        <DialogActions>
+                            <Button appearance="primary" onClick={onClose}>
+                                {closeLabel}
+                            </Button>
+                        </DialogActions>
+                    )}
                 </DialogBody>
             </DialogSurface>
         </Dialog>
