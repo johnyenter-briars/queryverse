@@ -55,6 +55,7 @@ export interface IMenuBarProps {
     onPreviewFetchXml: () => void;
     canExecute: boolean;
     canPreview: boolean;
+    onOpenSettings: () => void;
     onShowShortcuts: () => void;
     onOpenSqlFile: () => void;
     onSaveSqlFile: () => void;
@@ -74,6 +75,7 @@ export function MenuBar({
     onPreviewFetchXml,
     canExecute,
     canPreview,
+    onOpenSettings,
     onShowShortcuts,
     onOpenSqlFile,
     onSaveSqlFile,
@@ -152,7 +154,7 @@ export function MenuBar({
             >
                 Preview FetchXML
             </ToolbarButton>
-            <ToolbarButton icon={<Settings24Filled />} title="Settings">
+            <ToolbarButton icon={<Settings24Filled />} title="Settings" onClick={onOpenSettings}>
                 Settings
             </ToolbarButton>
             <ToolbarButton

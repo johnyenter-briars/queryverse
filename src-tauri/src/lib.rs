@@ -13,6 +13,7 @@ use crate::binding::function::{
     file::{open_sql_file, open_sql_file_path, save_sql_file, save_sql_file_as},
     launch::get_launch_context,
     query::{execute_sql, list_entity_definitions, parse_sql_to_fetchxml},
+    settings::{get_settings, save_settings},
 };
 use crate::auth::token::CachedToken;
 
@@ -93,7 +94,9 @@ pub fn run() {
             open_sql_file,
             open_sql_file_path,
             save_sql_file,
-            save_sql_file_as
+            save_sql_file_as,
+            get_settings,
+            save_settings
         ])
         .setup(|app| {
             let windows = app.webview_windows();

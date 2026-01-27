@@ -15,6 +15,8 @@ import { SaveSqlFileRequest } from "./model/SaveSqlFileRequest";
 import { SaveSqlFileAsRequest } from "./model/SaveSqlFileAsRequest";
 import { SaveSqlFileAsResponse } from "./model/SaveSqlFileAsResponse";
 import { LaunchContext } from "./model/LaunchContext";
+import { Settings } from "./model/Settings";
+import { SettingsResponse } from "./model/SettingsResponse";
 
 export const executeSql = async (
     sql: string
@@ -130,6 +132,22 @@ export const saveSqlFileAs = async (
 
 export const getLaunchContext = async (): Promise<LaunchContext> => {
     const response: LaunchContext = await invoke("get_launch_context");
+
+    console.log(response);
+
+    return response;
+};
+
+export const getSettings = async (): Promise<SettingsResponse> => {
+    const response: SettingsResponse = await invoke("get_settings");
+
+    console.log(response);
+
+    return response;
+};
+
+export const saveSettings = async (settings: Settings): Promise<SettingsResponse> => {
+    const response: SettingsResponse = await invoke("save_settings", { settings });
 
     console.log(response);
 

@@ -17,3 +17,5 @@ pub mod opensqlfileresponse;
 pub mod savesqlfilerequest;
 pub mod savesqlfileasrequest;
 pub mod savesqlfileasresponse;
+pub mod settings;
+pub mod settingsresponse;
