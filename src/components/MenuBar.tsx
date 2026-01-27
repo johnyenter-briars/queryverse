@@ -16,9 +16,7 @@ import {
     PlugConnected24Regular,
     Settings24Filled,
     Play24Filled,
-    WindowConsole20Filled,
     DocumentText24Regular,
-    Keyboard24Regular,
     Table24Regular,
     Link24Filled,
     FolderOpen24Regular,
@@ -45,8 +43,6 @@ const useMenuBarStyles = makeStyles({
     },
 });
 export interface IMenuBarProps {
-    vimEnabled: boolean;
-    onToggleVimEnabled: () => void;
     connectionsEnabled: boolean;
     onToggleConnections: () => void;
     schemaEnabled: boolean;
@@ -56,7 +52,6 @@ export interface IMenuBarProps {
     canExecute: boolean;
     canPreview: boolean;
     onOpenSettings: () => void;
-    onShowShortcuts: () => void;
     onOpenSqlFile: () => void;
     onSaveSqlFile: () => void;
     canSaveSqlFile: boolean;
@@ -65,18 +60,15 @@ export interface IMenuBarProps {
 }
 
 export function MenuBar({
-    vimEnabled,
     connectionsEnabled,
     onToggleConnections,
     schemaEnabled,
     onToggleSchema,
-    onToggleVimEnabled,
     onExecuteSql,
     onPreviewFetchXml,
     canExecute,
     canPreview,
     onOpenSettings,
-    onShowShortcuts,
     onOpenSqlFile,
     onSaveSqlFile,
     canSaveSqlFile,
@@ -156,21 +148,6 @@ export function MenuBar({
             </ToolbarButton>
             <ToolbarButton icon={<Settings24Filled />} title="Settings" onClick={onOpenSettings}>
                 Settings
-            </ToolbarButton>
-            <ToolbarButton
-                icon={<Keyboard24Regular />}
-                title="Keyboard Shortcuts"
-                onClick={onShowShortcuts}
-            >
-                Shortcuts
-            </ToolbarButton>
-            <ToolbarButton
-                icon={<WindowConsole20Filled />}
-                appearance={vimEnabled ? "primary" : "subtle"}
-                title="Vim Mode"
-                onClick={onToggleVimEnabled}
-            >
-                Vim Mode
             </ToolbarButton>
             <div className={styles.connectionInfo} title={connectionTitle}>
                 <Link24Filled className={styles.connectionIcon} />

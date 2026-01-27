@@ -1,17 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import {
     Button,
-    Dialog,
-    DialogActions,
-    DialogBody,
-    DialogContent,
-    DialogSurface,
-    DialogTitle,
     Switch,
     Text,
 } from "@fluentui/react-components";
 import { Settings } from "../binding/model/Settings";
 import { useSettingsModalStyles } from "../styles/SettingsModalStyles";
+import { SHORTCUTS } from "../settings/shortcuts";
+import { ModalDialog } from "./ModalDialog";
 
 export interface SettingsModalProps {
     open: boolean;
@@ -48,61 +44,72 @@ export function SettingsModal({
     };
 
     return (
-        <Dialog open={open} onOpenChange={(_, data) => (data.open ? null : onClose())}>
-            <DialogSurface className={styles.surface}>
-                <DialogBody>
-                    <DialogTitle>Settings</DialogTitle>
-                    <DialogContent>
-                        <div className={styles.body}>
-                            <div className={styles.section}>
-                                <Switch
-                                    label="Enable keyboard shortcuts"
-                                    checked={draft.keyBindingsEnabled}
-                                    onChange={(_, data) =>
-                                        setDraft((prev) => ({
-                                            ...prev,
-                                            keyBindingsEnabled: data.checked,
-                                        }))
-                                    }
-                                />
-                                <Text className={styles.description}>
-                                    When disabled, app-level shortcuts like Execute (F5) and Save
-                                    (Ctrl+S) will not run.
-                                </Text>
-                            </div>
+        <ModalDialog
+            open={open}
+            title="Settings"
+            onClose={onClose}
+            width="420px"
+            actions={
+                <>
+                    <Button appearance="secondary" onClick={onClose} disabled={isSaving}>
+                        Cancel
+                    </Button>
+                    <Button
+                        appearance="primary"
+                        onClick={handleSave}
+                        disabled={isSaving || !isDirty}
+                    >
+                        Save
+                    </Button>
+                </>
+            }
+        >
+            <div className={styles.body}>
+                <div className={styles.section}>
+                    <Switch
+                        label="Enable Vim mode"
+                        checked={draft.vimEnabled}
+                        onChange={(_, data) =>
+                            setDraft((prev) => ({
+                                ...prev,
+                                vimEnabled: data.checked,
+                            }))
+                        }
+                    />
+                    <Text className={styles.description}>
+                        Vim mode applies to SQL query tabs (not read-only tabs).
+                    </Text>
+                </div>
 
-                            <div className={styles.section}>
-                                <Switch
-                                    label="Enable Vim mode"
-                                    checked={draft.vimEnabled}
-                                    onChange={(_, data) =>
-                                        setDraft((prev) => ({
-                                            ...prev,
-                                            vimEnabled: data.checked,
-                                        }))
-                                    }
-                                />
-                                <Text className={styles.description}>
-                                    Vim mode applies to SQL query tabs (not read-only tabs).
-                                </Text>
+                <div className={styles.section}>
+                    <Switch
+                        label="Enable keyboard shortcuts"
+                        checked={draft.keyBindingsEnabled}
+                        onChange={(_, data) =>
+                            setDraft((prev) => ({
+                                ...prev,
+                                keyBindingsEnabled: data.checked,
+                            }))
+                        }
+                    />
+                    <Text className={styles.description}>
+                        When disabled, app-level shortcuts like Execute (F5) and Save (Ctrl+S)
+                        will not run.
+                    </Text>
+                </div>
+
+                <div className={styles.section}>
+                    <Text weight="semibold">Keyboard Shortcuts</Text>
+                    <div className={styles.shortcutsList}>
+                        {SHORTCUTS.map((shortcut) => (
+                            <div key={shortcut.id} className={styles.shortcutRow}>
+                                <Text className={styles.shortcutKeys}>{shortcut.keyLabel}</Text>
+                                <Text>{shortcut.label}</Text>
                             </div>
-                        </div>
-                    </DialogContent>
-                    <DialogActions className={styles.actions}>
-                        <Button appearance="secondary" onClick={onClose} disabled={isSaving}>
-                            Cancel
-                        </Button>
-                        <Button
-                            appearance="primary"
-                            onClick={handleSave}
-                            disabled={isSaving || !isDirty}
-                        >
-                            Save
-                        </Button>
-                    </DialogActions>
-                </DialogBody>
-            </DialogSurface>
-        </Dialog>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </ModalDialog>
     );
 }
-

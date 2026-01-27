@@ -35,7 +35,7 @@ import {
     saveSettings,
     setConnection,
 } from "./binding/function";
-import { SHORTCUTS, ShortcutActionId } from "./settings/shortcuts";
+import { ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
 import { EntityDefinition } from "./binding/model/EntityDefinition";
 import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
@@ -115,7 +115,6 @@ export default function App() {
     const nextTabId = useRef(1);
     const cliInitRef = useRef(false);
     const tabContextMenuRef = useRef<HTMLDivElement | null>(null);
-    const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
     const [tabContextMenu, setTabContextMenu] = useState<{
         open: boolean;
@@ -587,12 +586,8 @@ export default function App() {
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
                 <MenuBar
-                    vimEnabled={vimEnabled}
                     connectionsEnabled={connectionsEnabled}
                     schemaEnabled={schemaEnabled}
-                    onToggleVimEnabled={() =>
-                        persistSettings({ ...settings, vimEnabled: !vimEnabled })
-                    }
                     onOpenSettings={() => setSettingsOpen(true)}
                     onToggleConnections={() => {
                         const next = !connectionsEnabled;
@@ -612,7 +607,6 @@ export default function App() {
                     onPreviewFetchXml={handlePreviewActiveTab}
                     canExecute={Boolean(selectedConnection?.id && activeTab?.kind === "query")}
                     canPreview={Boolean(activeTab?.kind === "query")}
-                    onShowShortcuts={() => setShortcutsOpen(true)}
                     onOpenSqlFile={handleOpenSqlFile}
                     onSaveSqlFile={handleSaveActiveTab}
                     canSaveSqlFile={Boolean(activeTab?.filePath)}
@@ -645,19 +639,6 @@ export default function App() {
                         setSettingsOpen(false);
                     }}
                 />
-                <ModalDialog
-                    open={shortcutsOpen}
-                    title="Keyboard Shortcuts"
-                    onClose={() => setShortcutsOpen(false)}
-                >
-                    <div>
-                        {SHORTCUTS.map((shortcut) => (
-                            <div key={shortcut.id}>
-                                {shortcut.keyLabel} - {shortcut.label}
-                            </div>
-                        ))}
-                    </div>
-                </ModalDialog>
                 <ModalDialog
                     open={connectionPickerOpen}
                     title="Set Connection"
