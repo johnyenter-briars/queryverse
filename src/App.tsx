@@ -772,6 +772,9 @@ export default function App() {
                                     language={activeTab.kind === "fetchxml" ? "xml" : "sql"}
                                     readOnly={activeTab.kind === "fetchxml"}
                                     debounceMs={EDITOR_DEBOUNCE_MS}
+                                    entityDefinitions={
+                                        activeTab.kind === "query" ? entityDefinitions : []
+                                    }
                                     onChange={(value) => {
                                         if (activeTab.kind !== "query") return;
                                         updateTab(activeTab.id, (tab) => ({

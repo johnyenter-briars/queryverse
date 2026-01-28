@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 //@ts-expect-error monaco-vim has no type declarations
 import { initVimMode } from "monaco-vim";
 import Editor, { OnMount } from "@monaco-editor/react";
+import type * as Monaco from "monaco-editor";
 import { useCustomEditorStyles } from "../styles/CustomEditorStyles";
+import { EntityDefinition } from "../binding/model/EntityDefinition";
 
 interface ICustomEditor {
     vimEnabled: boolean;
@@ -11,6 +13,7 @@ interface ICustomEditor {
     language?: string;
     readOnly?: boolean;
     debounceMs?: number;
+    entityDefinitions?: EntityDefinition[];
 }
 
 export function CustomEditor({
@@ -20,11 +23,15 @@ export function CustomEditor({
     language,
     readOnly,
     debounceMs,
+    entityDefinitions,
 }: ICustomEditor) {
     const styles = useCustomEditorStyles();
     const vimModeRef = useRef<any>(null);
     const statusBarRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<any>(null);
+    const monacoRef = useRef<Monaco | null>(null);
+    const completionDisposableRef = useRef<Monaco.IDisposable | null>(null);
+    const [monacoReady, setMonacoReady] = useState(false);
     const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const effectiveDebounceMs = debounceMs ?? 200;
 
@@ -58,8 +65,10 @@ export function CustomEditor({
         [effectiveDebounceMs, onChange]
     );
 
-    const handleEditorMount: OnMount = (editor) => {
+    const handleEditorMount: OnMount = (editor, monaco) => {
         editorRef.current = editor;
+        monacoRef.current = monaco;
+        setMonacoReady(true);
         editor.focus();
         editor.onDidBlurEditorText(() => {
             // Ensure the latest keystrokes are committed when focus leaves.
@@ -78,6 +87,19 @@ export function CustomEditor({
         if (vimEnabled && !readOnly && statusBarRef.current) {
             vimModeRef.current = initVimMode(editor, statusBarRef.current);
         }
+
+        editor.onDidChangeModelContent(() => {
+            if ((language ?? "sql") !== "sql") return;
+            if (!entityDefinitions?.length) return;
+            const model = editor.getModel();
+            const position = editor.getPosition();
+            if (!model || !position) return;
+            const line = model.getLineContent(position.lineNumber);
+            const prefix = line.slice(0, Math.max(position.column - 1, 0));
+            if (/\bfrom\s+\w*$/i.test(prefix)) {
+                editor.trigger("keyboard", "editor.action.triggerSuggest", {});
+            }
+        });
     };
 
     useEffect(() => {
@@ -101,8 +123,63 @@ export function CustomEditor({
         return () => {
             if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
             if (vimModeRef.current) vimModeRef.current.dispose();
+            if (completionDisposableRef.current) completionDisposableRef.current.dispose();
         };
     }, []);
+
+    useEffect(() => {
+        if ((language ?? "sql") !== "sql") return;
+        if (!monacoRef.current || !monacoReady) return;
+
+        if (completionDisposableRef.current) {
+            completionDisposableRef.current.dispose();
+            completionDisposableRef.current = null;
+        }
+
+        if (!entityDefinitions?.length) return;
+
+        const monaco = monacoRef.current;
+        const tableNames = Array.from(
+            new Set(
+                entityDefinitions
+                    .flatMap((definition) => [
+                        definition.EntitySetName,
+                        definition.LogicalName,
+                        definition.SchemaName,
+                    ])
+                    .filter((name): name is string => Boolean(name))
+            )
+        ).sort((a, b) => a.localeCompare(b));
+
+        completionDisposableRef.current = monaco.languages.registerCompletionItemProvider("sql", {
+            triggerCharacters: [" "],
+            provideCompletionItems: (model, position) => {
+                const lineText = model.getLineContent(position.lineNumber);
+                const prefix = lineText.slice(0, Math.max(position.column - 1, 0));
+                const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
+                if (!match) return { suggestions: [] };
+
+                const current = match[1] ?? "";
+                const range = new monaco.Range(
+                    position.lineNumber,
+                    position.column - current.length,
+                    position.lineNumber,
+                    position.column
+                );
+
+                const suggestions = tableNames
+                    .filter((name) => name.toLowerCase().startsWith(current.toLowerCase()))
+                    .map((name) => ({
+                        label: name,
+                        kind: monaco.languages.CompletionItemKind.Class,
+                        insertText: name,
+                        range,
+                    }));
+
+                return { suggestions };
+            },
+        });
+    }, [entityDefinitions, language, monacoReady]);
 
     return (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
