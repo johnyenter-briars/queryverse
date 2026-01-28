@@ -511,14 +511,16 @@ export default function App() {
     };
 
     const handleSaveActiveTab = async () => {
-        if (!activeTab?.filePath) return;
+        if (!activeTab || activeTab.kind !== "query") return;
         try {
             const editorContents =
                 editorRef.current?.getValue() ?? activeTab.query;
-            await saveSqlFile({
-                path: activeTab.filePath,
-                contents: editorContents,
-            });
+            if (activeTab.filePath) {
+                await saveSqlFile({
+                    path: activeTab.filePath,
+                    contents: editorContents,
+                });
+            }
             updateTab(activeTab.id, (tab) => ({
                 ...tab,
                 query: editorContents,
@@ -625,7 +627,7 @@ export default function App() {
                     canPreview={Boolean(activeTab?.kind === "query")}
                     onOpenSqlFile={handleOpenSqlFile}
                     onSaveSqlFile={handleSaveActiveTab}
-                    canSaveSqlFile={Boolean(activeTab?.filePath)}
+                    canSaveSqlFile={Boolean(activeTab?.kind === "query")}
                     onSaveSqlFileAs={handleSaveActiveTabAs}
                     currentConnection={selectedConnection}
                 />
@@ -645,7 +647,7 @@ export default function App() {
                                       !activeTab?.isEditorDirty
                               )
                             : id === "save-file"
-                            ? Boolean(activeTab?.filePath)
+                            ? Boolean(activeTab?.kind === "query")
                             : true;
                     }}
                 />
