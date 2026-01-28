@@ -184,9 +184,7 @@ export function CustomEditor({
             new Set(
                 entityDefinitions
                     .flatMap((definition) => [
-                        definition.EntitySetName,
                         definition.LogicalName,
-                        definition.SchemaName,
                     ])
                     .filter((name): name is string => Boolean(name))
             )
