@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 //@ts-expect-error monaco-vim has no type declarations
 import { initVimMode } from "monaco-vim";
 import Editor, { OnMount } from "@monaco-editor/react";
-import type * as Monaco from "monaco-editor";
+import type { editor as MonacoEditor, Position, IDisposable } from "monaco-editor";
+type MonacoApi = typeof import("monaco-editor");
 import { useCustomEditorStyles } from "../styles/CustomEditorStyles";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 
@@ -29,8 +30,9 @@ export function CustomEditor({
     const vimModeRef = useRef<any>(null);
     const statusBarRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<any>(null);
-    const monacoRef = useRef<Monaco | null>(null);
-    const completionDisposableRef = useRef<Monaco.IDisposable | null>(null);
+    const monacoRef = useRef<MonacoApi | null>(null);
+    const completionDisposableRef = useRef<IDisposable | null>(null);
+    const keybindingRegisteredRef = useRef(false);
     const [monacoReady, setMonacoReady] = useState(false);
     const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const effectiveDebounceMs = debounceMs ?? 200;
@@ -68,8 +70,11 @@ export function CustomEditor({
     const handleEditorMount: OnMount = (editor, monaco) => {
         editorRef.current = editor;
         monacoRef.current = monaco;
+
         setMonacoReady(true);
+
         editor.focus();
+
         editor.onDidBlurEditorText(() => {
             // Ensure the latest keystrokes are committed when focus leaves.
             const modelValue = editor.getModel()?.getValue();
@@ -84,22 +89,10 @@ export function CustomEditor({
                 flushChange();
             }
         });
+
         if (vimEnabled && !readOnly && statusBarRef.current) {
             vimModeRef.current = initVimMode(editor, statusBarRef.current);
         }
-
-        editor.onDidChangeModelContent(() => {
-            if ((language ?? "sql") !== "sql") return;
-            if (!entityDefinitions?.length) return;
-            const model = editor.getModel();
-            const position = editor.getPosition();
-            if (!model || !position) return;
-            const line = model.getLineContent(position.lineNumber);
-            const prefix = line.slice(0, Math.max(position.column - 1, 0));
-            if (/\bfrom\s+\w*$/i.test(prefix)) {
-                editor.trigger("keyboard", "editor.action.triggerSuggest", {});
-            }
-        });
     };
 
     useEffect(() => {
@@ -153,7 +146,10 @@ export function CustomEditor({
 
         completionDisposableRef.current = monaco.languages.registerCompletionItemProvider("sql", {
             triggerCharacters: [" "],
-            provideCompletionItems: (model, position) => {
+            provideCompletionItems: (
+                model: MonacoEditor.ITextModel,
+                position: Position
+            ) => {
                 const lineText = model.getLineContent(position.lineNumber);
                 const prefix = lineText.slice(0, Math.max(position.column - 1, 0));
                 const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
