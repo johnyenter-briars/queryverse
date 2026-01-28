@@ -7,10 +7,15 @@ type MonacoApi = typeof import("monaco-editor");
 import { useCustomEditorStyles } from "../styles/CustomEditorStyles";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 
+const DEFAULT_FONT_SIZE = 16;
+const MIN_FONT_SIZE = 10;
+const MAX_FONT_SIZE = 28;
+
 interface ICustomEditor {
     vimEnabled: boolean;
     value: string;
     onChange: (value: string) => void;
+    fontSize?: number;
     language?: string;
     readOnly?: boolean;
     debounceMs?: number;
@@ -21,6 +26,7 @@ export function CustomEditor({
     vimEnabled,
     value,
     onChange,
+    fontSize,
     language,
     readOnly,
     debounceMs,
@@ -34,7 +40,11 @@ export function CustomEditor({
     const completionDisposableRef = useRef<IDisposable | null>(null);
     const [monacoReady, setMonacoReady] = useState(false);
     const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const wheelCleanupRef = useRef<(() => void) | null>(null);
     const effectiveDebounceMs = debounceMs ?? 200;
+    const [localFontSize, setLocalFontSize] = useState(
+        fontSize ?? DEFAULT_FONT_SIZE
+    );
 
     // Keep the editor responsive by buffering keystrokes locally and
     // committing to app state on a short debounce and on blur.
@@ -44,6 +54,13 @@ export function CustomEditor({
         // Sync when the active tab/value changes externally.
         setLocalValue(value);
     }, [value]);
+
+    useEffect(() => {
+        if (fontSize === undefined) return;
+        const clamped = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, fontSize));
+        setLocalFontSize(clamped);
+        editorRef.current?.updateOptions({ fontSize: clamped });
+    }, [fontSize]);
 
     const flushChange = useCallback(() => {
         if (debounceTimerRef.current) {
@@ -72,6 +89,7 @@ export function CustomEditor({
 
         setMonacoReady(true);
 
+        editor.updateOptions({ fontSize: localFontSize });
         editor.focus();
 
         monaco.editor.addKeybindingRules([
@@ -99,6 +117,29 @@ export function CustomEditor({
         if (vimEnabled && !readOnly && statusBarRef.current) {
             vimModeRef.current = initVimMode(editor, statusBarRef.current);
         }
+
+        const domNode = editor.getDomNode();
+        if (domNode) {
+            const handleWheel = (event: WheelEvent) => {
+                if (!event.ctrlKey) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const direction = event.deltaY < 0 ? 1 : -1;
+                setLocalFontSize((prev) => {
+                    const next = Math.min(
+                        MAX_FONT_SIZE,
+                        Math.max(MIN_FONT_SIZE, prev + direction)
+                    );
+                    editor.updateOptions({ fontSize: next });
+                    return next;
+                });
+            };
+
+            domNode.addEventListener("wheel", handleWheel, { passive: false });
+            wheelCleanupRef.current = () => {
+                domNode.removeEventListener("wheel", handleWheel);
+            };
+        }
     };
 
     useEffect(() => {
@@ -123,6 +164,7 @@ export function CustomEditor({
             if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
             if (vimModeRef.current) vimModeRef.current.dispose();
             if (completionDisposableRef.current) completionDisposableRef.current.dispose();
+            if (wheelCleanupRef.current) wheelCleanupRef.current();
         };
     }, []);
 
@@ -196,7 +238,7 @@ export function CustomEditor({
                     setLocalValue(nextValue);
                     scheduleChange(nextValue);
                 }}
-                options={{ readOnly: Boolean(readOnly) }}
+                options={{ readOnly: Boolean(readOnly), fontSize: localFontSize }}
             />
             <div ref={statusBarRef} className={styles.statusBar}>
             </div>

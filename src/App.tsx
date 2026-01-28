@@ -139,6 +139,7 @@ export default function App() {
 
     const vimEnabled = settings.vimEnabled;
     const keyBindingsEnabled = settings.keyBindingsEnabled;
+    const editorFontSize = settings.fontSize;
 
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
 
@@ -772,6 +773,7 @@ export default function App() {
                                     language={activeTab.kind === "fetchxml" ? "xml" : "sql"}
                                     readOnly={activeTab.kind === "fetchxml"}
                                     debounceMs={EDITOR_DEBOUNCE_MS}
+                                    fontSize={editorFontSize}
                                     entityDefinitions={
                                         activeTab.kind === "query" ? entityDefinitions : []
                                     }

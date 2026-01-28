@@ -5,6 +5,12 @@ use serde::{Deserialize, Serialize};
 pub struct Settings {
     pub vim_enabled: bool,
     pub key_bindings_enabled: bool,
+    #[serde(default = "default_font_size")]
+    pub font_size: u32,
+}
+
+fn default_font_size() -> u32 {
+    16
 }
 
 impl Default for Settings {
@@ -12,6 +18,7 @@ impl Default for Settings {
         Self {
             vim_enabled: true,
             key_bindings_enabled: true,
+            font_size: default_font_size(),
         }
     }
 }
