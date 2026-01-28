@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 //@ts-expect-error monaco-vim has no type declarations
 import { initVimMode } from "monaco-vim";
 import Editor, { OnMount } from "@monaco-editor/react";
@@ -22,16 +22,19 @@ interface ICustomEditor {
     entityDefinitions?: EntityDefinition[];
 }
 
-export function CustomEditor({
+export type CustomEditorHandle = {
+    getValue: () => string;
+};
+
+export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     vimEnabled,
     value,
     onChange,
     fontSize,
     language,
     readOnly,
-    debounceMs,
     entityDefinitions,
-}: ICustomEditor) {
+}: ICustomEditor, ref) => {
     const styles = useCustomEditorStyles();
     const vimModeRef = useRef<any>(null);
     const statusBarRef = useRef<HTMLDivElement>(null);
@@ -39,9 +42,7 @@ export function CustomEditor({
     const monacoRef = useRef<MonacoApi | null>(null);
     const completionDisposableRef = useRef<IDisposable | null>(null);
     const [monacoReady, setMonacoReady] = useState(false);
-    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const wheelCleanupRef = useRef<(() => void) | null>(null);
-    const effectiveDebounceMs = debounceMs ?? 200;
     const [localFontSize, setLocalFontSize] = useState(
         fontSize ?? DEFAULT_FONT_SIZE
     );
@@ -62,26 +63,12 @@ export function CustomEditor({
         editorRef.current?.updateOptions({ fontSize: clamped });
     }, [fontSize]);
 
-    const flushChange = useCallback(() => {
-        if (debounceTimerRef.current) {
-            clearTimeout(debounceTimerRef.current);
-            debounceTimerRef.current = null;
-        }
-        onChange(localValue);
-    }, [localValue, onChange]);
-
-    const scheduleChange = useCallback(
-        (nextValue: string) => {
-            if (debounceTimerRef.current) {
-                clearTimeout(debounceTimerRef.current);
-            }
-            debounceTimerRef.current = setTimeout(() => {
-                debounceTimerRef.current = null;
-                onChange(nextValue);
-            }, effectiveDebounceMs);
+    useImperativeHandle(ref, () => ({
+        getValue: () => {
+            const modelValue = editorRef.current?.getModel()?.getValue();
+            return typeof modelValue === "string" ? modelValue : localValue;
         },
-        [effectiveDebounceMs, onChange]
-    );
+    }), [localValue]);
 
     const handleEditorMount: OnMount = (editor, monaco) => {
         editorRef.current = editor;
@@ -98,21 +85,6 @@ export function CustomEditor({
                 command: "acceptSelectedSuggestion",
             },
         ]);
-
-        editor.onDidBlurEditorText(() => {
-            // Ensure the latest keystrokes are committed when focus leaves.
-            const modelValue = editor.getModel()?.getValue();
-            if (typeof modelValue === "string") {
-                setLocalValue(modelValue);
-                onChange(modelValue);
-                if (debounceTimerRef.current) {
-                    clearTimeout(debounceTimerRef.current);
-                    debounceTimerRef.current = null;
-                }
-            } else {
-                flushChange();
-            }
-        });
 
         if (vimEnabled && !readOnly && statusBarRef.current) {
             vimModeRef.current = initVimMode(editor, statusBarRef.current);
@@ -161,7 +133,6 @@ export function CustomEditor({
 
     useEffect(() => {
         return () => {
-            if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
             if (vimModeRef.current) vimModeRef.current.dispose();
             if (completionDisposableRef.current) completionDisposableRef.current.dispose();
             if (wheelCleanupRef.current) wheelCleanupRef.current();
@@ -234,7 +205,7 @@ export function CustomEditor({
                 onChange={(v) => {
                     const nextValue = v || "";
                     setLocalValue(nextValue);
-                    scheduleChange(nextValue);
+                    onChange(nextValue);
                 }}
                 options={{ readOnly: Boolean(readOnly), fontSize: localFontSize }}
             />
@@ -243,4 +214,4 @@ export function CustomEditor({
 
         </div>
     );
-}
+});
