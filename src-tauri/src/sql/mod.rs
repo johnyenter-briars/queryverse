@@ -213,4 +213,18 @@ mod tests {
             .fetchxml
             .contains("attribute name=\"address1_country\" alias=\"col_address1_country\" groupby=\"true\""));
     }
+
+    #[test]
+    fn orders_by_group_by_column_using_alias() {
+        let sql = "select count(*), address1_city from account group by address1_city order by address1_city asc";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+        assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
+        assert!(result
+            .fetchxml
+            .contains("attribute name=\"address1_city\" alias=\"count_address1_city\" aggregate=\"count\""));
+        assert!(result
+            .fetchxml
+            .contains("attribute name=\"address1_city\" alias=\"col_address1_city\" groupby=\"true\""));
+        assert!(result.fetchxml.contains("<order alias=\"col_address1_city\""));
+    }
 }

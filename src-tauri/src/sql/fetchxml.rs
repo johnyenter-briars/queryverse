@@ -58,7 +58,7 @@ pub fn to_fetchxml(
     }
 
     for order in &stmt.order_by {
-        write_order(order, aggregate_mode, &alias_map, &mut out);
+        write_order(order, aggregate_mode, &alias_map, &group_by, &mut out);
     }
 
     out.push_str("</entity>");
@@ -127,12 +127,16 @@ fn write_order(
     order: &OrderBy,
     aggregate_mode: bool,
     alias_map: &std::collections::HashMap<String, String>,
+    group_by: &std::collections::HashSet<String>,
     out: &mut String,
 ) {
     if aggregate_mode {
         if let Some(alias) = alias_map.get(&order.column) {
             out.push_str("<order alias=\"");
             out.push_str(&escape_xml(alias));
+        } else if group_by.contains(&order.column) {
+            out.push_str("<order alias=\"");
+            out.push_str(&escape_xml(&groupby_fetch_alias(&order.column, &order.column)));
         } else {
             out.push_str("<order attribute=\"");
             out.push_str(&escape_xml(&order.column));
@@ -143,6 +147,8 @@ fn write_order(
     }
     if order.descending {
         out.push_str("\" descending=\"true");
+    } else {
+        out.push_str("\" descending=\"false");
     }
     out.push_str("\" />");
 }
