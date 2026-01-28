@@ -12,7 +12,7 @@ use crate::binding::function::{
     connection::{create_connection, list_connections, set_connection, update_connection},
     file::{open_sql_file, open_sql_file_path, save_sql_file, save_sql_file_as},
     launch::get_launch_context,
-    query::{execute_sql, list_entity_definitions, parse_sql_to_fetchxml},
+    query::{execute_sql, list_entity_attributes, list_entity_definitions, parse_sql_to_fetchxml},
     settings::{get_settings, save_settings},
 };
 use crate::auth::token::CachedToken;
@@ -126,6 +126,7 @@ pub fn run() {
             set_connection,
             update_connection,
             execute_sql,
+            list_entity_attributes,
             list_entity_definitions,
             parse_sql_to_fetchxml,
             get_launch_context,

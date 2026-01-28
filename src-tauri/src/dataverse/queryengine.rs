@@ -5,6 +5,7 @@ use serde_json::Value;
 
 use crate::binding::model::dataverse::entity::Value::{Boolean, Float, Int, Null, String};
 use crate::binding::model::dataverse::entity::{Attribute, Entity, Value as RowValue};
+use crate::binding::model::dataverse::entityattribute::EntityAttribute;
 use crate::binding::model::dataverse::entitydefinition::EntityDefinition;
 use crate::binding::model::response::MultipleResponse;
 use crate::LogLevel;
@@ -171,6 +172,40 @@ impl QueryEngine {
         }
 
         let parsed: ODataList<EntityDefinition> = resp
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse JSON: {e}"))?;
+
+        Ok(parsed.value)
+    }
+
+    pub async fn list_entity_attributes(
+        &self,
+        logical_name: &str,
+    ) -> Result<Vec<EntityAttribute>, std::string::String> {
+        let logical = logical_name.replace('\'', "''");
+        let url = format!(
+            "{}/api/data/v9.2/EntityDefinitions(LogicalName='{}')/Attributes?$select=LogicalName,SchemaName,AttributeType,IsCustomAttribute,IsValidODataAttribute,IsValidForRead&$filter=IsValidODataAttribute eq true and IsValidForRead eq true",
+            self.base_url, logical
+        );
+
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.token)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {e}"))?;
+
+        let status = resp.status();
+
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("Dataverse API error ({}): {}", status, body));
+        }
+
+        let parsed: ODataList<EntityAttribute> = resp
             .json()
             .await
             .map_err(|e| format!("Failed to parse JSON: {e}"))?;

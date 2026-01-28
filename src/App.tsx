@@ -27,6 +27,7 @@ import {
     getLaunchContext,
     listConnections,
     listEntityDefinitions,
+    listEntityAttributes,
     openSqlFile,
     openSqlFilePath,
     previewFetchXml,
@@ -38,6 +39,7 @@ import {
 import { ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
 import { EntityDefinition } from "./binding/model/EntityDefinition";
+import { EntityAttribute } from "./binding/model/EntityAttribute";
 import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 import { DEFAULT_SETTINGS, Settings } from "./binding/model/Settings";
 
@@ -127,6 +129,15 @@ export default function App() {
     const [connectionOptions, setConnectionOptions] = useState<Connection[]>([]);
 
     const [entityDefinitions, setEntityDefinitions] = useState<EntityDefinition[]>([]);
+    const [entityAttributesByLogical, setEntityAttributesByLogical] = useState<
+        Record<string, EntityAttribute[]>
+    >({});
+    const [entityAttributesLoading, setEntityAttributesLoading] = useState<
+        Record<string, boolean>
+    >({});
+    const [entityAttributesError, setEntityAttributesError] = useState<
+        Record<string, string | null>
+    >({});
 
     const styles = useAppStyles();
 
@@ -310,6 +321,9 @@ export default function App() {
                                 const response = await listEntityDefinitions();
                                 if (response.success) {
                                     setEntityDefinitions(response.value);
+                                    setEntityAttributesByLogical({});
+                                    setEntityAttributesLoading({});
+                                    setEntityAttributesError({});
                                 }
                             }
                         }
@@ -589,10 +603,47 @@ export default function App() {
                 const response = await listEntityDefinitions();
                 if (response.success) {
                     setEntityDefinitions(response.value);
+                    setEntityAttributesByLogical({});
+                    setEntityAttributesLoading({});
+                    setEntityAttributesError({});
                 }
             } catch (error) {
                 console.error("Failed to load entity definitions", error);
             }
+        }
+    };
+
+    const handleLoadEntityAttributes = async (logicalName: string) => {
+        if (!logicalName) return;
+        if (entityAttributesByLogical[logicalName]) return;
+        if (entityAttributesLoading[logicalName]) return;
+
+        setEntityAttributesLoading((prev) => ({ ...prev, [logicalName]: true }));
+        setEntityAttributesError((prev) => ({ ...prev, [logicalName]: null }));
+
+        try {
+            const response = await listEntityAttributes(logicalName);
+            if (response.success) {
+                setEntityAttributesByLogical((prev) => ({
+                    ...prev,
+                    [logicalName]: response.value,
+                }));
+            } else {
+                setEntityAttributesError((prev) => ({
+                    ...prev,
+                    [logicalName]: response.message || "Failed to load attributes.",
+                }));
+            }
+        } catch (error) {
+            setEntityAttributesError((prev) => ({
+                ...prev,
+                [logicalName]: getErrorMessage(error),
+            }));
+        } finally {
+            setEntityAttributesLoading((prev) => ({
+                ...prev,
+                [logicalName]: false,
+            }));
         }
     };
 
@@ -720,6 +771,9 @@ export default function App() {
                             const response = await listEntityDefinitions();
                             //TODO: handle failure here
                             setEntityDefinitions(response.value);
+                            setEntityAttributesByLogical({});
+                            setEntityAttributesLoading({});
+                            setEntityAttributesError({});
 
                             setIsMenuOpen(false);
                         }}
@@ -727,6 +781,10 @@ export default function App() {
                     <SchemaExplorerMenu
                         isOpen={schemaEnabled}
                         entityDefinitions={entityDefinitions}
+                        entityAttributes={entityAttributesByLogical}
+                        attributesLoading={entityAttributesLoading}
+                        attributesError={entityAttributesError}
+                        onLoadAttributes={handleLoadEntityAttributes}
                     />
 
                     <div className={contentClasses}>
