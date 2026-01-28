@@ -131,7 +131,21 @@ pub async fn list_entity_definitions(
 }
 
 fn entity_to_result_row(entity: Entity) -> ResultRow {
+    let mut attributes = std::collections::HashMap::new();
+    for (key, value) in entity.attributes {
+        let normalized_key = if let Some(base) = key.strip_prefix("col_") {
+            if attributes.contains_key(base) {
+                key
+            } else {
+                base.to_string()
+            }
+        } else {
+            key
+        };
+        attributes.insert(normalized_key, value);
+    }
+
     ResultRow {
-        attributes: entity.attributes,
+        attributes,
     }
 }

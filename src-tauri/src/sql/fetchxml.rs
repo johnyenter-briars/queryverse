@@ -18,9 +18,8 @@ pub fn to_fetchxml(
     let mut out = String::new();
     let aggregate_mode = select_aggregate_mode(stmt);
     let column_outputs = projection_output_names(stmt, entity_name)?;
-    let output_aliases: std::collections::HashSet<String> =
-        column_outputs.iter().cloned().collect();
     let group_by = validate_group_by(stmt)?;
+    let alias_map = build_alias_map(stmt, entity_name, aggregate_mode, &group_by)?;
 
     out.push_str("<fetch");
     if let Some(top) = stmt.top {
@@ -59,7 +58,7 @@ pub fn to_fetchxml(
     }
 
     for order in &stmt.order_by {
-        write_order(order, aggregate_mode, &output_aliases, &mut out);
+        write_order(order, aggregate_mode, &alias_map, &mut out);
     }
 
     out.push_str("</entity>");
@@ -91,8 +90,9 @@ fn write_attribute(
 
             out.push_str("<attribute name=\"");
             out.push_str(&escape_xml(name));
+            let display_alias = output_name(item, entity_name)?;
             let alias = if aggregate_mode {
-                Some(item.alias.clone().unwrap_or_else(|| name.clone()))
+                Some(groupby_fetch_alias(name, &display_alias))
             } else {
                 item.alias.clone()
             };
@@ -126,12 +126,17 @@ fn write_attribute(
 fn write_order(
     order: &OrderBy,
     aggregate_mode: bool,
-    output_aliases: &std::collections::HashSet<String>,
+    alias_map: &std::collections::HashMap<String, String>,
     out: &mut String,
 ) {
-    if aggregate_mode && output_aliases.contains(&order.column) {
-        out.push_str("<order alias=\"");
-        out.push_str(&escape_xml(&order.column));
+    if aggregate_mode {
+        if let Some(alias) = alias_map.get(&order.column) {
+            out.push_str("<order alias=\"");
+            out.push_str(&escape_xml(alias));
+        } else {
+            out.push_str("<order attribute=\"");
+            out.push_str(&escape_xml(&order.column));
+        }
     } else {
         out.push_str("<order attribute=\"");
         out.push_str(&escape_xml(&order.column));
@@ -306,6 +311,48 @@ fn select_has_aggregates(stmt: &SelectStmt) -> bool {
 
 fn select_aggregate_mode(stmt: &SelectStmt) -> bool {
     select_has_aggregates(stmt) || !stmt.group_by.is_empty()
+}
+
+fn build_alias_map(
+    stmt: &SelectStmt,
+    entity_name: &str,
+    aggregate_mode: bool,
+    group_by: &std::collections::HashSet<String>,
+) -> Result<std::collections::HashMap<String, String>, TranslationError> {
+    let mut map = std::collections::HashMap::new();
+
+    if !aggregate_mode {
+        return Ok(map);
+    }
+
+    if let SelectColumns::Columns(items) = &stmt.columns {
+        for item in items {
+            match &item.kind {
+                SelectItemKind::Attribute(name) => {
+                    if group_by_matches_item(item, group_by) {
+                        let display_alias = output_name(item, entity_name)?;
+                        let fetch_alias = groupby_fetch_alias(name, &display_alias);
+                        map.insert(display_alias.clone(), fetch_alias.clone());
+                        map.entry(name.clone()).or_insert(fetch_alias);
+                    }
+                }
+                SelectItemKind::Aggregate(_) => {
+                    let display_alias = output_name(item, entity_name)?;
+                    map.insert(display_alias.clone(), display_alias);
+                }
+            }
+        }
+    }
+
+    Ok(map)
+}
+
+fn groupby_fetch_alias(column: &str, display_alias: &str) -> String {
+    if display_alias == column {
+        format!("col_{}", display_alias)
+    } else {
+        display_alias.to_string()
+    }
 }
 
 fn group_by_matches_item(

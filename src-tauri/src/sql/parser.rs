@@ -84,7 +84,7 @@ impl Parser {
 
         self.expect_end()?;
 
-        Ok(SelectStmt {
+        let mut stmt = SelectStmt {
             columns,
             entity,
             top,
@@ -92,7 +92,11 @@ impl Parser {
             filter,
             group_by,
             order_by,
-        })
+        };
+
+        self.apply_group_by_rules(&mut stmt)?;
+
+        Ok(stmt)
     }
 
     fn parse_columns(&mut self) -> Result<SelectColumns, ParseError> {
@@ -195,6 +199,33 @@ impl Parser {
         }
 
         Ok(group_by)
+    }
+
+    fn apply_group_by_rules(&self, stmt: &mut SelectStmt) -> Result<(), ParseError> {
+        if stmt.group_by.is_empty() {
+            return Ok(());
+        }
+
+        if let SelectColumns::Columns(items) = &mut stmt.columns {
+            for item in items {
+                if let SelectItemKind::Aggregate(aggregate) = &mut item.kind {
+                    if matches!(aggregate.function, AggregateFunction::Count)
+                        && matches!(aggregate.target, AggregateTarget::Star)
+                    {
+                        if stmt.group_by.len() == 1 {
+                            aggregate.target =
+                                AggregateTarget::Column(stmt.group_by[0].clone());
+                        } else {
+                            return Err(self.error_at_current(
+                                "COUNT(*) with GROUP BY requires a single group column; use COUNT(column)",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn parse_expr(&mut self) -> Result<Expr, ParseError> {
