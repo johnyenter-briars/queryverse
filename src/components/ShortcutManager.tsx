@@ -13,10 +13,8 @@ export function ShortcutManager({
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Tab") {
-                console.log("foo4");
                 const target = event.target as HTMLElement | null;
                 if (target && target.closest(".monaco-editor")) {
-                    console.log("foo5");
                     event.preventDefault();
                     return;
                 }

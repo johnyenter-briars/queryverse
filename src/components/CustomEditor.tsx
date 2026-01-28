@@ -32,7 +32,6 @@ export function CustomEditor({
     const editorRef = useRef<any>(null);
     const monacoRef = useRef<MonacoApi | null>(null);
     const completionDisposableRef = useRef<IDisposable | null>(null);
-    const keybindingRegisteredRef = useRef(false);
     const [monacoReady, setMonacoReady] = useState(false);
     const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const effectiveDebounceMs = debounceMs ?? 200;
