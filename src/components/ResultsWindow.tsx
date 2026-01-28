@@ -34,7 +34,7 @@ const HEADER_HEIGHT = 40;
 const AUTO_FIT_COLUMNS = false;
 
 function renderValue(value: Value): React.ReactNode {
-    if (value === null || value === undefined) return "";
+    if (value === null || value === undefined) return "NULL";
     return String(value);
 }
 
