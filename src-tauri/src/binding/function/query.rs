@@ -1,17 +1,12 @@
 use serde::Serialize;
 
 use crate::{
-    auth::connection::load_connections,
-    auth::token::get_access_token,
-    binding::model::{
-        dataverse::entity::{Entity, ResultRow},
-        dataverse::entitydefinition::EntityDefinition,
+    Database, LogLevel, auth::{connection::load_connections, token::get_access_token}, binding::model::{
+        dataverse::{entity::{Entity, ResultRow}, entitydefinition::EntityDefinition},
         executesqlrequest::ExecuteSqlRequest,
         executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
         response::MultipleResponse,
-    },
-    dataverse::queryengine::QueryEngine,
-    sql, Database,
+    }, dataverse::queryengine::QueryEngine, sql
 };
 
 #[derive(Debug, Serialize)]
@@ -43,6 +38,10 @@ pub async fn execute_sql(
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
 ) -> Result<ExecuteSqlResponse, String> {
+    if matches!(context.log_level, LogLevel::Debug) {
+        println!("SQL: {}", request.sql);
+    }
+
     let stmt = sql::parse(&request.sql).map_err(|e| e.to_string())?;
     let parsed = sql::to_fetchxml(&stmt).map_err(|e| e.to_string())?;
     let columns_order = parsed.column_outputs.clone();
