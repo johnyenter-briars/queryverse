@@ -41,6 +41,7 @@ pub async fn execute_sql(
     _window: tauri::Window,
     request: ExecuteSqlRequest,
     database: tauri::State<'_, Database>,
+    context: tauri::State<'_, crate::LaunchContext>,
 ) -> Result<ExecuteSqlResponse, String> {
     let stmt = sql::parse(&request.sql).map_err(|e| e.to_string())?;
     let parsed = sql::to_fetchxml(&stmt).map_err(|e| e.to_string())?;
@@ -69,7 +70,7 @@ pub async fn execute_sql(
         return Err("Connection is missing a Dataverse URL".to_string());
     }
 
-    let query_engine = QueryEngine::new(&dataverse_url, &token);
+    let query_engine = QueryEngine::new(&dataverse_url, &token, context.log_level);
 
     let resp = query_engine
         .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
@@ -96,6 +97,7 @@ pub async fn execute_sql(
 pub async fn list_entity_definitions(
     _window: tauri::Window,
     database: tauri::State<'_, Database>,
+    context: tauri::State<'_, crate::LaunchContext>,
 ) -> Result<MultipleResponse<EntityDefinition>, String> {
     let connection_id = {
         let selected = database
@@ -119,7 +121,7 @@ pub async fn list_entity_definitions(
         return Err("Connection is missing a Dataverse URL".to_string());
     }
 
-    let query_engine = QueryEngine::new(&dataverse_url, &token);
+    let query_engine = QueryEngine::new(&dataverse_url, &token, context.log_level);
     let value = query_engine.list_entity_definitions().await?;
 
     Ok(MultipleResponse {

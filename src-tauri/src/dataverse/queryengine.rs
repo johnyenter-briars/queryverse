@@ -7,6 +7,7 @@ use crate::binding::model::dataverse::entity::{Attribute, Entity, Value as RowVa
 use crate::binding::model::dataverse::entity::Value::{Boolean, Float, Int, Null, String};
 use crate::binding::model::dataverse::entitydefinition::EntityDefinition;
 use crate::binding::model::response::MultipleResponse;
+use crate::LogLevel;
 
 #[derive(Debug, serde::Deserialize)]
 struct ODataList<T> {
@@ -17,14 +18,16 @@ pub struct QueryEngine {
     client: Client,
     base_url: std::string::String,
     token: std::string::String,
+    log_level: LogLevel,
 }
 
 impl QueryEngine {
-    pub fn new(base_url: &str, token: &str) -> Self {
+    pub fn new(base_url: &str, token: &str, log_level: LogLevel) -> Self {
         Self {
             client: Client::new(),
             base_url: base_url.trim_end_matches('/').to_string(),
             token: token.to_string(),
+            log_level,
         }
     }
 
@@ -103,6 +106,11 @@ impl QueryEngine {
         entity: &str,
         fetchxml: &str,
     ) -> Result<MultipleResponse<Entity>, std::string::String> {
+        
+        if matches!(self.log_level, LogLevel::Debug) {
+            println!("FetchXML: {}", fetchxml);
+        }
+
         let mut url = format!("{}/api/data/v9.2/{}", self.base_url, entity);
         url.push_str("?fetchXml=");
         url.push_str(&urlencoding::encode(fetchxml));
