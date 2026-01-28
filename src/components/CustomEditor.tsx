@@ -74,6 +74,13 @@ export function CustomEditor({
 
         editor.focus();
 
+        monaco.editor.addKeybindingRules([
+            {
+                keybinding: monaco.KeyCode.Tab,
+                command: "acceptSelectedSuggestion",
+            },
+        ]);
+
         editor.onDidBlurEditorText(() => {
             // Ensure the latest keystrokes are committed when focus leaves.
             const modelValue = editor.getModel()?.getValue();
