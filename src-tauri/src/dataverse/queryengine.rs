@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use reqwest::Client;
 use serde_json::Value;
 
-use crate::binding::model::dataverse::entity::{Attribute, Entity, Value as RowValue};
 use crate::binding::model::dataverse::entity::Value::{Boolean, Float, Int, Null, String};
+use crate::binding::model::dataverse::entity::{Attribute, Entity, Value as RowValue};
 use crate::binding::model::dataverse::entitydefinition::EntityDefinition;
 use crate::binding::model::response::MultipleResponse;
 use crate::LogLevel;
@@ -106,7 +106,6 @@ impl QueryEngine {
         entity: &str,
         fetchxml: &str,
     ) -> Result<MultipleResponse<Entity>, std::string::String> {
-        
         if matches!(self.log_level, LogLevel::Debug) {
             println!("FetchXML: {}", fetchxml);
         }
@@ -114,6 +113,10 @@ impl QueryEngine {
         let mut url = format!("{}/api/data/v9.2/{}", self.base_url, entity);
         url.push_str("?fetchXml=");
         url.push_str(&urlencoding::encode(fetchxml));
+
+        if matches!(self.log_level, LogLevel::Debug) {
+            println!("Url: {:?}", url);
+        }
 
         let resp = self
             .client
@@ -135,6 +138,10 @@ impl QueryEngine {
             .json()
             .await
             .map_err(|e| format!("Failed to parse JSON: {e}"))?;
+
+        if matches!(self.log_level, LogLevel::Debug) {
+            println!("Raw data: {:?}", json);
+        }
 
         parse_multiple_response_entity(json)
     }

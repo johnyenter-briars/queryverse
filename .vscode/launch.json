@@ -6,7 +6,14 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/src-tauri/target/debug/QueryVerse.exe",
-            "args": [],
+            "args": [
+                "--sql-file",
+                "C:/Users/Owner/dev/queryverse-test/query.sql",
+                "--connection",
+                "jyb",
+                "--log-level",
+                "debug"
+            ],
             "cwd": "${workspaceFolder}/src-tauri",
             "preLaunchTask": "Build & Serve",
             "sourceLanguages": [

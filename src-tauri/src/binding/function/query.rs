@@ -43,8 +43,15 @@ pub async fn execute_sql(
     }
 
     let stmt = sql::parse(&request.sql).map_err(|e| e.to_string())?;
+
     let parsed = sql::to_fetchxml(&stmt).map_err(|e| e.to_string())?;
-    let columns_order = parsed.column_outputs.clone();
+
+    let columns_order = parsed
+        .column_outputs
+        .iter()
+        .map(|name| name.strip_prefix("col_").unwrap_or(name).to_string())
+        .collect::<Vec<String>>();
+
     let columns_selected = !columns_order.is_empty();
 
     let connection_id = {
@@ -79,7 +86,11 @@ pub async fn execute_sql(
             error
         })?;
 
-    let rows: Vec<ResultRow> = resp.value.into_iter().map(entity_to_result_row).collect();
+    let rows: Vec<ResultRow> = resp
+        .value
+        .into_iter()
+        .map(|entity| entity_to_result_row(entity, &columns_order))
+        .collect();
 
     Ok(ExecuteSqlResponse {
         message: resp.message,
@@ -130,7 +141,7 @@ pub async fn list_entity_definitions(
     })
 }
 
-fn entity_to_result_row(entity: Entity) -> ResultRow {
+fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultRow {
     let mut attributes = std::collections::HashMap::new();
     for (key, value) in entity.attributes {
         let normalized_key = if let Some(base) = key.strip_prefix("col_") {
@@ -143,6 +154,10 @@ fn entity_to_result_row(entity: Entity) -> ResultRow {
             key
         };
         attributes.insert(normalized_key, value);
+    }
+
+    for column in columns_order {
+        attributes.entry(column.clone()).or_insert(crate::binding::model::dataverse::entity::Value::Null);
     }
 
     ResultRow {
