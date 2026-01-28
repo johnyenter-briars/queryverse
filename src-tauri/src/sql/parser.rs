@@ -64,6 +64,13 @@ impl Parser {
             None
         };
 
+        let group_by = if self.consume_keyword(Keyword::Group) {
+            self.expect_keyword(Keyword::By)?;
+            self.parse_group_by()?
+        } else {
+            Vec::new()
+        };
+
         let order_by = if self.consume_keyword(Keyword::Order) {
             self.expect_keyword(Keyword::By)?;
             self.parse_order_by()?
@@ -83,6 +90,7 @@ impl Parser {
             top,
             distinct,
             filter,
+            group_by,
             order_by,
         })
     }
@@ -172,6 +180,21 @@ impl Parser {
         }
 
         Ok(order_by)
+    }
+
+    fn parse_group_by(&mut self) -> Result<Vec<String>, ParseError> {
+        let mut group_by = Vec::new();
+        loop {
+            group_by.push(self.parse_identifier()?);
+
+            if self.consume_kind(TokenKind::Comma) {
+                continue;
+            }
+
+            break;
+        }
+
+        Ok(group_by)
     }
 
     fn parse_expr(&mut self) -> Result<Expr, ParseError> {

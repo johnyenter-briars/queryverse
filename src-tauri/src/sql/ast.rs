@@ -5,6 +5,7 @@ pub struct SelectStmt {
     pub top: Option<u32>,
     pub distinct: bool,
     pub filter: Option<Expr>,
+    pub group_by: Vec<String>,
     pub order_by: Vec<OrderBy>,
 }
 

@@ -180,6 +180,24 @@ mod tests {
         let err = to_fetchxml(&stmt).expect_err("expected translation error");
         assert!(err
             .to_string()
-            .contains("Mixing aggregate functions with non-aggregate columns"));
+            .contains("Non-aggregate columns must appear in GROUP BY"));
+    }
+
+    #[test]
+    fn translates_group_by_with_aggregates() {
+        let sql = "select sum(numberofemployees) as Total, count(address1_city) as Count, address1_city as City from account group by address1_city order by City";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+        assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
+        assert!(result
+            .fetchxml
+            .contains("attribute name=\"numberofemployees\" alias=\"Total\" aggregate=\"sum\""));
+        assert!(result
+            .fetchxml
+            .contains("attribute name=\"address1_city\" alias=\"Count\" aggregate=\"count\""));
+        assert!(result
+            .fetchxml
+            .contains("attribute name=\"address1_city\" alias=\"City\" groupby=\"true\""));
+        assert!(result.fetchxml.contains("<order alias=\"City\""));
+        assert!(result.aggregate);
     }
 }

@@ -16,10 +16,11 @@ pub fn to_fetchxml(
     entity_name: &str,
 ) -> Result<FetchXmlTranslation, TranslationError> {
     let mut out = String::new();
-    let aggregate_mode = select_has_aggregates(stmt);
+    let aggregate_mode = select_aggregate_mode(stmt);
     let column_outputs = projection_output_names(stmt, entity_name)?;
     let output_aliases: std::collections::HashSet<String> =
         column_outputs.iter().cloned().collect();
+    let group_by = validate_group_by(stmt)?;
 
     out.push_str("<fetch");
     if let Some(top) = stmt.top {
@@ -48,7 +49,7 @@ pub fn to_fetchxml(
         }
         SelectColumns::Columns(columns) => {
             for column in columns {
-                write_attribute(column, entity_name, aggregate_mode, &mut out)?;
+                write_attribute(column, entity_name, aggregate_mode, &group_by, &mut out)?;
             }
         }
     }
@@ -75,21 +76,32 @@ fn write_attribute(
     item: &SelectItem,
     entity_name: &str,
     aggregate_mode: bool,
+    group_by: &std::collections::HashSet<String>,
     out: &mut String,
 ) -> Result<(), TranslationError> {
     match &item.kind {
         SelectItemKind::Attribute(name) => {
             if aggregate_mode {
-                return Err(TranslationError::new(
-                    "Mixing aggregate functions with non-aggregate columns is not supported without GROUP BY",
-                ));
+                if group_by.is_empty() || !group_by_matches_item(item, group_by) {
+                    return Err(TranslationError::new(
+                        "Non-aggregate columns must appear in GROUP BY when using aggregates",
+                    ));
+                }
             }
 
             out.push_str("<attribute name=\"");
             out.push_str(&escape_xml(name));
-            if let Some(alias) = &item.alias {
+            let alias = if aggregate_mode {
+                Some(item.alias.clone().unwrap_or_else(|| name.clone()))
+            } else {
+                item.alias.clone()
+            };
+            if let Some(alias) = &alias {
                 out.push_str("\" alias=\"");
                 out.push_str(&escape_xml(alias));
+            }
+            if aggregate_mode {
+                out.push_str("\" groupby=\"true");
             }
             out.push_str("\" />");
         }
@@ -290,6 +302,74 @@ fn select_has_aggregates(stmt: &SelectStmt) -> bool {
             .iter()
             .any(|item| matches!(item.kind, SelectItemKind::Aggregate(_))),
     }
+}
+
+fn select_aggregate_mode(stmt: &SelectStmt) -> bool {
+    select_has_aggregates(stmt) || !stmt.group_by.is_empty()
+}
+
+fn group_by_matches_item(
+    item: &SelectItem,
+    group_by: &std::collections::HashSet<String>,
+) -> bool {
+    match &item.kind {
+        SelectItemKind::Attribute(name) => {
+            if group_by.contains(name) {
+                return true;
+            }
+            match &item.alias {
+                Some(alias) => group_by.contains(alias),
+                None => false,
+            }
+        }
+        SelectItemKind::Aggregate(_) => false,
+    }
+}
+
+fn validate_group_by(
+    stmt: &SelectStmt,
+) -> Result<std::collections::HashSet<String>, TranslationError> {
+    if stmt.group_by.is_empty() {
+        return Ok(std::collections::HashSet::new());
+    }
+
+    let mut remaining: std::collections::HashSet<String> =
+        stmt.group_by.iter().cloned().collect();
+
+    match &stmt.columns {
+        SelectColumns::All => {
+            return Err(TranslationError::new(
+                "GROUP BY requires explicit column list in SELECT",
+            ))
+        }
+        SelectColumns::Columns(items) => {
+            for item in items {
+                if let SelectItemKind::Attribute(name) = &item.kind {
+                    let mut matched = false;
+                    if remaining.remove(name) {
+                        matched = true;
+                    }
+                    if let Some(alias) = &item.alias {
+                        if remaining.remove(alias) {
+                            matched = true;
+                        }
+                    }
+
+                    if matched {
+                        continue;
+                    }
+                }
+            }
+        }
+    }
+
+    if !remaining.is_empty() {
+        return Err(TranslationError::new(
+            "GROUP BY columns must appear in the SELECT list",
+        ));
+    }
+
+    Ok(stmt.group_by.iter().cloned().collect())
 }
 
 fn projection_output_names(

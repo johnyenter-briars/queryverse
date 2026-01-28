@@ -1,7 +1,6 @@
 use serde::Serialize;
 
 use crate::{
-    Database,
     auth::connection::load_connections,
     auth::token::get_access_token,
     binding::model::{
@@ -12,7 +11,7 @@ use crate::{
         response::MultipleResponse,
     },
     dataverse::queryengine::QueryEngine,
-    sql,
+    sql, Database,
 };
 
 #[derive(Debug, Serialize)]
@@ -74,13 +73,13 @@ pub async fn execute_sql(
 
     let resp = query_engine
         .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
-        .await?;
+        .await
+        .map_err(|error| {
+            println!("Error: {error}");
+            error
+        })?;
 
-    let rows: Vec<ResultRow> = resp
-        .value
-        .into_iter()
-        .map(entity_to_result_row)
-        .collect();
+    let rows: Vec<ResultRow> = resp.value.into_iter().map(entity_to_result_row).collect();
 
     Ok(ExecuteSqlResponse {
         message: resp.message,
