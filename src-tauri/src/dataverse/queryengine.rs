@@ -177,17 +177,17 @@ fn parse_multiple_response_entity(
         .as_array()
         .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
 
-    let mut rows: Vec<Entity> = vec![];
+    let mut entities: Vec<Entity> = vec![];
 
     for record_value in response_array {
-        let mut row = Entity::new();
+        let mut entity = Entity::new();
 
         let record = record_value
             .as_object()
             .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
 
         for (key, value) in record {
-            let implemented = add_attribute_to_map(&mut row.attributes, key, value)
+            let implemented = add_attribute(&mut entity.attributes, key, value)
                 .map_err(|_| "Invalid response from Dataverse".to_string())?;
 
             if !implemented {
@@ -195,17 +195,17 @@ fn parse_multiple_response_entity(
             }
         }
 
-        rows.push(row);
+        entities.push(entity);
     }
 
     let mut multi_resposne = MultipleResponse::new();
 
-    multi_resposne.value = rows;
+    multi_resposne.value = entities;
 
     Ok(multi_resposne)
 }
 
-fn add_attribute_to_map(
+fn add_attribute(
     attributes: &mut HashMap<Attribute, RowValue>,
     key: &str,
     value: &Value,
