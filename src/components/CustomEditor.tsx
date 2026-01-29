@@ -4,6 +4,7 @@ import { initVimMode } from "monaco-vim";
 import Editor, { OnMount } from "@monaco-editor/react";
 import type { editor as MonacoEditor, Position, IDisposable } from "monaco-editor";
 type MonacoApi = typeof import("monaco-editor");
+import type { languages } from "monaco-editor";
 import { useCustomEditorStyles } from "../styles/CustomEditorStyles";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { EntityAttribute } from "../binding/model/EntityAttribute";
@@ -182,7 +183,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                 const prefix = lineText.slice(0, Math.max(position.column - 1, 0));
                 const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
 
-                const suggestions: MonacoEditor.languages.CompletionItem[] = [];
+                const suggestions: languages.CompletionItem[] = [];
 
                 if (match) {
                     const current = match[1] ?? "";
