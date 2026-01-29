@@ -6,6 +6,7 @@ import type { editor as MonacoEditor, Position, IDisposable } from "monaco-edito
 type MonacoApi = typeof import("monaco-editor");
 import { useCustomEditorStyles } from "../styles/CustomEditorStyles";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
+import { EntityAttribute } from "../binding/model/EntityAttribute";
 
 const DEFAULT_FONT_SIZE = 16;
 const MIN_FONT_SIZE = 10;
@@ -21,6 +22,7 @@ interface ICustomEditor {
     readOnly?: boolean;
     debounceMs?: number;
     entityDefinitions?: EntityDefinition[];
+    entityAttributes?: Record<string, EntityAttribute[]>;
 }
 
 export type CustomEditorHandle = {
@@ -36,6 +38,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     language,
     readOnly,
     entityDefinitions,
+    entityAttributes,
 }: ICustomEditor, ref) => {
     const styles = useCustomEditorStyles();
     const vimModeRef = useRef<any>(null);
@@ -76,6 +79,15 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
             return normalized === logical || normalized === schema || normalized === entitySet;
         });
         return match?.LogicalName ?? null;
+    };
+
+    const isInSelectList = (text: string, cursorOffset: number) => {
+        const lower = text.toLowerCase();
+        const selectIndex = lower.lastIndexOf("select", cursorOffset);
+        if (selectIndex === -1) return false;
+        const fromIndex = lower.indexOf("from", selectIndex);
+        if (fromIndex !== -1 && cursorOffset > fromIndex) return false;
+        return true;
     };
 
     useEffect(() => {
@@ -184,7 +196,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         ).sort((a, b) => a.localeCompare(b));
 
         completionDisposableRef.current = monaco.languages.registerCompletionItemProvider("sql", {
-            triggerCharacters: [" "],
+            triggerCharacters: [" ", ","],
             provideCompletionItems: (
                 model: MonacoEditor.ITextModel,
                 position: Position
@@ -192,29 +204,70 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                 const lineText = model.getLineContent(position.lineNumber);
                 const prefix = lineText.slice(0, Math.max(position.column - 1, 0));
                 const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
-                if (!match) return { suggestions: [] };
 
-                const current = match[1] ?? "";
-                const range = new monaco.Range(
-                    position.lineNumber,
-                    position.column - current.length,
-                    position.lineNumber,
-                    position.column
-                );
+                const suggestions: MonacoEditor.languages.CompletionItem[] = [];
 
-                const suggestions = tableNames
-                    .filter((name) => name.toLowerCase().startsWith(current.toLowerCase()))
-                    .map((name) => ({
-                        label: name,
-                        kind: monaco.languages.CompletionItemKind.Class,
-                        insertText: name,
-                        range,
-                    }));
+                if (match) {
+                    const current = match[1] ?? "";
+                    const range = new monaco.Range(
+                        position.lineNumber,
+                        position.column - current.length,
+                        position.lineNumber,
+                        position.column
+                    );
+
+                    suggestions.push(
+                        ...tableNames
+                            .filter((name) =>
+                                name.toLowerCase().startsWith(current.toLowerCase())
+                            )
+                            .map((name) => ({
+                                label: name,
+                                kind: monaco.languages.CompletionItemKind.Class,
+                                insertText: name,
+                                range,
+                            }))
+                    );
+                }
+
+                const fullText = model.getValue();
+                const cursorOffset = model.getOffsetAt(position);
+                if (entityAttributes && isInSelectList(fullText, cursorOffset)) {
+                    const selectedEntity = findSelectedEntity(fullText);
+                    const attributes = selectedEntity
+                        ? entityAttributes[selectedEntity]
+                        : undefined;
+                    if (attributes?.length) {
+                        const word = model.getWordUntilPosition(position);
+                        const range = new monaco.Range(
+                            position.lineNumber,
+                            word.startColumn,
+                            position.lineNumber,
+                            word.endColumn
+                        );
+                        const current = word.word.toLowerCase();
+
+                        suggestions.push(
+                            ...attributes
+                                .filter((attribute) =>
+                                    attribute.LogicalName.toLowerCase().startsWith(current) ||
+                                    attribute.SchemaName.toLowerCase().startsWith(current)
+                                )
+                                .map((attribute) => ({
+                                    label: attribute.LogicalName,
+                                    detail: attribute.AttributeType ?? undefined,
+                                    kind: monaco.languages.CompletionItemKind.Field,
+                                    insertText: attribute.LogicalName,
+                                    range,
+                                }))
+                        );
+                    }
+                }
 
                 return { suggestions };
             },
         });
-    }, [entityDefinitions, language, monacoReady]);
+    }, [entityAttributes, entityDefinitions, language, monacoReady]);
 
     return (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>

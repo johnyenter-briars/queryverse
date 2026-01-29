@@ -856,6 +856,7 @@ export default function App() {
                                     entityDefinitions={
                                         activeTab.kind === "query" ? entityDefinitions : []
                                     }
+                                    entityAttributes={entityAttributesByLogical}
                                     onEntitySelected={handleLoadEntityAttributes}
                                     onChange={(value) => {
                                         if (activeTab.kind !== "query") return;
