@@ -15,6 +15,7 @@ interface ICustomEditor {
     vimEnabled: boolean;
     value: string;
     onChange: (value: string) => void;
+    onEntitySelected?: (logicalName: string) => void;
     fontSize?: number;
     language?: string;
     readOnly?: boolean;
@@ -30,6 +31,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     vimEnabled,
     value,
     onChange,
+    onEntitySelected,
     fontSize,
     language,
     readOnly,
@@ -46,6 +48,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     const [localFontSize, setLocalFontSize] = useState(
         fontSize ?? DEFAULT_FONT_SIZE
     );
+    const lastEntityRef = useRef<string | null>(null);
 
     // Keep the editor responsive by buffering keystrokes locally and
     // committing to app state on a short debounce and on blur.
@@ -55,6 +58,25 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         // Sync when the active tab/value changes externally.
         setLocalValue(value);
     }, [value]);
+
+    const normalizeTableName = (input: string) =>
+        input.replace(/^[\[\"]+|[\]\"]+$/g, "").toLowerCase();
+
+    const findSelectedEntity = (text: string): string | null => {
+        if (!entityDefinitions?.length) return null;
+        const matches = [...text.matchAll(/\bfrom\s+([A-Za-z0-9_\[\]\"]+)/gi)];
+        if (matches.length === 0) return null;
+        const rawName = matches[matches.length - 1]?.[1];
+        if (!rawName) return null;
+        const normalized = normalizeTableName(rawName);
+        const match = entityDefinitions.find((definition) => {
+            const logical = normalizeTableName(definition.LogicalName);
+            const schema = normalizeTableName(definition.SchemaName);
+            const entitySet = normalizeTableName(definition.EntitySetName);
+            return normalized === logical || normalized === schema || normalized === entitySet;
+        });
+        return match?.LogicalName ?? null;
+    };
 
     useEffect(() => {
         if (fontSize === undefined) return;
@@ -206,6 +228,13 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                     const nextValue = v || "";
                     setLocalValue(nextValue);
                     onChange(nextValue);
+                    if (onEntitySelected) {
+                        const selected = findSelectedEntity(nextValue);
+                        if (selected && selected !== lastEntityRef.current) {
+                            lastEntityRef.current = selected;
+                            onEntitySelected(selected);
+                        }
+                    }
                 }}
                 options={{ readOnly: Boolean(readOnly), fontSize: localFontSize }}
             />
