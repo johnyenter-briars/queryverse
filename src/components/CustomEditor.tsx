@@ -4,14 +4,13 @@ import { initVimMode } from "monaco-vim";
 import Editor, { OnMount } from "@monaco-editor/react";
 import type { editor as MonacoEditor, Position, IDisposable } from "monaco-editor";
 type MonacoApi = typeof import("monaco-editor");
-import type { languages } from "monaco-editor";
 import { useCustomEditorStyles } from "../styles/CustomEditorStyles";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { EntityAttribute } from "../binding/model/EntityAttribute";
 import {
     findSelectedEntity,
-    isInSelectList,
-    isInWhereClause,
+    getSqlCompletionItems,
+    getSqlTableNames,
 } from "../utility/editorIntellisense";
 
 const DEFAULT_FONT_SIZE = 16;
@@ -163,15 +162,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         if (!entityDefinitions?.length) return;
 
         const monaco = monacoRef.current;
-        const tableNames = Array.from(
-            new Set(
-                entityDefinitions
-                    .flatMap((definition) => [
-                        definition.LogicalName,
-                    ])
-                    .filter((name): name is string => Boolean(name))
-            )
-        ).sort((a, b) => a.localeCompare(b));
+        const tableNames = getSqlTableNames(entityDefinitions);
 
         completionDisposableRef.current = monaco.languages.registerCompletionItemProvider("sql", {
             triggerCharacters: [" ", ","],
@@ -179,75 +170,14 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                 model: MonacoEditor.ITextModel,
                 position: Position
             ) => {
-                const lineText = model.getLineContent(position.lineNumber);
-                const prefix = lineText.slice(0, Math.max(position.column - 1, 0));
-                const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
-
-                const suggestions: languages.CompletionItem[] = [];
-
-                if (match) {
-                    const current = match[1] ?? "";
-                    const range = new monaco.Range(
-                        position.lineNumber,
-                        position.column - current.length,
-                        position.lineNumber,
-                        position.column
-                    );
-
-                    suggestions.push(
-                        ...tableNames
-                            .filter((name) =>
-                                name.toLowerCase().startsWith(current.toLowerCase())
-                            )
-                            .map((name) => ({
-                                label: name,
-                                kind: monaco.languages.CompletionItemKind.Class,
-                                insertText: name,
-                                range,
-                            }))
-                    );
-                }
-
-                const fullText = model.getValue();
-                const cursorOffset = model.getOffsetAt(position);
-                if (
-                    entityAttributes &&
-                    (isInSelectList(fullText, cursorOffset) ||
-                        isInWhereClause(fullText, cursorOffset))
-                ) {
-                    const selectedEntity = findSelectedEntity(
-                        fullText,
-                        entityDefinitions
-                    );
-                    const attributes = selectedEntity
-                        ? entityAttributes[selectedEntity]
-                        : undefined;
-                    if (attributes?.length) {
-                        const word = model.getWordUntilPosition(position);
-                        const range = new monaco.Range(
-                            position.lineNumber,
-                            word.startColumn,
-                            position.lineNumber,
-                            word.endColumn
-                        );
-                        const current = word.word.toLowerCase();
-
-                        suggestions.push(
-                            ...attributes
-                                .filter((attribute) =>
-                                    attribute.LogicalName.toLowerCase().startsWith(current) ||
-                                    attribute.SchemaName.toLowerCase().startsWith(current)
-                                )
-                                .map((attribute) => ({
-                                    label: attribute.LogicalName,
-                                    detail: attribute.AttributeType ?? undefined,
-                                    kind: monaco.languages.CompletionItemKind.Field,
-                                    insertText: attribute.LogicalName,
-                                    range,
-                                }))
-                        );
-                    }
-                }
+                const suggestions = getSqlCompletionItems({
+                    monaco,
+                    model,
+                    position,
+                    entityDefinitions,
+                    entityAttributes,
+                    tableNames,
+                });
 
                 return { suggestions };
             },

@@ -1,4 +1,6 @@
+import type { editor as MonacoEditor, Position, languages } from "monaco-editor";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
+import { EntityAttribute } from "../binding/model/EntityAttribute";
 
 const normalizeTableName = (input: string) =>
     input.replace(/^[\[\"]+|[\]\"]+$/g, "").toLowerCase();
@@ -55,4 +57,99 @@ export const isInWhereClause = (text: string, cursorOffset: number) => {
     ]);
     if (nextKeyword !== -1 && cursorOffset > nextKeyword) return false;
     return cursorOffset >= whereIndex + 5;
+};
+
+export const getSqlTableNames = (entityDefinitions?: EntityDefinition[]) => {
+    if (!entityDefinitions?.length) return [];
+    const names = new Set<string>();
+    for (const definition of entityDefinitions) {
+        if (definition.LogicalName) names.add(definition.LogicalName);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+};
+
+type SqlCompletionContext = {
+    monaco: typeof import("monaco-editor");
+    model: MonacoEditor.ITextModel;
+    position: Position;
+    entityDefinitions: EntityDefinition[];
+    entityAttributes?: Record<string, EntityAttribute[]>;
+    tableNames?: string[];
+};
+
+export const getSqlCompletionItems = ({
+    monaco,
+    model,
+    position,
+    entityDefinitions,
+    entityAttributes,
+    tableNames,
+}: SqlCompletionContext): languages.CompletionItem[] => {
+    if (!entityDefinitions?.length) return [];
+    const suggestions: languages.CompletionItem[] = [];
+    const names = tableNames?.length ? tableNames : getSqlTableNames(entityDefinitions);
+
+    const lineText = model.getLineContent(position.lineNumber);
+    const prefix = lineText.slice(0, Math.max(position.column - 1, 0));
+    const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
+
+    if (match) {
+        const current = match[1] ?? "";
+        const range = new monaco.Range(
+            position.lineNumber,
+            position.column - current.length,
+            position.lineNumber,
+            position.column
+        );
+
+        suggestions.push(
+            ...names
+                .filter((name) => name.toLowerCase().startsWith(current.toLowerCase()))
+                .map((name) => ({
+                    label: name,
+                    kind: monaco.languages.CompletionItemKind.Class,
+                    insertText: name,
+                    range,
+                }))
+        );
+    }
+
+    const fullText = model.getValue();
+    const cursorOffset = model.getOffsetAt(position);
+    if (
+        entityAttributes &&
+        (isInSelectList(fullText, cursorOffset) ||
+            isInWhereClause(fullText, cursorOffset))
+    ) {
+        const selectedEntity = findSelectedEntity(fullText, entityDefinitions);
+        const attributes = selectedEntity ? entityAttributes[selectedEntity] : undefined;
+        if (attributes?.length) {
+            const word = model.getWordUntilPosition(position);
+            const range = new monaco.Range(
+                position.lineNumber,
+                word.startColumn,
+                position.lineNumber,
+                word.endColumn
+            );
+            const current = word.word.toLowerCase();
+
+            suggestions.push(
+                ...attributes
+                    .filter(
+                        (attribute) =>
+                            attribute.LogicalName.toLowerCase().startsWith(current) ||
+                            attribute.SchemaName.toLowerCase().startsWith(current)
+                    )
+                    .map((attribute) => ({
+                        label: attribute.LogicalName,
+                        detail: attribute.AttributeType ?? undefined,
+                        kind: monaco.languages.CompletionItemKind.Field,
+                        insertText: attribute.LogicalName,
+                        range,
+                    }))
+            );
+        }
+    }
+
+    return suggestions;
 };
