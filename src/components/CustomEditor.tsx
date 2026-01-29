@@ -7,6 +7,11 @@ type MonacoApi = typeof import("monaco-editor");
 import { useCustomEditorStyles } from "../styles/CustomEditorStyles";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { EntityAttribute } from "../binding/model/EntityAttribute";
+import {
+    findSelectedEntity,
+    isInSelectList,
+    isInWhereClause,
+} from "../utility/editorIntellisense";
 
 const DEFAULT_FONT_SIZE = 16;
 const MIN_FONT_SIZE = 10;
@@ -61,34 +66,6 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         // Sync when the active tab/value changes externally.
         setLocalValue(value);
     }, [value]);
-
-    const normalizeTableName = (input: string) =>
-        input.replace(/^[\[\"]+|[\]\"]+$/g, "").toLowerCase();
-
-    const findSelectedEntity = (text: string): string | null => {
-        if (!entityDefinitions?.length) return null;
-        const matches = [...text.matchAll(/\bfrom\s+([A-Za-z0-9_\[\]\"]+)/gi)];
-        if (matches.length === 0) return null;
-        const rawName = matches[matches.length - 1]?.[1];
-        if (!rawName) return null;
-        const normalized = normalizeTableName(rawName);
-        const match = entityDefinitions.find((definition) => {
-            const logical = normalizeTableName(definition.LogicalName);
-            const schema = normalizeTableName(definition.SchemaName);
-            const entitySet = normalizeTableName(definition.EntitySetName);
-            return normalized === logical || normalized === schema || normalized === entitySet;
-        });
-        return match?.LogicalName ?? null;
-    };
-
-    const isInSelectList = (text: string, cursorOffset: number) => {
-        const lower = text.toLowerCase();
-        const selectIndex = lower.lastIndexOf("select", cursorOffset);
-        if (selectIndex === -1) return false;
-        const fromIndex = lower.indexOf("from", selectIndex);
-        if (fromIndex !== -1 && cursorOffset > fromIndex) return false;
-        return true;
-    };
 
     useEffect(() => {
         if (fontSize === undefined) return;
@@ -232,8 +209,15 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
 
                 const fullText = model.getValue();
                 const cursorOffset = model.getOffsetAt(position);
-                if (entityAttributes && isInSelectList(fullText, cursorOffset)) {
-                    const selectedEntity = findSelectedEntity(fullText);
+                if (
+                    entityAttributes &&
+                    (isInSelectList(fullText, cursorOffset) ||
+                        isInWhereClause(fullText, cursorOffset))
+                ) {
+                    const selectedEntity = findSelectedEntity(
+                        fullText,
+                        entityDefinitions
+                    );
                     const attributes = selectedEntity
                         ? entityAttributes[selectedEntity]
                         : undefined;
@@ -282,7 +266,10 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                     setLocalValue(nextValue);
                     onChange(nextValue);
                     if (onEntitySelected) {
-                        const selected = findSelectedEntity(nextValue);
+                        const selected = findSelectedEntity(
+                            nextValue,
+                            entityDefinitions
+                        );
                         if (selected && selected !== lastEntityRef.current) {
                             lastEntityRef.current = selected;
                             onEntitySelected(selected);
