@@ -32,45 +32,6 @@ impl QueryEngine {
         }
     }
 
-    pub async fn retrieve_multiple_accounts(
-        &self,
-        filter: Option<&str>,
-        select: Option<&str>,
-    ) -> Result<MultipleResponse<Entity>, std::string::String> {
-        let mut url = format!("{}/api/data/v9.2/accounts", self.base_url);
-
-        if let Some(f) = filter {
-            url.push_str(&format!("?$filter={}", urlencoding::encode(f)));
-        }
-
-        if let Some(s) = select {
-            url.push_str(&format!("&$select={}", urlencoding::encode(s)));
-        }
-
-        let resp = self
-            .client
-            .get(&url)
-            .bearer_auth(&self.token)
-            .header("Accept", "application/json")
-            .send()
-            .await
-            .map_err(|e| format!("Request failed: {e}"))?;
-
-        let status = resp.status();
-
-        if !status.is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            return Err(format!("Dataverse API error ({}): {}", status, body));
-        }
-
-        let json: Value = resp
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse JSON: {e}"))?;
-
-        parse_multiple_response_entity(json)
-    }
-
     pub async fn _get_entity_metadata(
         &self,
         entity_logical: &str,
@@ -144,7 +105,7 @@ impl QueryEngine {
             println!("Raw data: {:?}", json);
         }
 
-        parse_multiple_response_entity(json)
+        parse_multiple_response(json)
     }
 
     pub async fn list_entity_definitions(
@@ -214,9 +175,7 @@ impl QueryEngine {
     }
 }
 
-fn parse_multiple_response_entity(
-    json: Value,
-) -> Result<MultipleResponse<Entity>, std::string::String> {
+fn parse_multiple_response(json: Value) -> Result<MultipleResponse<Entity>, std::string::String> {
     let response_object = json
         .as_object()
         .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
@@ -248,11 +207,11 @@ fn parse_multiple_response_entity(
         entities.push(entity);
     }
 
-    let mut multi_resposne = MultipleResponse::new();
-
-    multi_resposne.value = entities;
-
-    Ok(multi_resposne)
+    Ok(MultipleResponse {
+        message: "Multiple results found".to_string(),
+        success: true,
+        value: entities,
+    })
 }
 
 fn add_attribute(

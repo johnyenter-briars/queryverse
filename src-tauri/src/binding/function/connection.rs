@@ -4,12 +4,10 @@ use crate::auth::connection::{load_connections, save_connection, save_connection
 use crate::auth::credentials::{exchange_authorization_code, validate_client_credentials};
 use crate::auth::token::prime_token_cache;
 use crate::binding::model::{
-    connection::Connection,
-    createconnectionpayload::CreateConnectionPayload,
+    connection::Connection, createconnectionpayload::CreateConnectionPayload,
     createconnectionrequest::CreateConnectionRequest,
     createconnectionresponse::CreateConnectionResponse,
-    listconnectionsresponse::ListConnectionsResponse,
-    setconnectionrequest::SetConnectionRequest,
+    listconnectionsresponse::ListConnectionsResponse, setconnectionrequest::SetConnectionRequest,
     updateconnectionrequest::UpdateConnectionRequest,
     updateconnectionresponse::UpdateConnectionResponse,
 };
@@ -97,13 +95,21 @@ pub async fn create_connection(
         error
     })?;
 
-    Ok(CreateConnectionResponse::validated(connection))
+    Ok(CreateConnectionResponse {
+        message: "Connection validated.".to_string(),
+        success: true,
+        value: connection,
+    })
 }
 
 #[tauri::command]
 pub async fn list_connections(_window: tauri::Window) -> Result<ListConnectionsResponse, String> {
     let connections = load_connections()?;
-    Ok(ListConnectionsResponse::success(connections))
+    Ok(ListConnectionsResponse {
+        message: "Connections found".to_string(),
+        success: true,
+        value: connections,
+    })
 }
 
 #[tauri::command]
