@@ -91,10 +91,17 @@ export const getSqlCompletionItems = ({
 
     const lineText = model.getLineContent(position.lineNumber);
     const prefix = lineText.slice(0, Math.max(position.column - 1, 0));
-    const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
+    const fullText = model.getValue();
+    const cursorOffset = model.getOffsetAt(position);
+    const textUpToCursor = fullText.slice(0, cursorOffset);
 
-    if (match) {
-        const current = match[1] ?? "";
+    const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
+    const joinMatch = textUpToCursor.match(
+        /(?:^|\s)(?:inner|left|right|full|outer)?\s*join\s+([A-Za-z0-9_\[\]\"]*)$/i
+    );
+
+    if (match || joinMatch) {
+        const current = (joinMatch?.[1] ?? match?.[1] ?? "");
         const range = new monaco.Range(
             position.lineNumber,
             position.column - current.length,
@@ -114,8 +121,6 @@ export const getSqlCompletionItems = ({
         );
     }
 
-    const fullText = model.getValue();
-    const cursorOffset = model.getOffsetAt(position);
     if (
         entityAttributes &&
         (isInSelectList(fullText, cursorOffset) ||

@@ -165,7 +165,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         const tableNames = getSqlTableNames(entityDefinitions);
 
         completionDisposableRef.current = monaco.languages.registerCompletionItemProvider("sql", {
-            triggerCharacters: [" ", ","],
+            triggerCharacters: [" ", ",", "n", "N"],
             provideCompletionItems: (
                 model: MonacoEditor.ITextModel,
                 position: Position
