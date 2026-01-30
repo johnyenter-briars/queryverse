@@ -196,13 +196,13 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                     const nextValue = v || "";
                     setLocalValue(nextValue);
                     onChange(nextValue);
-                    if (onEntitySelected) {
-                        const selected = findSelectedEntity(
-                            nextValue,
-                            entityDefinitions
-                        );
-                        if (selected && selected !== lastEntityRef.current) {
-                            lastEntityRef.current = selected;
+                    const selected = findSelectedEntity(
+                        nextValue,
+                        entityDefinitions
+                    );
+                    if (selected !== lastEntityRef.current) {
+                        lastEntityRef.current = selected;
+                        if (selected && onEntitySelected) {
                             onEntitySelected(selected);
                         }
                     }

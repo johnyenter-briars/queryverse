@@ -71,6 +71,12 @@ impl QueryEngine {
         entity: &str,
         fetchxml: &str,
     ) -> Result<MultipleResponse<Entity>, std::string::String> {
+        if fetch_tag_has_attr(fetchxml, "top")? {
+            return self
+                .retrieve_multiple_fetchxml_single(entity, fetchxml)
+                .await;
+        }
+
         let mut page = 1;
         let mut paging_cookie: Option<std::string::String> = None;
         let mut entities: Vec<Entity> = vec![];
@@ -151,6 +157,13 @@ impl QueryEngine {
         entity: &str,
         fetchxml: &str,
     ) -> Result<usize, std::string::String> {
+        if fetch_tag_has_attr(fetchxml, "top")? {
+            let resp = self
+                .retrieve_multiple_fetchxml_single(entity, fetchxml)
+                .await?;
+            return Ok(resp.value.len());
+        }
+
         let mut page = 1;
         let mut paging_cookie: Option<std::string::String> = None;
         let mut total = 0usize;
@@ -212,6 +225,55 @@ impl QueryEngine {
         }
 
         Ok(total)
+    }
+
+    async fn retrieve_multiple_fetchxml_single(
+        &self,
+        entity: &str,
+        fetchxml: &str,
+    ) -> Result<MultipleResponse<Entity>, std::string::String> {
+        if matches!(self.log_level, LogLevel::Debug) {
+            println!("FetchXML: {}", fetchxml);
+        }
+
+        let mut url = format!("{}/api/data/v9.2/{}", self.base_url, entity);
+        url.push_str("?fetchXml=");
+        url.push_str(&urlencoding::encode(fetchxml));
+
+        if matches!(self.log_level, LogLevel::Debug) {
+            println!("Url: {:?}", url);
+        }
+
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.token)
+            .header("Accept", "application/json")
+            .header(
+                "Prefer",
+                "odata.include-annotations=\"Microsoft.Dynamics.CRM.fetchxmlpagingcookie,Microsoft.Dynamics.CRM.morerecords\"",
+            )
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {e}"))?;
+
+        let status = resp.status();
+
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("Dataverse API error ({}): {}", status, body));
+        }
+
+        let json: Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse JSON: {e}"))?;
+
+        if matches!(self.log_level, LogLevel::Debug) {
+            println!("Raw data: {:?}", json);
+        }
+
+        parse_multiple_response(json)
     }
 
     pub async fn list_entity_definitions(
