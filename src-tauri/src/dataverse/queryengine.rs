@@ -68,44 +68,72 @@ impl QueryEngine {
         entity: &str,
         fetchxml: &str,
     ) -> Result<MultipleResponse<Entity>, std::string::String> {
-        if matches!(self.log_level, LogLevel::Debug) {
-            println!("FetchXML: {}", fetchxml);
+        let mut page = 1;
+        let mut paging_cookie: Option<std::string::String> = None;
+        let mut entities: Vec<Entity> = vec![];
+
+        loop {
+            let fetch_with_paging =
+                apply_paging(fetchxml, page, paging_cookie.as_deref())?;
+
+            if matches!(self.log_level, LogLevel::Debug) {
+                println!("FetchXML: {}", fetch_with_paging);
+            }
+
+            let mut url = format!("{}/api/data/v9.2/{}", self.base_url, entity);
+            url.push_str("?fetchXml=");
+            url.push_str(&urlencoding::encode(&fetch_with_paging));
+
+            if matches!(self.log_level, LogLevel::Debug) {
+                println!("Url: {:?}", url);
+            }
+
+            let resp = self
+                .client
+                .get(&url)
+                .bearer_auth(&self.token)
+                .header("Accept", "application/json")
+                .header(
+                    "Prefer",
+                    "odata.include-annotations=\"Microsoft.Dynamics.CRM.fetchxmlpagingcookie,Microsoft.Dynamics.CRM.morerecords\"",
+                )
+                .send()
+                .await
+                .map_err(|e| format!("Request failed: {e}"))?;
+
+            let status = resp.status();
+
+            if !status.is_success() {
+                let body = resp.text().await.unwrap_or_default();
+                return Err(format!("Dataverse API error ({}): {}", status, body));
+            }
+
+            let json: Value = resp
+                .json()
+                .await
+                .map_err(|e| format!("Failed to parse JSON: {e}"))?;
+
+            if matches!(self.log_level, LogLevel::Debug) {
+                println!("Raw data: {:?}", json);
+            }
+
+            let page_entities = parse_entities_from_response(&json)?;
+            entities.extend(page_entities);
+
+            let more_records = parse_more_records(&json);
+            if !more_records {
+                break;
+            }
+
+            paging_cookie = extract_paging_cookie(&json);
+            page += 1;
         }
 
-        let mut url = format!("{}/api/data/v9.2/{}", self.base_url, entity);
-        url.push_str("?fetchXml=");
-        url.push_str(&urlencoding::encode(fetchxml));
-
-        if matches!(self.log_level, LogLevel::Debug) {
-            println!("Url: {:?}", url);
-        }
-
-        let resp = self
-            .client
-            .get(&url)
-            .bearer_auth(&self.token)
-            .header("Accept", "application/json")
-            .send()
-            .await
-            .map_err(|e| format!("Request failed: {e}"))?;
-
-        let status = resp.status();
-
-        if !status.is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            return Err(format!("Dataverse API error ({}): {}", status, body));
-        }
-
-        let json: Value = resp
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse JSON: {e}"))?;
-
-        if matches!(self.log_level, LogLevel::Debug) {
-            println!("Raw data: {:?}", json);
-        }
-
-        parse_multiple_response(json)
+        Ok(MultipleResponse {
+            message: "Multiple results found".to_string(),
+            success: true,
+            value: entities,
+        })
     }
 
     pub async fn list_entity_definitions(
@@ -175,7 +203,109 @@ impl QueryEngine {
     }
 }
 
+fn apply_paging(
+    fetchxml: &str,
+    page: i32,
+    paging_cookie: Option<&str>,
+) -> Result<std::string::String, std::string::String> {
+    let mut updated = upsert_fetch_attr(fetchxml, "page", &page.to_string())?;
+    if let Some(cookie) = paging_cookie {
+        let escaped = escape_xml_attribute(cookie);
+        updated = upsert_fetch_attr(&updated, "paging-cookie", &escaped)?;
+    }
+    Ok(updated)
+}
+
+fn upsert_fetch_attr(
+    fetchxml: &str,
+    name: &str,
+    value: &str,
+) -> Result<std::string::String, std::string::String> {
+    let fetch_start = fetchxml
+        .find("<fetch")
+        .ok_or_else(|| "FetchXML must start with a <fetch> element".to_string())?;
+    let tag_end = fetchxml[fetch_start..]
+        .find('>')
+        .ok_or_else(|| "FetchXML <fetch> element is not closed".to_string())?
+        + fetch_start;
+
+    let tag = &fetchxml[fetch_start..=tag_end];
+    let attr_key = format!("{}=", name);
+    if let Some(attr_index) = tag.find(&attr_key) {
+        let quote_index = attr_index + attr_key.len();
+        let quote = tag
+            .as_bytes()
+            .get(quote_index)
+            .ok_or_else(|| format!("Invalid fetch attribute '{}'", name))?;
+        if *quote != b'"' && *quote != b'\'' {
+            return Err(format!("Invalid fetch attribute '{}'", name));
+        }
+        let quote_char = *quote as char;
+        let value_start = quote_index + 1;
+        let value_end = tag[value_start..]
+            .find(quote_char)
+            .ok_or_else(|| format!("Invalid fetch attribute '{}'", name))?
+            + value_start;
+
+        let mut replaced = std::string::String::new();
+        replaced.push_str(&fetchxml[..fetch_start + value_start]);
+        replaced.push_str(value);
+        replaced.push_str(&fetchxml[fetch_start + value_end..]);
+        return Ok(replaced);
+    }
+
+    let mut inserted = std::string::String::new();
+    inserted.push_str(&fetchxml[..tag_end]);
+    inserted.push(' ');
+    inserted.push_str(name);
+    inserted.push_str("=\"");
+    inserted.push_str(value);
+    inserted.push('"');
+    inserted.push_str(&fetchxml[tag_end..]);
+    Ok(inserted)
+}
+
+fn escape_xml_attribute(value: &str) -> std::string::String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
+fn parse_more_records(json: &Value) -> bool {
+    match json.get("@Microsoft.Dynamics.CRM.morerecords") {
+        Some(Value::Bool(value)) => *value,
+        Some(Value::String(value)) => value.eq_ignore_ascii_case("true"),
+        _ => false,
+    }
+}
+
+fn extract_paging_cookie(json: &Value) -> Option<std::string::String> {
+    let cookie_element = json
+        .get("@Microsoft.Dynamics.CRM.fetchxmlpagingcookie")
+        .and_then(|value| value.as_str())?;
+    let key = "pagingcookie=\"";
+    let start = cookie_element.find(key)? + key.len();
+    let end = cookie_element[start..].find('"')? + start;
+    let encoded = &cookie_element[start..end];
+    let decoded_once = urlencoding::decode(encoded).ok()?.into_owned();
+    let decoded_twice = urlencoding::decode(&decoded_once).ok()?.into_owned();
+    Some(decoded_twice)
+}
+
 fn parse_multiple_response(json: Value) -> Result<MultipleResponse<Entity>, std::string::String> {
+    let entities = parse_entities_from_response(&json)?;
+
+    Ok(MultipleResponse {
+        message: "Multiple results found".to_string(),
+        success: true,
+        value: entities,
+    })
+}
+
+fn parse_entities_from_response(json: &Value) -> Result<Vec<Entity>, std::string::String> {
     let response_object = json
         .as_object()
         .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
@@ -207,13 +337,8 @@ fn parse_multiple_response(json: Value) -> Result<MultipleResponse<Entity>, std:
         entities.push(entity);
     }
 
-    Ok(MultipleResponse {
-        message: "Multiple results found".to_string(),
-        success: true,
-        value: entities,
-    })
+    Ok(entities)
 }
-
 fn add_attribute(
     attributes: &mut HashMap<Attribute, RowValue>,
     key: &str,
