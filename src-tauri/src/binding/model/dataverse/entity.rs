@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 #[serde(untagged)]
 pub enum Value {
     Int(i64),
-    String(String),//TODO: should be this be a string or an &Str?
+    Float(f64),
+    String(String),
     Boolean(bool),
     Null,
 }
@@ -21,6 +22,19 @@ pub struct Entity {
 impl Entity {
     pub fn new() -> Self {
         Entity {
+            attributes: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ResultRow {
+    pub attributes: HashMap<Attribute, Value>,
+}
+
+impl ResultRow {
+    pub fn new() -> Self {
+        ResultRow {
             attributes: HashMap::new(),
         }
     }

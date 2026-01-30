@@ -1,5 +1,6 @@
 use crate::sql::ast::{
-    Column, CompareOp, Expr, Literal, OrderBy, Predicate, SelectColumns, SelectStmt,
+    AggregateExpr, AggregateFunction, AggregateTarget, CompareOp, Expr, Literal, OrderBy,
+    Predicate, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
 };
 use crate::sql::errors::ParseError;
 use crate::sql::lexer::{Keyword, Lexer, Token, TokenKind};
@@ -63,6 +64,13 @@ impl Parser {
             None
         };
 
+        let group_by = if self.consume_keyword(Keyword::Group) {
+            self.expect_keyword(Keyword::By)?;
+            self.parse_group_by()?
+        } else {
+            Vec::new()
+        };
+
         let order_by = if self.consume_keyword(Keyword::Order) {
             self.expect_keyword(Keyword::By)?;
             self.parse_order_by()?
@@ -76,14 +84,19 @@ impl Parser {
 
         self.expect_end()?;
 
-        Ok(SelectStmt {
+        let mut stmt = SelectStmt {
             columns,
             entity,
             top,
             distinct,
             filter,
+            group_by,
             order_by,
-        })
+        };
+
+        self.apply_group_by_rules(&mut stmt)?;
+
+        Ok(stmt)
     }
 
     fn parse_columns(&mut self) -> Result<SelectColumns, ParseError> {
@@ -93,16 +106,7 @@ impl Parser {
 
         let mut columns = Vec::new();
         loop {
-            let name = self.parse_identifier()?;
-            let alias = if self.consume_keyword(Keyword::As) {
-                Some(self.parse_identifier()?)
-            } else if self.is_identifier() {
-                Some(self.parse_identifier()?)
-            } else {
-                None
-            };
-
-            columns.push(Column { name, alias });
+            columns.push(self.parse_select_item()?);
 
             if self.consume_kind(TokenKind::Comma) {
                 continue;
@@ -112,6 +116,51 @@ impl Parser {
         }
 
         Ok(SelectColumns::Columns(columns))
+    }
+
+    fn parse_select_item(&mut self) -> Result<SelectItem, ParseError> {
+        let ident = self.parse_identifier()?;
+
+        let kind = if self.consume_kind(TokenKind::LParen) {
+            let function = self.parse_aggregate_function(&ident)?;
+            let target = if self.consume_kind(TokenKind::Star) {
+                AggregateTarget::Star
+            } else {
+                AggregateTarget::Column(self.parse_identifier()?)
+            };
+            self.expect_kind(TokenKind::RParen)?;
+
+            SelectItemKind::Aggregate(AggregateExpr { function, target })
+        } else {
+            SelectItemKind::Attribute(ident)
+        };
+
+        let alias = self.parse_optional_alias()?;
+
+        Ok(SelectItem { kind, alias })
+    }
+
+    fn parse_aggregate_function(&self, ident: &str) -> Result<AggregateFunction, ParseError> {
+        match ident.to_ascii_uppercase().as_str() {
+            "MIN" => Ok(AggregateFunction::Min),
+            "MAX" => Ok(AggregateFunction::Max),
+            "COUNT" => Ok(AggregateFunction::Count),
+            "SUM" => Ok(AggregateFunction::Sum),
+            "AVG" => Ok(AggregateFunction::Avg),
+            _ => Err(self.error_at_current("Unsupported function in select list")),
+        }
+    }
+
+    fn parse_optional_alias(&mut self) -> Result<Option<String>, ParseError> {
+        if self.consume_keyword(Keyword::As) {
+            return Ok(Some(self.parse_identifier()?));
+        }
+
+        if self.is_identifier() {
+            return Ok(Some(self.parse_identifier()?));
+        }
+
+        Ok(None)
     }
 
     fn parse_order_by(&mut self) -> Result<Vec<OrderBy>, ParseError> {
@@ -135,6 +184,48 @@ impl Parser {
         }
 
         Ok(order_by)
+    }
+
+    fn parse_group_by(&mut self) -> Result<Vec<String>, ParseError> {
+        let mut group_by = Vec::new();
+        loop {
+            group_by.push(self.parse_identifier()?);
+
+            if self.consume_kind(TokenKind::Comma) {
+                continue;
+            }
+
+            break;
+        }
+
+        Ok(group_by)
+    }
+
+    fn apply_group_by_rules(&self, stmt: &mut SelectStmt) -> Result<(), ParseError> {
+        if stmt.group_by.is_empty() {
+            return Ok(());
+        }
+
+        if let SelectColumns::Columns(items) = &mut stmt.columns {
+            for item in items {
+                if let SelectItemKind::Aggregate(aggregate) = &mut item.kind {
+                    if matches!(aggregate.function, AggregateFunction::Count)
+                        && matches!(aggregate.target, AggregateTarget::Star)
+                    {
+                        if stmt.group_by.len() == 1 {
+                            aggregate.target =
+                                AggregateTarget::Column(stmt.group_by[0].clone());
+                        } else {
+                            return Err(self.error_at_current(
+                                "COUNT(*) with GROUP BY requires a single group column; use COUNT(column)",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn parse_expr(&mut self) -> Result<Expr, ParseError> {

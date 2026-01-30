@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
     Button,
+    Input,
     Switch,
     Text,
 } from "@fluentui/react-components";
@@ -35,7 +36,8 @@ export function SettingsModal({
     const isDirty = useMemo(
         () =>
             draft.vimEnabled !== settings.vimEnabled ||
-            draft.keyBindingsEnabled !== settings.keyBindingsEnabled,
+            draft.keyBindingsEnabled !== settings.keyBindingsEnabled ||
+            draft.fontSize !== settings.fontSize,
         [draft, settings]
     );
 
@@ -95,6 +97,28 @@ export function SettingsModal({
                     <Text className={styles.description}>
                         When disabled, app-level shortcuts like Execute (F5) and Save (Ctrl+S)
                         will not run.
+                    </Text>
+                </div>
+
+                <div className={styles.section}>
+                    <Text weight="semibold">Font sie</Text>
+                    <Input
+                        type="number"
+                        min={10}
+                        max={28}
+                        value={String(draft.fontSize)}
+                        onChange={(_, data) => {
+                            const next = Number.parseInt(data.value ?? "", 10);
+                            if (Number.isNaN(next)) return;
+                            const clamped = Math.min(28, Math.max(10, next));
+                            setDraft((prev) => ({
+                                ...prev,
+                                fontSize: clamped,
+                            }));
+                        }}
+                    />
+                    <Text className={styles.description}>
+                        Controls the editor font size. Ctrl + mouse wheel still zooms per-tab.
                     </Text>
                 </div>
 

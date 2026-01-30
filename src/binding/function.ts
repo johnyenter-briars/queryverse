@@ -7,6 +7,7 @@ import { FetchXmlPreview } from "./model/FetchXmlPreview";
 import { ListConnectionsResponse } from "./model/ListConnectionsResponse";
 import { ExecuteSqlRequest } from "./model/ExecuteSqlRequest";
 import { EntityDefinition } from "./model/EntityDefinition";
+import { EntityAttribute } from "./model/EntityAttribute";
 import { SetConnectionRequest } from "./model/SetConnectionRequest";
 import { ExecuteSqlResponse } from "./model/ExecuteSqlResponse";
 import { MultipleResponse } from "./model/MultipleResponse";
@@ -87,6 +88,19 @@ export const listEntityDefinitions = async (): Promise<
 > => {
     const response: MultipleResponse<EntityDefinition> = await invoke(
         "list_entity_definitions"
+    );
+
+    console.log(response);
+
+    return response;
+};
+
+export const listEntityAttributes = async (
+    logicalName: string
+): Promise<MultipleResponse<EntityAttribute>> => {
+    const response: MultipleResponse<EntityAttribute> = await invoke(
+        "list_entity_attributes",
+        { logicalName }
     );
 
     console.log(response);

@@ -12,7 +12,7 @@ use crate::binding::function::{
     connection::{create_connection, list_connections, set_connection, update_connection},
     file::{open_sql_file, open_sql_file_path, save_sql_file, save_sql_file_as},
     launch::get_launch_context,
-    query::{execute_sql, list_entity_definitions, parse_sql_to_fetchxml},
+    query::{execute_sql, list_entity_attributes, list_entity_definitions, parse_sql_to_fetchxml},
     settings::{get_settings, save_settings},
 };
 use crate::auth::token::CachedToken;
@@ -22,11 +22,25 @@ pub struct Database {
     pub token_cache: Mutex<HashMap<Uuid, CachedToken>>,
 }
 
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    Debug,
+    Information,
+}
+
+impl Default for LogLevel {
+    fn default() -> Self {
+        LogLevel::Information
+    }
+}
+
 #[derive(Default, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchContext {
     pub sql_file_path: Option<String>,
     pub connection_name: Option<String>,
+    pub log_level: LogLevel,
 }
 
 impl Default for Database {
@@ -41,6 +55,7 @@ impl Default for Database {
 fn parse_cli_args() -> LaunchContext {
     let mut sql_file_path = None;
     let mut connection_name = None;
+    let mut log_level = LogLevel::Information;
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -68,11 +83,34 @@ fn parse_cli_args() -> LaunchContext {
             }
             continue;
         }
+        if arg == "--log-level" {
+            if let Some(value) = args.next() {
+                if let Some(parsed) = parse_log_level(&value) {
+                    log_level = parsed;
+                }
+            }
+            continue;
+        }
+        if let Some(value) = arg.strip_prefix("--log-level=") {
+            if let Some(parsed) = parse_log_level(value) {
+                log_level = parsed;
+            }
+            continue;
+        }
     }
 
     LaunchContext {
         sql_file_path,
         connection_name,
+        log_level,
+    }
+}
+
+fn parse_log_level(value: &str) -> Option<LogLevel> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "debug" => Some(LogLevel::Debug),
+        "information" => Some(LogLevel::Information),
+        _ => None,
     }
 }
 
@@ -88,6 +126,7 @@ pub fn run() {
             set_connection,
             update_connection,
             execute_sql,
+            list_entity_attributes,
             list_entity_definitions,
             parse_sql_to_fetchxml,
             get_launch_context,

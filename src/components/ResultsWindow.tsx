@@ -19,7 +19,7 @@ import {
     useScrollbarWidth,
     TableCellLayout,
 } from "@fluentui/react-components";
-import { Entity, Value } from "../binding/model/Entity";
+import { ResultRow, Value } from "../binding/model/ResultRow";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { SqlQueryMetadata } from "../binding/model/SqlQueryMetadata";
 import {
@@ -34,12 +34,12 @@ const HEADER_HEIGHT = 40;
 const AUTO_FIT_COLUMNS = false;
 
 function renderValue(value: Value): React.ReactNode {
-    if (value === null || value === undefined) return "";
+    if (value === null || value === undefined) return "NULL";
     return String(value);
 }
 
 export interface IResultsWindowProps {
-    data: Entity[];
+    data: ResultRow[];
     entityDefinitions: EntityDefinition[];
     query: string;
     queryMetadata?: SqlQueryMetadata | null;
@@ -47,8 +47,8 @@ export interface IResultsWindowProps {
     errorMessage?: string | null;
 }
 
-function getEntityRowId(entity: Entity, primaryIdAttribute?: string): string {
-    const keys = Object.keys(entity.attributes);
+function getRowId(row: ResultRow, primaryIdAttribute?: string): string {
+    const keys = Object.keys(row.attributes);
     if (keys.length === 0) return "empty-row";
     const primaryKey =
         (primaryIdAttribute && keys.includes(primaryIdAttribute)
@@ -56,10 +56,10 @@ function getEntityRowId(entity: Entity, primaryIdAttribute?: string): string {
             : undefined) ??
         keys.find((key) => key.endsWith("id")) ??
         keys[0];
-    const value = entity.attributes[primaryKey];
+    const value = row.attributes[primaryKey];
     return value !== null && value !== undefined
         ? String(value)
-        : JSON.stringify(entity.attributes);
+        : JSON.stringify(row.attributes);
 }
 
 export const ResultsWindow = React.memo(
@@ -102,14 +102,14 @@ export const ResultsWindow = React.memo(
             return buildResultColumnDescriptors(data, entityDefinitions, query, queryMetadata);
         }, [data, entityDefinitions, query, queryMetadata]);
 
-        const columns = useMemo<TableColumnDefinition<Entity>[]>(() => {
+        const columns = useMemo<TableColumnDefinition<ResultRow>[]>(() => {
             return orderedAttributes.map(({ key, attribute, dataKey }) =>
-                createTableColumn<Entity>({
+                createTableColumn<ResultRow>({
                     columnId: key,
                     renderHeaderCell: () => attribute,
-                    renderCell: (entity) => (
+                    renderCell: (row) => (
                         <TableCellLayout>
-                                {renderValue(entity.attributes[dataKey])}
+                            {renderValue(row.attributes[dataKey])}
                         </TableCellLayout>
                     ),
                 })
@@ -169,8 +169,8 @@ export const ResultsWindow = React.memo(
             );
         }
 
-        const renderRow: RowRenderer<Entity> = ({ item, rowId }, style) => (
-            <DataGridRow<Entity> key={rowId} style={style}>
+        const renderRow: RowRenderer<ResultRow> = ({ item, rowId }, style) => (
+            <DataGridRow<ResultRow> key={rowId} style={style}>
                 {({ renderCell }) => (
                     <DataGridCell>{renderCell(item)}</DataGridCell>
                 )}
@@ -197,8 +197,8 @@ export const ResultsWindow = React.memo(
                         resizableColumnsOptions={{ autoFitColumns: AUTO_FIT_COLUMNS }}
                         columnSizingOptions={columnSizingOptions}
                         style={{ minWidth: "auto" }}
-                        getRowId={(entity: Entity) =>
-                            getEntityRowId(entity, primaryIdAttribute)
+                        getRowId={(row: ResultRow) =>
+                            getRowId(row, primaryIdAttribute)
                         }
                     >
                         <DataGridHeader
@@ -219,7 +219,7 @@ export const ResultsWindow = React.memo(
                             </DataGridRow>
                         </DataGridHeader>
 
-                        <DataGridBody<Entity> itemSize={ROW_HEIGHT} height={bodyHeight}>
+                        <DataGridBody<ResultRow> itemSize={ROW_HEIGHT} height={bodyHeight}>
                             {renderRow}
                         </DataGridBody>
                     </DataGrid>

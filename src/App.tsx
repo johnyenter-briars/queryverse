@@ -8,7 +8,7 @@ import {
 } from "@fluentui/react-components";
 import { Add24Regular, Link24Filled } from "@fluentui/react-icons";
 import { ResultsWindow } from "./components/ResultsWindow";
-import { CustomEditor } from "./components/CustomEditor";
+import { CustomEditor, type CustomEditorHandle } from "./components/CustomEditor";
 import { ShortcutManager } from "./components/ShortcutManager";
 import { ModalDialog } from "./components/ModalDialog";
 import { SettingsModal } from "./components/SettingsModal";
@@ -17,7 +17,7 @@ import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
 import { SchemaExplorerMenu } from "./components/SchemaExplorerMenu";
 import { combineClasses } from "./utility/class";
-import { Entity } from "./binding/model/Entity";
+import { ResultRow } from "./binding/model/ResultRow";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
 import { Connection } from "./binding/model/Connection";
 import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
@@ -27,6 +27,7 @@ import {
     getLaunchContext,
     listConnections,
     listEntityDefinitions,
+    listEntityAttributes,
     openSqlFile,
     openSqlFilePath,
     previewFetchXml,
@@ -38,13 +39,11 @@ import {
 import { ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
 import { EntityDefinition } from "./binding/model/EntityDefinition";
+import { EntityAttribute } from "./binding/model/EntityAttribute";
 import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 import { DEFAULT_SETTINGS, Settings } from "./binding/model/Settings";
 
 const DEFAULT_QUERY = "select top 20 *\nfrom account";
-// Debouncing editor updates avoids per-keystroke app state writes and UI lag.
-const EDITOR_DEBOUNCE_MS = 200;
-
 type EditorTab = {
     kind: "query" | "fetchxml";
     id: number;
@@ -53,8 +52,8 @@ type EditorTab = {
     filePath: string | null;
     fileName: string | null;
     lastSavedQuery: string;
-    isDirty: boolean;
-    results: Entity[];
+    isEditorDirty: boolean;
+    results: ResultRow[];
     connectionId: string | null;
     fetchPreview: FetchXmlPreview | null;
     previewError: string | null;
@@ -71,7 +70,7 @@ const createQueryTab = (id: number): EditorTab => ({
     filePath: null,
     fileName: null,
     lastSavedQuery: DEFAULT_QUERY,
-    isDirty: false,
+    isEditorDirty: false,
     results: [],
     connectionId: null,
     fetchPreview: null,
@@ -94,7 +93,7 @@ const createFetchXmlTab = (
     filePath: null,
     fileName: null,
     lastSavedQuery: fetchXml,
-    isDirty: false,
+    isEditorDirty: false,
     results: [],
     connectionId,
     fetchPreview: null,
@@ -115,6 +114,7 @@ export default function App() {
     const nextTabId = useRef(1);
     const cliInitRef = useRef(false);
     const tabContextMenuRef = useRef<HTMLDivElement | null>(null);
+    const editorRef = useRef<CustomEditorHandle | null>(null);
     const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
     const [tabContextMenu, setTabContextMenu] = useState<{
         open: boolean;
@@ -129,6 +129,15 @@ export default function App() {
     const [connectionOptions, setConnectionOptions] = useState<Connection[]>([]);
 
     const [entityDefinitions, setEntityDefinitions] = useState<EntityDefinition[]>([]);
+    const [entityAttributesByLogical, setEntityAttributesByLogical] = useState<
+        Record<string, EntityAttribute[]>
+    >({});
+    const [entityAttributesLoading, setEntityAttributesLoading] = useState<
+        Record<string, boolean>
+    >({});
+    const [entityAttributesError, setEntityAttributesError] = useState<
+        Record<string, string | null>
+    >({});
 
     const styles = useAppStyles();
 
@@ -139,6 +148,7 @@ export default function App() {
 
     const vimEnabled = settings.vimEnabled;
     const keyBindingsEnabled = settings.keyBindingsEnabled;
+    const editorFontSize = settings.fontSize;
 
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
 
@@ -311,6 +321,9 @@ export default function App() {
                                 const response = await listEntityDefinitions();
                                 if (response.success) {
                                     setEntityDefinitions(response.value);
+                                    setEntityAttributesByLogical({});
+                                    setEntityAttributesLoading({});
+                                    setEntityAttributesError({});
                                 }
                             }
                         }
@@ -328,7 +341,7 @@ export default function App() {
                         filePath: file.path,
                         fileName: file.fileName,
                         lastSavedQuery: file.contents,
-                        isDirty: false,
+                        isEditorDirty: false,
                         connectionId: connectionToUse?.id ?? null,
                     };
 
@@ -398,6 +411,13 @@ export default function App() {
         if (activeTabId === 0) return;
         const targetTab = tabs.find((tab) => tab.id === activeTabId);
         if (!targetTab || targetTab.kind !== "query" || !selectedConnection?.id) {
+            return;
+        }
+        if (targetTab.isEditorDirty) {
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                executeError: "Save changes before executing the query.",
+            }));
             return;
         }
 
@@ -493,7 +513,7 @@ export default function App() {
                 filePath: response.path,
                 fileName: response.fileName,
                 lastSavedQuery: response.contents,
-                isDirty: false,
+                isEditorDirty: false,
                 connectionId: selectedConnection?.id ?? null,
             };
 
@@ -505,16 +525,21 @@ export default function App() {
     };
 
     const handleSaveActiveTab = async () => {
-        if (!activeTab?.filePath) return;
+        if (!activeTab || activeTab.kind !== "query") return;
         try {
-            await saveSqlFile({
-                path: activeTab.filePath,
-                contents: activeTab.query,
-            });
+            const editorContents =
+                editorRef.current?.getValue() ?? activeTab.query;
+            if (activeTab.filePath) {
+                await saveSqlFile({
+                    path: activeTab.filePath,
+                    contents: editorContents,
+                });
+            }
             updateTab(activeTab.id, (tab) => ({
                 ...tab,
-                lastSavedQuery: tab.query,
-                isDirty: false,
+                query: editorContents,
+                lastSavedQuery: editorContents,
+                isEditorDirty: false,
             }));
         } catch (error) {
             console.error("Failed to save SQL file", error);
@@ -524,8 +549,10 @@ export default function App() {
     const handleSaveActiveTabAs = async () => {
         if (!activeTab) return;
         try {
+            const editorContents =
+                editorRef.current?.getValue() ?? activeTab.query;
             const response = await saveSqlFileAs({
-                contents: activeTab.query,
+                contents: editorContents,
                 fileName: activeTab.fileName ?? "query.sql",
             });
             if (!response) return;
@@ -536,8 +563,9 @@ export default function App() {
                 filePath: response.path,
                 fileName: response.fileName,
                 title: `${response.fileName} - ${connectionName}`,
-                lastSavedQuery: tab.query,
-                isDirty: false,
+                query: editorContents,
+                lastSavedQuery: editorContents,
+                isEditorDirty: false,
             }));
         } catch (error) {
             console.error("Failed to save SQL file as", error);
@@ -575,10 +603,47 @@ export default function App() {
                 const response = await listEntityDefinitions();
                 if (response.success) {
                     setEntityDefinitions(response.value);
+                    setEntityAttributesByLogical({});
+                    setEntityAttributesLoading({});
+                    setEntityAttributesError({});
                 }
             } catch (error) {
                 console.error("Failed to load entity definitions", error);
             }
+        }
+    };
+
+    const handleLoadEntityAttributes = async (logicalName: string) => {
+        if (!logicalName) return;
+        if (entityAttributesByLogical[logicalName]) return;
+        if (entityAttributesLoading[logicalName]) return;
+
+        setEntityAttributesLoading((prev) => ({ ...prev, [logicalName]: true }));
+        setEntityAttributesError((prev) => ({ ...prev, [logicalName]: null }));
+
+        try {
+            const response = await listEntityAttributes(logicalName);
+            if (response.success) {
+                setEntityAttributesByLogical((prev) => ({
+                    ...prev,
+                    [logicalName]: response.value,
+                }));
+            } else {
+                setEntityAttributesError((prev) => ({
+                    ...prev,
+                    [logicalName]: response.message || "Failed to load attributes.",
+                }));
+            }
+        } catch (error) {
+            setEntityAttributesError((prev) => ({
+                ...prev,
+                [logicalName]: getErrorMessage(error),
+            }));
+        } finally {
+            setEntityAttributesLoading((prev) => ({
+                ...prev,
+                [logicalName]: false,
+            }));
         }
     };
 
@@ -605,11 +670,15 @@ export default function App() {
                     }}
                     onExecuteSql={handleExecuteActiveTab}
                     onPreviewFetchXml={handlePreviewActiveTab}
-                    canExecute={Boolean(selectedConnection?.id && activeTab?.kind === "query")}
+                    canExecute={Boolean(
+                        selectedConnection?.id &&
+                            activeTab?.kind === "query" &&
+                            !activeTab?.isEditorDirty
+                    )}
                     canPreview={Boolean(activeTab?.kind === "query")}
                     onOpenSqlFile={handleOpenSqlFile}
                     onSaveSqlFile={handleSaveActiveTab}
-                    canSaveSqlFile={Boolean(activeTab?.filePath)}
+                    canSaveSqlFile={Boolean(activeTab?.kind === "query")}
                     onSaveSqlFileAs={handleSaveActiveTabAs}
                     currentConnection={selectedConnection}
                 />
@@ -623,9 +692,13 @@ export default function App() {
                     isEnabled={(id: ShortcutActionId) => {
                         if (!keyBindingsEnabled) return false;
                         return id === "execute"
-                            ? Boolean(selectedConnection?.id && activeTab?.kind === "query")
+                            ? Boolean(
+                                  selectedConnection?.id &&
+                                      activeTab?.kind === "query" &&
+                                      !activeTab?.isEditorDirty
+                              )
                             : id === "save-file"
-                            ? Boolean(activeTab?.filePath)
+                            ? Boolean(activeTab?.kind === "query")
                             : true;
                     }}
                 />
@@ -698,6 +771,9 @@ export default function App() {
                             const response = await listEntityDefinitions();
                             //TODO: handle failure here
                             setEntityDefinitions(response.value);
+                            setEntityAttributesByLogical({});
+                            setEntityAttributesLoading({});
+                            setEntityAttributesError({});
 
                             setIsMenuOpen(false);
                         }}
@@ -705,6 +781,10 @@ export default function App() {
                     <SchemaExplorerMenu
                         isOpen={schemaEnabled}
                         entityDefinitions={entityDefinitions}
+                        entityAttributes={entityAttributesByLogical}
+                        attributesLoading={entityAttributesLoading}
+                        attributesError={entityAttributesError}
+                        onLoadAttributes={handleLoadEntityAttributes}
                     />
 
                     <div className={contentClasses}>
@@ -740,7 +820,7 @@ export default function App() {
                                                 <span
                                                     className={combineClasses(
                                                         styles.tabClose,
-                                                        tab.isDirty && styles.tabCloseDirty
+                                                        tab.isEditorDirty && styles.tabCloseDirty
                                                     )}
                                                     role="button"
                                                     aria-label={`Close ${tab.title}`}
@@ -766,19 +846,26 @@ export default function App() {
                             </div>
                             {activeTab ? (
                                 <CustomEditor
+                                    ref={editorRef}
                                     key={`${activeTab.kind}-${activeTab.id}`}
                                     vimEnabled={vimEnabled && activeTab.kind === "query"}
                                     value={activeTab.query}
                                     language={activeTab.kind === "fetchxml" ? "xml" : "sql"}
                                     readOnly={activeTab.kind === "fetchxml"}
-                                    debounceMs={EDITOR_DEBOUNCE_MS}
+                                    fontSize={editorFontSize}
+                                    entityDefinitions={
+                                        activeTab.kind === "query" ? entityDefinitions : []
+                                    }
+                                    entityAttributes={entityAttributesByLogical}
+                                    onEntitySelected={handleLoadEntityAttributes}
                                     onChange={(value) => {
                                         if (activeTab.kind !== "query") return;
-                                        updateTab(activeTab.id, (tab) => ({
-                                            ...tab,
-                                            query: value,
-                                            isDirty: value !== tab.lastSavedQuery,
-                                        }));
+                                        if (activeTab.isEditorDirty) return;
+                                        updateTab(activeTab.id, (tab) =>
+                                            tab.isEditorDirty
+                                                ? tab
+                                                : { ...tab, isEditorDirty: true }
+                                        );
                                     }}
                                 />
                             ) : null}

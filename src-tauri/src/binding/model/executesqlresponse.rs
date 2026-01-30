@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::binding::model::dataverse::entity::Entity;
+use crate::binding::model::dataverse::entity::ResultRow;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,6 +14,6 @@ pub struct SqlQueryMetadata {
 pub struct ExecuteSqlResponse {
     pub message: String,
     pub success: bool,
-    pub value: Vec<Entity>,
+    pub value: Vec<ResultRow>,
     pub metadata: SqlQueryMetadata,
 }

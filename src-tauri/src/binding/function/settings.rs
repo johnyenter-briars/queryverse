@@ -4,7 +4,11 @@ use crate::binding::model::{settings::Settings, settingsresponse::SettingsRespon
 #[tauri::command]
 pub async fn get_settings(_window: tauri::Window) -> Result<SettingsResponse, String> {
     let settings = load_settings()?;
-    Ok(SettingsResponse::success(settings))
+    Ok(SettingsResponse {
+        message: "Retrieve settings success".to_string(),
+        success: true,
+        value: settings,
+    })
 }
 
 #[tauri::command]
@@ -13,6 +17,9 @@ pub async fn save_settings(
     settings: Settings,
 ) -> Result<SettingsResponse, String> {
     persist_settings(&settings)?;
-    Ok(SettingsResponse::success(settings))
+    Ok(SettingsResponse {
+        message: "Retrieve settings success".to_string(),
+        success: true,
+        value: settings,
+    })
 }
-

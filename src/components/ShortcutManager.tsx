@@ -12,6 +12,14 @@ export function ShortcutManager({
 }: ShortcutManagerProps) {
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Tab") {
+                const target = event.target as HTMLElement | null;
+                if (target && target.closest(".monaco-editor")) {
+                    event.preventDefault();
+                    return;
+                }
+            }
+
             const shortcut = SHORTCUTS.find(
                 (entry) => (entry.kind ?? "standard") === "standard" && entry.matches(event)
             );
