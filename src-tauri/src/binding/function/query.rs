@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::{
     Database, LogLevel, auth::{connection::load_connections, token::get_access_token}, binding::model::{
         dataverse::{
-            entity::{Entity, ResultRow},
+            entity::{Entity, ResultRow, Value as RowValue},
             entityattribute::EntityAttribute,
             entitydefinition::EntityDefinition,
         },
@@ -84,45 +84,85 @@ pub async fn execute_sql(
     let query_engine = QueryEngine::new(&dataverse_url, &token, context.log_level);
 
     let (rows, message, success): (Vec<ResultRow>, String, bool) =
-        if let Some(count_alias) = count_only_alias(&stmt) {
-        let count_fetchxml = demote_count_fetchxml(&parsed.fetchxml)?;
-        let total = query_engine
-            .retrieve_multiple_fetchxml_count(&parsed.entity_set, &count_fetchxml)
-            .await
-            .map_err(|error| {
-                println!("Error: {error}");
-                error
-            })?;
+        if let Some((count_alias, group_columns)) = count_group_by_spec(&stmt) {
+            let demoted_fetchxml = demote_groupby_fetchxml(&parsed.fetchxml)?;
+            let resp = query_engine
+                .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
+                .await
+                .map_err(|error| {
+                    println!("Error: {error}");
+                    error
+                })?;
 
-        let mut attributes = HashMap::new();
-        attributes.insert(
-            count_alias.clone(),
-            crate::binding::model::dataverse::entity::Value::Int(total as i64),
-        );
-        attributes.insert(
-            ROW_NUMBER_ATTRIBUTE.to_string(),
-            crate::binding::model::dataverse::entity::Value::Int(1),
-        );
+            let mut groups: HashMap<Vec<std::string::String>, (HashMap<std::string::String, RowValue>, i64)> =
+                HashMap::new();
 
-        (vec![ResultRow { attributes }], "Count retrieved.".to_string(), true)
-    } else {
-        let resp = query_engine
-            .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
-            .await
-            .map_err(|error| {
-                println!("Error: {error}");
-                error
-            })?;
+            for entity in resp.value {
+                let row = entity_to_result_row(entity, &columns_order);
+                let mut key_parts: Vec<std::string::String> = Vec::new();
+                let mut group_values: HashMap<std::string::String, RowValue> = HashMap::new();
 
-        (
-            resp.value
-                .into_iter()
-                .map(|entity| entity_to_result_row(entity, &columns_order))
-                .collect(),
-            resp.message,
-            resp.success,
-        )
-    };
+                for column in &group_columns {
+                    let value = row
+                        .attributes
+                        .get(column)
+                        .cloned()
+                        .unwrap_or(RowValue::Null);
+                    key_parts.push(value_key(&value));
+                    group_values.entry(column.clone()).or_insert(value);
+                }
+
+                let entry = groups.entry(key_parts).or_insert((group_values, 0));
+                entry.1 += 1;
+            }
+
+            let mut rows: Vec<ResultRow> = Vec::with_capacity(groups.len());
+            let mut row_number = 1i64;
+            for (_, (mut group_values, count)) in groups {
+                group_values.insert(count_alias.clone(), RowValue::Int(count));
+                group_values.insert(ROW_NUMBER_ATTRIBUTE.to_string(), RowValue::Int(row_number));
+                ensure_columns(&mut group_values, &columns_order);
+                rows.push(ResultRow {
+                    attributes: group_values,
+                });
+                row_number += 1;
+            }
+
+            (rows, resp.message, resp.success)
+        } else if let Some(count_alias) = count_only_alias(&stmt) {
+            let count_fetchxml = demote_count_fetchxml(&parsed.fetchxml)?;
+            let total = query_engine
+                .retrieve_multiple_fetchxml_count(&parsed.entity_set, &count_fetchxml)
+                .await
+                .map_err(|error| {
+                    println!("Error: {error}");
+                    error
+                })?;
+
+            let mut attributes = HashMap::new();
+            attributes.insert(count_alias.clone(), RowValue::Int(total as i64));
+            attributes.insert(ROW_NUMBER_ATTRIBUTE.to_string(), RowValue::Int(1));
+            ensure_columns(&mut attributes, &columns_order);
+
+            (vec![ResultRow { attributes }], "Count retrieved.".to_string(), true)
+        } else {
+            let resp = query_engine
+                .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
+                .await
+                .map_err(|error| {
+                    println!("Error: {error}");
+                    error
+                })?;
+
+            (
+                resp.value
+                    .into_iter()
+                    .map(|entity| entity_to_result_row(entity, &columns_order))
+                    .collect(),
+                resp.message,
+                resp.success,
+            )
+        };
 
     Ok(ExecuteSqlResponse {
         message,
@@ -229,9 +269,7 @@ fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultRow {
         attributes.insert(normalized_key, value);
     }
 
-    for column in columns_order {
-        attributes.entry(column.clone()).or_insert(crate::binding::model::dataverse::entity::Value::Null);
-    }
+    ensure_columns(&mut attributes, columns_order);
 
     ResultRow {
         attributes,
@@ -278,4 +316,115 @@ fn demote_count_fetchxml(fetchxml: &str) -> Result<String, String> {
     let mut updated = fetchxml.replace(" aggregate=\"true\"", "");
     updated = updated.replace(" aggregate=\"count\"", "");
     Ok(updated)
+}
+
+fn count_group_by_spec(
+    stmt: &sql::SelectStmt,
+) -> Option<(std::string::String, Vec<std::string::String>)> {
+    if stmt.group_by.is_empty() {
+        return None;
+    }
+
+    let items = match &stmt.columns {
+        sql::SelectColumns::Columns(items) => items,
+        _ => return None,
+    };
+
+    let mut count_alias: Option<std::string::String> = None;
+    let mut group_columns: Vec<std::string::String> = Vec::new();
+
+    for item in items {
+        match &item.kind {
+            sql::SelectItemKind::Attribute(name) => {
+                let display = item
+                    .alias
+                    .clone()
+                    .unwrap_or_else(|| name.clone());
+                let matches_group = stmt
+                    .group_by
+                    .iter()
+                    .any(|group| group == name || item.alias.as_ref().is_some_and(|alias| alias == group));
+                if !matches_group {
+                    return None;
+                }
+                group_columns.push(display);
+            }
+            sql::SelectItemKind::Aggregate(aggregate) => {
+                if aggregate.function != sql::AggregateFunction::Count {
+                    return None;
+                }
+                if count_alias.is_some() {
+                    return None;
+                }
+                let alias = if let Some(alias) = &item.alias {
+                    alias.clone()
+                } else {
+                    match &aggregate.target {
+                        sql::AggregateTarget::Star => "count".to_string(),
+                        sql::AggregateTarget::Column(column) => {
+                            format!("count_{}", column)
+                        }
+                    }
+                };
+                count_alias = Some(alias);
+            }
+        }
+    }
+
+    count_alias.map(|alias| (alias, group_columns))
+}
+
+fn demote_groupby_fetchxml(fetchxml: &str) -> Result<String, String> {
+    let mut updated = fetchxml.replace(" aggregate=\"true\"", "");
+    updated = updated.replace(" groupby=\"true\"", "");
+    strip_aggregate_attributes(&updated)
+}
+
+fn strip_aggregate_attributes(fetchxml: &str) -> Result<String, String> {
+    let mut output = std::string::String::new();
+    let mut remaining = fetchxml;
+
+    loop {
+        let start = match remaining.find("<attribute") {
+            Some(pos) => pos,
+            None => {
+                output.push_str(remaining);
+                break;
+            }
+        };
+
+        output.push_str(&remaining[..start]);
+        let attr_end = remaining[start..]
+            .find("/>")
+            .ok_or_else(|| "Invalid FetchXML attribute tag".to_string())?
+            + start
+            + 2;
+        let attr_block = &remaining[start..attr_end];
+        if !attr_block.contains("aggregate=\"") {
+            output.push_str(attr_block);
+        }
+
+        remaining = &remaining[attr_end..];
+    }
+
+    Ok(output)
+}
+
+fn ensure_columns(
+    attributes: &mut HashMap<std::string::String, RowValue>,
+    columns_order: &[String],
+) {
+    for column in columns_order {
+        attributes.entry(column.clone()).or_insert(RowValue::Null);
+    }
+}
+
+fn value_key(value: &RowValue) -> std::string::String {
+    match value {
+        RowValue::Int(i) => i.to_string(),
+        RowValue::Float(f) => f.to_string(),
+        RowValue::String(s) => s.clone(),
+        RowValue::Boolean(b) => b.to_string(),
+        RowValue::Null => "null".to_string(),
+    }
 }

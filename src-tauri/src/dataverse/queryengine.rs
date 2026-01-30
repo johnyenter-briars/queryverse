@@ -11,6 +11,7 @@ use crate::binding::model::response::MultipleResponse;
 use crate::LogLevel;
 
 const ROW_NUMBER_ATTRIBUTE: &str = "__rownum";
+const AGGREGATE_PAGE_SIZE: i32 = 5000;
 
 #[derive(Debug, serde::Deserialize)]
 struct ODataList<T> {
@@ -75,8 +76,11 @@ impl QueryEngine {
         let mut entities: Vec<Entity> = vec![];
 
         loop {
-            let fetch_with_paging =
-                apply_paging(fetchxml, page, paging_cookie.as_deref())?;
+            let fetch_with_paging = apply_paging(
+                &ensure_aggregate_page_size(fetchxml)?,
+                page,
+                paging_cookie.as_deref(),
+            )?;
 
             if matches!(self.log_level, LogLevel::Debug) {
                 println!("Fetch page: {}", page);
@@ -152,8 +156,11 @@ impl QueryEngine {
         let mut total = 0usize;
 
         loop {
-            let fetch_with_paging =
-                apply_paging(fetchxml, page, paging_cookie.as_deref())?;
+            let fetch_with_paging = apply_paging(
+                &ensure_aggregate_page_size(fetchxml)?,
+                page,
+                paging_cookie.as_deref(),
+            )?;
 
             if matches!(self.log_level, LogLevel::Debug) {
                 println!("Fetch page: {}", page);
@@ -285,6 +292,31 @@ fn apply_paging(
         updated = upsert_fetch_attr(&updated, "paging-cookie", &escaped)?;
     }
     Ok(updated)
+}
+
+fn ensure_aggregate_page_size(fetchxml: &str) -> Result<std::string::String, std::string::String> {
+    if !fetchxml.contains("aggregate=\"true\"") {
+        return Ok(fetchxml.to_string());
+    }
+
+    if fetch_tag_has_attr(fetchxml, "count")? {
+        return Ok(fetchxml.to_string());
+    }
+
+    upsert_fetch_attr(fetchxml, "count", &AGGREGATE_PAGE_SIZE.to_string())
+}
+
+fn fetch_tag_has_attr(fetchxml: &str, name: &str) -> Result<bool, std::string::String> {
+    let fetch_start = fetchxml
+        .find("<fetch")
+        .ok_or_else(|| "FetchXML must start with a <fetch> element".to_string())?;
+    let tag_end = fetchxml[fetch_start..]
+        .find('>')
+        .ok_or_else(|| "FetchXML <fetch> element is not closed".to_string())?
+        + fetch_start;
+
+    let tag = &fetchxml[fetch_start..=tag_end];
+    Ok(tag.contains(&format!("{}=", name)))
 }
 
 fn upsert_fetch_attr(
