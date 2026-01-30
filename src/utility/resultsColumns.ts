@@ -2,6 +2,9 @@ import { ResultRow } from "../binding/model/ResultRow";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { SqlQueryMetadata } from "../binding/model/SqlQueryMetadata";
 
+const ROW_NUMBER_ATTRIBUTE = "__rownum";
+const ROW_NUMBER_LABEL = "Row #";
+
 function normalizeEntityName(name: string): string {
     const cleaned = name.replace(/[\[\]"`]/g, "").trim();
     const parts = cleaned.split(".");
@@ -51,19 +54,23 @@ export function buildResultColumnDescriptors(
     if (data.length === 0) return [];
 
     const attributes = Object.keys(data[0].attributes);
+    const hasRowNumber = attributes.includes(ROW_NUMBER_ATTRIBUTE);
+    const dataAttributes = hasRowNumber
+        ? attributes.filter((attribute) => attribute !== ROW_NUMBER_ATTRIBUTE)
+        : attributes;
 
     if (queryMetadata?.columnsOrder?.length) {
         const ordered = queryMetadata.columnsOrder
             .map((attribute) => {
                 // Respect select list order but only include attributes present in results.
-                const dataKey = resolveAttributeKey(attributes, attribute);
+                const dataKey = resolveAttributeKey(dataAttributes, attribute);
                 return dataKey ? { attribute, dataKey } : undefined;
             })
             .filter(
                 (column): column is { attribute: string; dataKey: string } =>
                     Boolean(column)
             );
-        return buildOrderedColumns(ordered);
+        return buildOrderedColumns(prependRowNumber(ordered, hasRowNumber));
     }
 
     const primaryIdAttribute = getPrimaryIdAttributeForQuery(
@@ -71,22 +78,39 @@ export function buildResultColumnDescriptors(
         query
     );
 
-    const sorted = attributes.slice().sort((a, b) => a.localeCompare(b));
+    const sorted = dataAttributes.slice().sort((a, b) => a.localeCompare(b));
 
     if (primaryIdAttribute && sorted.includes(primaryIdAttribute)) {
         // No select list: prefer primary ID first, then the remaining attributes.
         return buildOrderedColumns(
-            [
-                primaryIdAttribute,
-                ...sorted.filter((attribute) => attribute !== primaryIdAttribute),
-            ].map((attribute) => ({ attribute, dataKey: attribute }))
+            prependRowNumber(
+                [
+                    primaryIdAttribute,
+                    ...sorted.filter((attribute) => attribute !== primaryIdAttribute),
+                ].map((attribute) => ({ attribute, dataKey: attribute })),
+                hasRowNumber
+            )
         );
     }
 
     return buildOrderedColumns(
-        sorted.map((attribute) => ({ attribute, dataKey: attribute }))
+        prependRowNumber(
+            sorted.map((attribute) => ({ attribute, dataKey: attribute })),
+            hasRowNumber
+        )
     );
 }
+
+const prependRowNumber = (
+    orderedAttributes: { attribute: string; dataKey: string }[],
+    includeRowNumber: boolean
+) => {
+    if (!includeRowNumber) return orderedAttributes;
+    return [
+        { attribute: ROW_NUMBER_LABEL, dataKey: ROW_NUMBER_ATTRIBUTE },
+        ...orderedAttributes,
+    ];
+};
 
 const resolveAttributeKey = (attributes: string[], attribute: string): string | undefined => {
     // Prefer the explicit attribute, but fall back to lookup storage keys.
