@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::collections::HashMap;
 
 use crate::{
     Database, LogLevel, auth::{connection::load_connections, token::get_access_token}, binding::model::{
@@ -82,23 +83,50 @@ pub async fn execute_sql(
 
     let query_engine = QueryEngine::new(&dataverse_url, &token, context.log_level);
 
-    let resp = query_engine
-        .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
-        .await
-        .map_err(|error| {
-            println!("Error: {error}");
-            error
-        })?;
+    let (rows, message, success): (Vec<ResultRow>, String, bool) =
+        if let Some(count_alias) = count_only_alias(&stmt) {
+        let count_fetchxml = demote_count_fetchxml(&parsed.fetchxml)?;
+        let total = query_engine
+            .retrieve_multiple_fetchxml_count(&parsed.entity_set, &count_fetchxml)
+            .await
+            .map_err(|error| {
+                println!("Error: {error}");
+                error
+            })?;
 
-    let rows: Vec<ResultRow> = resp
-        .value
-        .into_iter()
-        .map(|entity| entity_to_result_row(entity, &columns_order))
-        .collect();
+        let mut attributes = HashMap::new();
+        attributes.insert(
+            count_alias.clone(),
+            crate::binding::model::dataverse::entity::Value::Int(total as i64),
+        );
+        attributes.insert(
+            ROW_NUMBER_ATTRIBUTE.to_string(),
+            crate::binding::model::dataverse::entity::Value::Int(1),
+        );
+
+        (vec![ResultRow { attributes }], "Count retrieved.".to_string(), true)
+    } else {
+        let resp = query_engine
+            .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
+            .await
+            .map_err(|error| {
+                println!("Error: {error}");
+                error
+            })?;
+
+        (
+            resp.value
+                .into_iter()
+                .map(|entity| entity_to_result_row(entity, &columns_order))
+                .collect(),
+            resp.message,
+            resp.success,
+        )
+    };
 
     Ok(ExecuteSqlResponse {
-        message: resp.message,
-        success: resp.success,
+        message,
+        success,
         value: rows,
         metadata: SqlQueryMetadata {
             columns_selected,
@@ -208,4 +236,46 @@ fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultRow {
     ResultRow {
         attributes,
     }
+}
+
+const ROW_NUMBER_ATTRIBUTE: &str = "__rownum";
+
+fn count_only_alias(stmt: &sql::SelectStmt) -> Option<String> {
+    if stmt.distinct || !stmt.group_by.is_empty() {
+        return None;
+    }
+
+    let columns = match &stmt.columns {
+        sql::SelectColumns::Columns(items) => items,
+        _ => return None,
+    };
+
+    if columns.len() != 1 {
+        return None;
+    }
+
+    let item = &columns[0];
+    let aggregate = match &item.kind {
+        sql::SelectItemKind::Aggregate(aggregate) => aggregate,
+        _ => return None,
+    };
+
+    if aggregate.function != sql::AggregateFunction::Count {
+        return None;
+    }
+
+    if let Some(alias) = &item.alias {
+        return Some(alias.clone());
+    }
+
+    match &aggregate.target {
+        sql::AggregateTarget::Star => Some("count".to_string()),
+        sql::AggregateTarget::Column(column) => Some(format!("count_{}", column)),
+    }
+}
+
+fn demote_count_fetchxml(fetchxml: &str) -> Result<String, String> {
+    let mut updated = fetchxml.replace(" aggregate=\"true\"", "");
+    updated = updated.replace(" aggregate=\"count\"", "");
+    Ok(updated)
 }

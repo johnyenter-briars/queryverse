@@ -142,6 +142,71 @@ impl QueryEngine {
         })
     }
 
+    pub async fn retrieve_multiple_fetchxml_count(
+        &self,
+        entity: &str,
+        fetchxml: &str,
+    ) -> Result<usize, std::string::String> {
+        let mut page = 1;
+        let mut paging_cookie: Option<std::string::String> = None;
+        let mut total = 0usize;
+
+        loop {
+            let fetch_with_paging =
+                apply_paging(fetchxml, page, paging_cookie.as_deref())?;
+
+            if matches!(self.log_level, LogLevel::Debug) {
+                println!("Fetch page: {}", page);
+                println!("FetchXML: {}", fetch_with_paging);
+            }
+
+            let mut url = format!("{}/api/data/v9.2/{}", self.base_url, entity);
+            url.push_str("?fetchXml=");
+            url.push_str(&urlencoding::encode(&fetch_with_paging));
+
+            if matches!(self.log_level, LogLevel::Debug) {
+                println!("Url: {:?}", url);
+            }
+
+            let resp = self
+                .client
+                .get(&url)
+                .bearer_auth(&self.token)
+                .header("Accept", "application/json")
+                .header(
+                    "Prefer",
+                    "odata.include-annotations=\"Microsoft.Dynamics.CRM.fetchxmlpagingcookie,Microsoft.Dynamics.CRM.morerecords\"",
+                )
+                .send()
+                .await
+                .map_err(|e| format!("Request failed: {e}"))?;
+
+            let status = resp.status();
+
+            if !status.is_success() {
+                let body = resp.text().await.unwrap_or_default();
+                return Err(format!("Dataverse API error ({}): {}", status, body));
+            }
+
+            let json: Value = resp
+                .json()
+                .await
+                .map_err(|e| format!("Failed to parse JSON: {e}"))?;
+
+            total += parse_record_count_from_response(&json)?;
+
+            let more_records = parse_more_records(&json);
+            if !more_records {
+                break;
+            }
+
+            paging_cookie = extract_paging_cookie(&json);
+            page += 1;
+        }
+
+        Ok(total)
+    }
+
     pub async fn list_entity_definitions(
         &self,
     ) -> Result<Vec<EntityDefinition>, std::string::String> {
@@ -344,6 +409,20 @@ fn parse_entities_from_response(json: &Value) -> Result<Vec<Entity>, std::string
     }
 
     Ok(entities)
+}
+
+fn parse_record_count_from_response(json: &Value) -> Result<usize, std::string::String> {
+    let response_object = json
+        .as_object()
+        .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
+
+    let response_array = response_object
+        .get("value")
+        .ok_or_else(|| "Invalid response from Dataverse".to_string())?
+        .as_array()
+        .ok_or_else(|| "Invalid response from Dataverse".to_string())?;
+
+    Ok(response_array.len())
 }
 fn add_attribute(
     attributes: &mut HashMap<Attribute, RowValue>,
