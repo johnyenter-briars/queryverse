@@ -10,6 +10,8 @@ use crate::binding::model::dataverse::entitydefinition::EntityDefinition;
 use crate::binding::model::response::MultipleResponse;
 use crate::LogLevel;
 
+const ROW_NUMBER_ATTRIBUTE: &str = "__rownum";
+
 #[derive(Debug, serde::Deserialize)]
 struct ODataList<T> {
     value: Vec<T>,
@@ -77,6 +79,7 @@ impl QueryEngine {
                 apply_paging(fetchxml, page, paging_cookie.as_deref())?;
 
             if matches!(self.log_level, LogLevel::Debug) {
+                println!("Fetch page: {}", page);
                 println!("FetchXML: {}", fetch_with_paging);
             }
 
@@ -117,7 +120,14 @@ impl QueryEngine {
                 println!("Raw data: {:?}", json);
             }
 
-            let page_entities = parse_entities_from_response(&json)?;
+            let mut page_entities = parse_entities_from_response(&json)?;
+            let start_index = entities.len();
+            for (offset, entity) in page_entities.iter_mut().enumerate() {
+                let row_number = (start_index + offset + 1) as i64;
+                entity
+                    .attributes
+                    .insert(ROW_NUMBER_ATTRIBUTE.to_string(), Int(row_number));
+            }
             entities.extend(page_entities);
 
             let more_records = parse_more_records(&json);
