@@ -227,4 +227,21 @@ mod tests {
             .contains("attribute name=\"address1_city\" alias=\"col_address1_city\" groupby=\"true\""));
         assert!(result.fetchxml.contains("<order alias=\"col_address1_city\""));
     }
+
+    #[test]
+    fn translates_inner_join_to_link_entity() {
+        let sql = "select systemuser.fullname, account.accountid from account inner join systemuser on systemuser.systemuserid = account.ownerid";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+        assert!(result.fetchxml.contains("<entity name=\"account\">"));
+        assert!(result.fetchxml.contains("link-entity name=\"systemuser\""));
+        assert!(result.fetchxml.contains("from=\"systemuserid\""));
+        assert!(result.fetchxml.contains("to=\"ownerid\""));
+        assert!(result.fetchxml.contains("link-type=\"inner\""));
+        assert!(result.fetchxml.contains("attribute name=\"fullname\""));
+        assert!(result.fetchxml.contains("attribute name=\"accountid\""));
+        assert_eq!(
+            result.column_outputs,
+            vec!["systemuser.fullname".to_string(), "accountid".to_string()]
+        );
+    }
 }
