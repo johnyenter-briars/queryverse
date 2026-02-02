@@ -269,10 +269,6 @@ impl QueryEngine {
             .await
             .map_err(|e| format!("Failed to parse JSON: {e}"))?;
 
-        if matches!(self.log_level, LogLevel::Debug) {
-            println!("Raw data: {:?}", json);
-        }
-
         parse_multiple_response(json)
     }
 
