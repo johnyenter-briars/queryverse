@@ -23,6 +23,7 @@ interface ICustomEditor {
     value: string;
     onChange: (value: string) => void;
     onEntitySelected?: (logicalName: string) => void;
+    onEntitiesSelected?: (logicalNames: string[]) => void;
     fontSize?: number;
     language?: string;
     readOnly?: boolean;
@@ -40,6 +41,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     value,
     onChange,
     onEntitySelected,
+    onEntitiesSelected,
     fontSize,
     language,
     readOnly,
@@ -58,6 +60,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         fontSize ?? DEFAULT_FONT_SIZE
     );
     const lastEntityRef = useRef<string | null>(null);
+    const lastEntitiesRef = useRef<string[]>([]);
     const parseContextRef = useRef<SqlParseContext | null>(null);
 
     // Keep the editor responsive by buffering keystrokes locally and
@@ -199,6 +202,21 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         const handle = window.setTimeout(() => {
             const { context, error } = analyzeSql(localValue, entityDefinitions);
             parseContextRef.current = context;
+            if (context?.tables?.length && onEntitiesSelected) {
+                const logicalNames = context.tables
+                    .map((table) => table.logicalName)
+                    .filter((name): name is string => Boolean(name));
+                if (
+                    logicalNames.length &&
+                    (logicalNames.length !== lastEntitiesRef.current.length ||
+                        logicalNames.some(
+                            (name, index) => name !== lastEntitiesRef.current[index]
+                        ))
+                ) {
+                    lastEntitiesRef.current = [...logicalNames];
+                    onEntitiesSelected(logicalNames);
+                }
+            }
 
             if (error) {
                 const line = error.line ?? 1;
@@ -219,7 +237,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         }, 300);
 
         return () => window.clearTimeout(handle);
-    }, [entityDefinitions, language, localValue, monacoReady]);
+    }, [entityDefinitions, language, localValue, monacoReady, onEntitiesSelected]);
 
     return (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>

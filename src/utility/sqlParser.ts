@@ -69,6 +69,7 @@ const pushTable = (
     const logicalName = nameMap.get(normalized);
     const tableRef: SqlTableRef = { raw, normalized, logicalName };
     tables.push(tableRef);
+    aliases[normalized] = tableRef;
     if (alias) {
         aliases[normalizeTableName(alias)] = tableRef;
     }
