@@ -1,6 +1,7 @@
 import type { editor as MonacoEditor, Position, languages } from "monaco-editor";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { EntityAttribute } from "../binding/model/EntityAttribute";
+import { SqlParseContext } from "./sqlParser";
 
 const normalizeTableName = (input: string) =>
     input.replace(/^[\[\"]+|[\]\"]+$/g, "").toLowerCase();
@@ -75,6 +76,15 @@ type SqlCompletionContext = {
     entityDefinitions: EntityDefinition[];
     entityAttributes?: Record<string, EntityAttribute[]>;
     tableNames?: string[];
+    parseContext?: SqlParseContext | null;
+};
+
+const getAliasContext = (textUpToCursor: string) => {
+    const match = textUpToCursor.match(
+        /([A-Za-z0-9_\[\]\"]+)\.([A-Za-z0-9_\[\]\"]*)$/i
+    );
+    if (!match) return null;
+    return { alias: match[1], columnPrefix: match[2] ?? "" };
 };
 
 export const getSqlCompletionItems = ({
@@ -84,6 +94,7 @@ export const getSqlCompletionItems = ({
     entityDefinitions,
     entityAttributes,
     tableNames,
+    parseContext,
 }: SqlCompletionContext): languages.CompletionItem[] => {
     if (!entityDefinitions?.length) return [];
     const suggestions: languages.CompletionItem[] = [];
@@ -121,12 +132,55 @@ export const getSqlCompletionItems = ({
         );
     }
 
+    const aliasContext = getAliasContext(textUpToCursor);
+    if (aliasContext && entityAttributes) {
+        const aliasKey = normalizeTableName(aliasContext.alias);
+        const target = parseContext?.aliases?.[aliasKey];
+        const logicalName = target?.logicalName;
+        const attributes = logicalName ? entityAttributes[logicalName] : undefined;
+        if (attributes?.length) {
+            const range = new monaco.Range(
+                position.lineNumber,
+                position.column - aliasContext.columnPrefix.length,
+                position.lineNumber,
+                position.column
+            );
+            const current = aliasContext.columnPrefix.toLowerCase();
+            suggestions.push(
+                ...attributes
+                    .filter(
+                        (attribute) =>
+                            attribute.LogicalName.toLowerCase().startsWith(current) ||
+                            attribute.SchemaName.toLowerCase().startsWith(current)
+                    )
+                    .map((attribute) => ({
+                        label: attribute.LogicalName,
+                        detail: attribute.AttributeType ?? undefined,
+                        kind: monaco.languages.CompletionItemKind.Field,
+                        insertText: attribute.LogicalName,
+                        range,
+                    }))
+            );
+        }
+        if (suggestions.length) return suggestions;
+    }
+
     if (
         entityAttributes &&
         (isInSelectList(fullText, cursorOffset) ||
             isInWhereClause(fullText, cursorOffset))
     ) {
-        const selectedEntity = findSelectedEntity(fullText, entityDefinitions);
+        const tablesInScope = parseContext?.tables?.length
+            ? parseContext.tables
+                  .map((table) => table.logicalName)
+                  .filter((name): name is string => Boolean(name))
+            : [];
+
+        const selectedEntity =
+            tablesInScope.length === 1
+                ? tablesInScope[0]
+                : findSelectedEntity(fullText, entityDefinitions);
+
         const attributes = selectedEntity ? entityAttributes[selectedEntity] : undefined;
         if (attributes?.length) {
             const word = model.getWordUntilPosition(position);
