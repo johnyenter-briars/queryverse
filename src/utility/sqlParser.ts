@@ -2,6 +2,7 @@ import { Parser } from "node-sql-parser";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 
 const parser = new Parser();
+const PARSE_OPTIONS = { database: "TransactSQL" } as const;
 
 const normalizeTableName = (input: string) =>
     input.replace(/^[\[\"]+|[\]\"]+$/g, "").toLowerCase();
@@ -153,7 +154,7 @@ export const analyzeSql = (
     }
 
     try {
-        const ast = parser.astify(sql);
+        const ast = parser.astify(sql, PARSE_OPTIONS);
         const root = Array.isArray(ast) ? ast[0] : ast;
         const nameMap = buildEntityNameMap(entityDefinitions);
         const context = collectTablesFromAst(root, nameMap);
