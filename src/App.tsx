@@ -11,7 +11,7 @@ import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor, type CustomEditorHandle } from "./components/CustomEditor";
 import { ShortcutManager } from "./components/ShortcutManager";
 import { ModalDialog } from "./components/ModalDialog";
-import { DataChangeConfirmModal } from "./components/UpdateConfirmModal";
+import { DataChangeConfirmModal } from "./components/DataChangeConfirmModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { TabSwitcher } from "./components/TabSwitcher";
 import { MenuBar } from "./components/MenuBar";
