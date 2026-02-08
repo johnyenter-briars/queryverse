@@ -9,6 +9,8 @@ import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { EntityAttribute } from "../binding/model/EntityAttribute";
 import {
     findSelectedEntity,
+    findDeleteEntity,
+    findUpdateEntity,
     getSqlCompletionItems,
     getSqlTableNames,
 } from "../utility/editorIntellisense";
@@ -62,6 +64,8 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     const lastEntityRef = useRef<string | null>(null);
     const lastEntitiesRef = useRef<string[]>([]);
     const parseContextRef = useRef<SqlParseContext | null>(null);
+    const lastUpdateEntityRef = useRef<string | null>(null);
+    const lastDeleteEntityRef = useRef<string | null>(null);
 
     // Keep the editor responsive by buffering keystrokes locally and
     // committing to app state on a short debounce and on blur.
@@ -200,8 +204,8 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         if (!model) return;
 
         const handle = window.setTimeout(() => {
-            const { context, error } = analyzeSql(localValue, entityDefinitions);
-            parseContextRef.current = context;
+                const { context, error } = analyzeSql(localValue, entityDefinitions);
+                parseContextRef.current = context;
             if (context?.tables?.length && onEntitiesSelected) {
                 const logicalNames = context.tables
                     .map((table) => table.logicalName)
@@ -250,18 +254,40 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                 onChange={(v) => {
                     const nextValue = v || "";
                     setLocalValue(nextValue);
-                    onChange(nextValue);
-                    const selected = findSelectedEntity(
-                        nextValue,
-                        entityDefinitions
-                    );
-                    if (selected !== lastEntityRef.current) {
-                        lastEntityRef.current = selected;
-                        if (selected && onEntitySelected) {
-                            onEntitySelected(selected);
-                        }
+                onChange(nextValue);
+                const selected = findSelectedEntity(
+                    nextValue,
+                    entityDefinitions
+                );
+                if (selected !== lastEntityRef.current) {
+                    lastEntityRef.current = selected;
+                    if (selected && onEntitySelected) {
+                        onEntitySelected(selected);
                     }
-                }}
+                }
+
+                const updateSelected = findUpdateEntity(
+                    nextValue,
+                    entityDefinitions
+                );
+                if (updateSelected !== lastUpdateEntityRef.current) {
+                    lastUpdateEntityRef.current = updateSelected;
+                    if (updateSelected && onEntitySelected) {
+                        onEntitySelected(updateSelected);
+                    }
+                }
+
+                const deleteSelected = findDeleteEntity(
+                    nextValue,
+                    entityDefinitions
+                );
+                if (deleteSelected !== lastDeleteEntityRef.current) {
+                    lastDeleteEntityRef.current = deleteSelected;
+                    if (deleteSelected && onEntitySelected) {
+                        onEntitySelected(deleteSelected);
+                    }
+                }
+            }}
                 options={{ readOnly: Boolean(readOnly), fontSize: localFontSize }}
             />
             <div ref={statusBarRef} className={styles.statusBar}>

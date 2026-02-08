@@ -2,16 +2,14 @@ use serde::Serialize;
 use std::collections::HashMap;
 
 use crate::{
-    Database, LogLevel, auth::{connection::load_connections, token::get_access_token}, binding::model::{
-        dataverse::{
-            entity::{Entity, ResultRow, Value as RowValue},
-            entityattribute::EntityAttribute,
-            entitydefinition::EntityDefinition,
-        },
+    auth::{connection::load_connections, token::get_access_token},
+    binding::model::{
+        dataverse::entity::{Entity, ResultRow, Value as RowValue},
         executesqlrequest::ExecuteSqlRequest,
         executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
-        response::MultipleResponse,
-    }, dataverse::queryengine::QueryEngine, sql
+    },
+    dataverse::queryengine::QueryEngine,
+    sql, Database, LogLevel,
 };
 
 #[derive(Debug, Serialize)]
@@ -147,85 +145,6 @@ pub async fn execute_sql(
     })
 }
 
-#[tauri::command]
-pub async fn list_entity_definitions(
-    _window: tauri::Window,
-    database: tauri::State<'_, Database>,
-    context: tauri::State<'_, crate::LaunchContext>,
-) -> Result<MultipleResponse<EntityDefinition>, String> {
-    let connection_id = {
-        let selected = database
-            .selected_connection_id
-            .lock()
-            .map_err(|_| "Failed to lock connection state".to_string())?;
-        selected.ok_or("No connection selected")?
-    };
-
-    let connections = load_connections()?;
-    let connection = connections
-        .into_iter()
-        .find(|connection| connection.id().as_ref() == Some(&connection_id))
-        .ok_or("Connection not found")?;
-
-    let token = get_access_token(&connection, &database).await?;
-
-    let dataverse_url = connection.dataverse_url();
-
-    if dataverse_url.trim().is_empty() {
-        return Err("Connection is missing a Dataverse URL".to_string());
-    }
-
-    let query_engine = QueryEngine::new(&dataverse_url, &token, context.log_level);
-    let value = query_engine.list_entity_definitions().await?;
-
-    Ok(MultipleResponse {
-        message: "Metadata retrieved.".to_string(),
-        success: true,
-        value,
-    })
-}
-
-#[tauri::command]
-pub async fn list_entity_attributes(
-    _window: tauri::Window,
-    logical_name: String,
-    database: tauri::State<'_, Database>,
-    context: tauri::State<'_, crate::LaunchContext>,
-) -> Result<MultipleResponse<EntityAttribute>, String> {
-    let connection_id = {
-        let selected = database
-            .selected_connection_id
-            .lock()
-            .map_err(|_| "Failed to lock connection state".to_string())?;
-        selected.ok_or("No connection selected")?
-    };
-
-    let connections = load_connections()?;
-    let connection = connections
-        .into_iter()
-        .find(|connection| connection.id().as_ref() == Some(&connection_id))
-        .ok_or("Connection not found")?;
-
-    let token = get_access_token(&connection, &database).await?;
-
-    let dataverse_url = connection.dataverse_url();
-
-    if dataverse_url.trim().is_empty() {
-        return Err("Connection is missing a Dataverse URL".to_string());
-    }
-
-    let query_engine = QueryEngine::new(&dataverse_url, &token, context.log_level);
-    let value = query_engine
-        .list_entity_attributes(&logical_name)
-        .await?;
-
-    Ok(MultipleResponse {
-        message: "Attributes retrieved.".to_string(),
-        success: true,
-        value,
-    })
-}
-
 fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultRow {
     let mut attributes = std::collections::HashMap::new();
     for (key, value) in entity.attributes {
@@ -243,9 +162,7 @@ fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultRow {
 
     ensure_columns(&mut attributes, columns_order);
 
-    ResultRow {
-        attributes,
-    }
+    ResultRow { attributes }
 }
 
 const ROW_NUMBER_ATTRIBUTE: &str = "__rownum";
@@ -353,7 +270,8 @@ fn aggregate_fallback_plan(stmt: &sql::SelectStmt) -> Option<AggregatePlan> {
         _ => return None,
     };
 
-    let has_aggregate = items.iter().any(|item| matches!(item.kind, sql::SelectItemKind::Aggregate(_)));
+    let has_aggregate =
+        items.iter().any(|item| matches!(item.kind, sql::SelectItemKind::Aggregate(_)));
     if !has_aggregate {
         return None;
     }
@@ -665,8 +583,12 @@ fn numeric_value(value: &RowValue) -> Option<(f64, bool)> {
 fn compare_values(left: &RowValue, right: &RowValue) -> std::cmp::Ordering {
     match (left, right) {
         (RowValue::Int(a), RowValue::Int(b)) => a.cmp(b),
-        (RowValue::Int(a), RowValue::Float(b)) => (*a as f64).partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
-        (RowValue::Float(a), RowValue::Int(b)) => a.partial_cmp(&(*b as f64)).unwrap_or(std::cmp::Ordering::Equal),
+        (RowValue::Int(a), RowValue::Float(b)) => {
+            (*a as f64).partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+        }
+        (RowValue::Float(a), RowValue::Int(b)) => {
+            a.partial_cmp(&(*b as f64)).unwrap_or(std::cmp::Ordering::Equal)
+        }
         (RowValue::Float(a), RowValue::Float(b)) => a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
         (RowValue::String(a), RowValue::String(b)) => a.cmp(b),
         (RowValue::Boolean(a), RowValue::Boolean(b)) => a.cmp(b),

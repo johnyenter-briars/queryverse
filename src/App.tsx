@@ -11,6 +11,10 @@ import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor, type CustomEditorHandle } from "./components/CustomEditor";
 import { ShortcutManager } from "./components/ShortcutManager";
 import { ModalDialog } from "./components/ModalDialog";
+import {
+    DataChangeConfirmModal,
+    type DataChangeAction,
+} from "./components/DataChangeConfirmModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { TabSwitcher } from "./components/TabSwitcher";
 import { MenuBar } from "./components/MenuBar";
@@ -22,7 +26,11 @@ import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
 import { Connection } from "./binding/model/Connection";
 import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
 import {
+    discardDeleteSql,
+    discardUpdateSql,
+    executeDeleteSql,
     executeSql,
+    executeUpdateSql,
     getSettings,
     getLaunchContext,
     listConnections,
@@ -31,6 +39,8 @@ import {
     openSqlFile,
     openSqlFilePath,
     previewFetchXml,
+    prepareDeleteSql,
+    prepareUpdateSql,
     saveSqlFile,
     saveSqlFileAs,
     saveSettings,
@@ -44,6 +54,8 @@ import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 import { DEFAULT_SETTINGS, Settings } from "./binding/model/Settings";
 
 const DEFAULT_QUERY = "select top 20 *\nfrom account";
+const isUpdateQuery = (sql: string) => /^\s*update\b/i.test(sql);
+const isDeleteQuery = (sql: string) => /^\s*delete\b/i.test(sql);
 type EditorTab = {
     kind: "query" | "fetchxml";
     id: number;
@@ -127,6 +139,21 @@ export default function App() {
     const [connectionPickerLoading, setConnectionPickerLoading] = useState(false);
     const [connectionPickerError, setConnectionPickerError] = useState<string | null>(null);
     const [connectionOptions, setConnectionOptions] = useState<Connection[]>([]);
+    const [dataChangeConfirm, setDataChangeConfirm] = useState<{
+        open: boolean;
+        count: number;
+        token: string | null;
+        tabId: number | null;
+        isLoading: boolean;
+        action: DataChangeAction;
+    }>({
+        open: false,
+        count: 0,
+        token: null,
+        tabId: null,
+        isLoading: false,
+        action: "update",
+    });
 
     const [entityDefinitions, setEntityDefinitions] = useState<EntityDefinition[]>([]);
     const [entityAttributesByLogical, setEntityAttributesByLogical] = useState<
@@ -249,6 +276,17 @@ export default function App() {
         if (error instanceof Error) return error.message;
         if (typeof error === "string") return error;
         return "Unknown error";
+    };
+
+    const resetDataChangeConfirm = () => {
+        setDataChangeConfirm({
+            open: false,
+            count: 0,
+            token: null,
+            tabId: null,
+            isLoading: false,
+            action: "update",
+        });
     };
 
     const formatFetchXml = (value: string): string => {
@@ -426,6 +464,76 @@ export default function App() {
             isExecuting: true,
             executeError: null,
         }));
+
+        if (isUpdateQuery(targetTab.query)) {
+            try {
+                const preview = await prepareUpdateSql(targetTab.query);
+                if (!preview.success) {
+                    updateTab(targetTab.id, (tab) => ({
+                        ...tab,
+                        executeError: preview.message || "Update preview failed",
+                        isExecuting: false,
+                    }));
+                    return;
+                }
+
+                setDataChangeConfirm({
+                    open: true,
+                    count: preview.count,
+                    token: preview.token,
+                    tabId: targetTab.id,
+                    isLoading: false,
+                    action: "update",
+                });
+
+                updateTab(targetTab.id, (tab) => ({
+                    ...tab,
+                    isExecuting: false,
+                }));
+            } catch (error) {
+                updateTab(targetTab.id, (tab) => ({
+                    ...tab,
+                    executeError: getErrorMessage(error),
+                    isExecuting: false,
+                }));
+            }
+            return;
+        }
+
+        if (isDeleteQuery(targetTab.query)) {
+            try {
+                const preview = await prepareDeleteSql(targetTab.query);
+                if (!preview.success) {
+                    updateTab(targetTab.id, (tab) => ({
+                        ...tab,
+                        executeError: preview.message || "Delete preview failed",
+                        isExecuting: false,
+                    }));
+                    return;
+                }
+
+                setDataChangeConfirm({
+                    open: true,
+                    count: preview.count,
+                    token: preview.token,
+                    tabId: targetTab.id,
+                    isLoading: false,
+                    action: "delete",
+                });
+
+                updateTab(targetTab.id, (tab) => ({
+                    ...tab,
+                    isExecuting: false,
+                }));
+            } catch (error) {
+                updateTab(targetTab.id, (tab) => ({
+                    ...tab,
+                    executeError: getErrorMessage(error),
+                    isExecuting: false,
+                }));
+            }
+            return;
+        }
 
         try {
             const response = await executeSql(targetTab.query);
@@ -647,6 +755,75 @@ export default function App() {
         }
     };
 
+    const handleConfirmDataChange = async () => {
+        if (!dataChangeConfirm.token || dataChangeConfirm.tabId === null) return;
+        setDataChangeConfirm((prev) => ({ ...prev, isLoading: true }));
+        updateTab(dataChangeConfirm.tabId, (tab) => ({
+            ...tab,
+            isExecuting: true,
+            executeError: null,
+        }));
+
+        try {
+            let summaryAttributes: ResultRow["attributes"];
+            let errors: string[] = [];
+
+            if (dataChangeConfirm.action === "delete") {
+                const response = await executeDeleteSql(dataChangeConfirm.token);
+                summaryAttributes = {
+                    deleted: response.deleted,
+                    failed: response.failed,
+                    message: response.message,
+                };
+                errors = response.errors;
+            } else {
+                const response = await executeUpdateSql(dataChangeConfirm.token);
+                summaryAttributes = {
+                    updated: response.updated,
+                    failed: response.failed,
+                    message: response.message,
+                };
+                errors = response.errors;
+            }
+
+            if (errors.length) {
+                summaryAttributes.firstError = errors[0];
+            }
+            const summaryRow: ResultRow = { attributes: summaryAttributes };
+
+            updateTab(dataChangeConfirm.tabId, (tab) => ({
+                ...tab,
+                results: [summaryRow],
+                queryMetadata: null,
+                executeError: null,
+                isExecuting: false,
+            }));
+        } catch (error) {
+            updateTab(dataChangeConfirm.tabId, (tab) => ({
+                ...tab,
+                executeError: getErrorMessage(error),
+                isExecuting: false,
+            }));
+        } finally {
+            resetDataChangeConfirm();
+        }
+    };
+
+    const handleCancelDataChange = async () => {
+        if (dataChangeConfirm.token) {
+            try {
+                if (dataChangeConfirm.action === "delete") {
+                    await discardDeleteSql(dataChangeConfirm.token);
+                } else {
+                    await discardUpdateSql(dataChangeConfirm.token);
+                }
+            } catch {
+                // Ignore discard errors; the batch will expire server-side.
+            }
+        }
+        resetDataChangeConfirm();
+    };
+
     return (
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
@@ -748,6 +925,14 @@ export default function App() {
                         </div>
                     </div>
                 </ModalDialog>
+                <DataChangeConfirmModal
+                    open={dataChangeConfirm.open}
+                    count={dataChangeConfirm.count}
+                    isLoading={dataChangeConfirm.isLoading}
+                    action={dataChangeConfirm.action}
+                    onConfirm={handleConfirmDataChange}
+                    onCancel={handleCancelDataChange}
+                />
                 <TabSwitcher
                     tabs={tabs.map(({ id, title }) => ({ id, title }))}
                     activeTabId={activeTabId}
