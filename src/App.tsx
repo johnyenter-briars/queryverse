@@ -11,6 +11,7 @@ import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor, type CustomEditorHandle } from "./components/CustomEditor";
 import { ShortcutManager } from "./components/ShortcutManager";
 import { ModalDialog } from "./components/ModalDialog";
+import { DataChangeConfirmModal } from "./components/UpdateConfirmModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { TabSwitcher } from "./components/TabSwitcher";
 import { MenuBar } from "./components/MenuBar";
@@ -131,11 +132,19 @@ export default function App() {
     const [connectionPickerLoading, setConnectionPickerLoading] = useState(false);
     const [connectionPickerError, setConnectionPickerError] = useState<string | null>(null);
     const [connectionOptions, setConnectionOptions] = useState<Connection[]>([]);
-    const [updateConfirmOpen, setUpdateConfirmOpen] = useState(false);
-    const [updateConfirmCount, setUpdateConfirmCount] = useState(0);
-    const [updateConfirmToken, setUpdateConfirmToken] = useState<string | null>(null);
-    const [updateConfirmTabId, setUpdateConfirmTabId] = useState<number | null>(null);
-    const [updateConfirmLoading, setUpdateConfirmLoading] = useState(false);
+    const [updateConfirm, setUpdateConfirm] = useState<{
+        open: boolean;
+        count: number;
+        token: string | null;
+        tabId: number | null;
+        isLoading: boolean;
+    }>({
+        open: false,
+        count: 0,
+        token: null,
+        tabId: null,
+        isLoading: false,
+    });
 
     const [entityDefinitions, setEntityDefinitions] = useState<EntityDefinition[]>([]);
     const [entityAttributesByLogical, setEntityAttributesByLogical] = useState<
@@ -261,11 +270,13 @@ export default function App() {
     };
 
     const resetUpdateConfirm = () => {
-        setUpdateConfirmOpen(false);
-        setUpdateConfirmCount(0);
-        setUpdateConfirmToken(null);
-        setUpdateConfirmTabId(null);
-        setUpdateConfirmLoading(false);
+        setUpdateConfirm({
+            open: false,
+            count: 0,
+            token: null,
+            tabId: null,
+            isLoading: false,
+        });
     };
 
     const formatFetchXml = (value: string): string => {
@@ -456,10 +467,13 @@ export default function App() {
                     return;
                 }
 
-                setUpdateConfirmCount(preview.count);
-                setUpdateConfirmToken(preview.token);
-                setUpdateConfirmTabId(targetTab.id);
-                setUpdateConfirmOpen(true);
+                setUpdateConfirm({
+                    open: true,
+                    count: preview.count,
+                    token: preview.token,
+                    tabId: targetTab.id,
+                    isLoading: false,
+                });
 
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
@@ -696,16 +710,16 @@ export default function App() {
     };
 
     const handleConfirmUpdate = async () => {
-        if (!updateConfirmToken || updateConfirmTabId === null) return;
-        setUpdateConfirmLoading(true);
-        updateTab(updateConfirmTabId, (tab) => ({
+        if (!updateConfirm.token || updateConfirm.tabId === null) return;
+        setUpdateConfirm((prev) => ({ ...prev, isLoading: true }));
+        updateTab(updateConfirm.tabId, (tab) => ({
             ...tab,
             isExecuting: true,
             executeError: null,
         }));
 
         try {
-            const response = await executeUpdateSql(updateConfirmToken);
+            const response = await executeUpdateSql(updateConfirm.token);
             const summaryAttributes: ResultRow["attributes"] = {
                 updated: response.updated,
                 failed: response.failed,
@@ -716,7 +730,7 @@ export default function App() {
             }
             const summaryRow: ResultRow = { attributes: summaryAttributes };
 
-            updateTab(updateConfirmTabId, (tab) => ({
+            updateTab(updateConfirm.tabId, (tab) => ({
                 ...tab,
                 results: [summaryRow],
                 queryMetadata: null,
@@ -724,21 +738,20 @@ export default function App() {
                 isExecuting: false,
             }));
         } catch (error) {
-            updateTab(updateConfirmTabId, (tab) => ({
+            updateTab(updateConfirm.tabId, (tab) => ({
                 ...tab,
                 executeError: getErrorMessage(error),
                 isExecuting: false,
             }));
         } finally {
-            setUpdateConfirmLoading(false);
             resetUpdateConfirm();
         }
     };
 
     const handleCancelUpdate = async () => {
-        if (updateConfirmToken) {
+        if (updateConfirm.token) {
             try {
-                await discardUpdateSql(updateConfirmToken);
+                await discardUpdateSql(updateConfirm.token);
             } catch {
                 // Ignore discard errors; the batch will expire server-side.
             }
@@ -847,38 +860,14 @@ export default function App() {
                         </div>
                     </div>
                 </ModalDialog>
-                <ModalDialog
-                    open={updateConfirmOpen}
-                    title="Confirm Update"
-                    onClose={handleCancelUpdate}
-                    closeLabel="Cancel"
-                    width="360px"
-                    actions={
-                        <>
-                            <Button
-                                appearance="subtle"
-                                onClick={handleCancelUpdate}
-                                disabled={updateConfirmLoading}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                appearance="primary"
-                                onClick={handleConfirmUpdate}
-                                disabled={updateConfirmLoading}
-                            >
-                                Update
-                            </Button>
-                        </>
-                    }
-                >
-                    <div className={styles.connectionPickerModal}>
-                        <div>
-                            You&apos;re about to update {updateConfirmCount} record
-                            {updateConfirmCount === 1 ? "" : "s"}. Are you sure?
-                        </div>
-                    </div>
-                </ModalDialog>
+                <DataChangeConfirmModal
+                    open={updateConfirm.open}
+                    count={updateConfirm.count}
+                    isLoading={updateConfirm.isLoading}
+                    action="update"
+                    onConfirm={handleConfirmUpdate}
+                    onCancel={handleCancelUpdate}
+                />
                 <TabSwitcher
                     tabs={tabs.map(({ id, title }) => ({ id, title }))}
                     activeTabId={activeTabId}
