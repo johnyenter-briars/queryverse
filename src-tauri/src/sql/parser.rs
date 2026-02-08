@@ -1,6 +1,7 @@
 use crate::sql::ast::{
     AggregateExpr, AggregateFunction, AggregateTarget, CompareOp, Expr, JoinClause, JoinOn,
     JoinType, Literal, OrderBy, Predicate, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
+    UpdateAssignment, UpdateStmt,
 };
 use crate::sql::errors::ParseError;
 use crate::sql::lexer::{Keyword, Lexer, Token, TokenKind};
@@ -27,6 +28,10 @@ impl Parser {
             )),
             _ => Err(self.error_at_current("Only SELECT statements are supported")),
         }
+    }
+
+    pub fn parse_update_statement(&mut self) -> Result<UpdateStmt, ParseError> {
+        self.parse_update()
     }
 
     fn parse_select(&mut self) -> Result<SelectStmt, ParseError> {
@@ -101,6 +106,47 @@ impl Parser {
         self.apply_group_by_rules(&mut stmt)?;
 
         Ok(stmt)
+    }
+
+    fn parse_update(&mut self) -> Result<UpdateStmt, ParseError> {
+        self.expect_keyword(Keyword::Update)?;
+
+        let entity = self.parse_identifier()?;
+        let entity_alias = self.parse_optional_alias()?;
+
+        self.expect_keyword(Keyword::Set)?;
+        let mut assignments: Vec<UpdateAssignment> = Vec::new();
+        loop {
+            let column = self.parse_identifier()?;
+            self.expect_kind(TokenKind::Eq)?;
+            let value = self.parse_literal()?;
+            assignments.push(UpdateAssignment { column, value });
+
+            if self.consume_kind(TokenKind::Comma) {
+                continue;
+            }
+
+            break;
+        }
+
+        let filter = if self.consume_keyword(Keyword::Where) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        if self.consume_kind(TokenKind::Semicolon) {
+            // Optional trailing semicolon.
+        }
+
+        self.expect_end()?;
+
+        Ok(UpdateStmt {
+            entity,
+            entity_alias,
+            assignments,
+            filter,
+        })
     }
 
     fn parse_columns(&mut self) -> Result<SelectColumns, ParseError> {

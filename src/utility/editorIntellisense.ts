@@ -134,17 +134,6 @@ const isInSetClause = (text: string, cursorOffset: number) => {
 };
 
 /**
- * Map an UPDATE target to a logical entity name, if possible.
- * @param text Full SQL text.
- * @param entityDefinitions Known entity metadata.
- * @returns Logical entity name or null.
- */
-const findUpdateTargetEntity = (
-    text: string,
-    entityDefinitions?: EntityDefinition[]
-) => findUpdateEntity(text, entityDefinitions);
-
-/**
  * Resolve the update target entity from the last UPDATE clause in the SQL text.
  * @param text Full SQL text.
  * @param entityDefinitions Known entity metadata.
@@ -168,6 +157,17 @@ export const findUpdateEntity = (
     });
     return match?.LogicalName ?? null;
 };
+
+/**
+ * Map an UPDATE target to a logical entity name, if possible.
+ * @param text Full SQL text.
+ * @param entityDefinitions Known entity metadata.
+ * @returns Logical entity name or null.
+ */
+const findUpdateTargetEntity = (
+    text: string,
+    entityDefinitions?: EntityDefinition[]
+) => findUpdateEntity(text, entityDefinitions);
 
 /**
  * Determine whether the cursor is positioned inside a JOIN ... ON clause.

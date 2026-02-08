@@ -12,6 +12,20 @@ pub struct SelectStmt {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpdateStmt {
+    pub entity: String,
+    pub entity_alias: Option<String>,
+    pub assignments: Vec<UpdateAssignment>,
+    pub filter: Option<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateAssignment {
+    pub column: String,
+    pub value: Literal,
+}
+
+#[derive(Debug, Clone)]
 pub struct JoinClause {
     pub join_type: JoinType,
     pub entity: String,

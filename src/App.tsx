@@ -23,6 +23,7 @@ import { Connection } from "./binding/model/Connection";
 import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
 import {
     executeSql,
+    executeUpdateSql,
     getSettings,
     getLaunchContext,
     listConnections,
@@ -31,10 +32,12 @@ import {
     openSqlFile,
     openSqlFilePath,
     previewFetchXml,
+    prepareUpdateSql,
     saveSqlFile,
     saveSqlFileAs,
     saveSettings,
     setConnection,
+    discardUpdateSql,
 } from "./binding/function";
 import { ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
@@ -44,6 +47,7 @@ import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 import { DEFAULT_SETTINGS, Settings } from "./binding/model/Settings";
 
 const DEFAULT_QUERY = "select top 20 *\nfrom account";
+const isUpdateQuery = (sql: string) => /^\s*update\b/i.test(sql);
 type EditorTab = {
     kind: "query" | "fetchxml";
     id: number;
@@ -127,6 +131,11 @@ export default function App() {
     const [connectionPickerLoading, setConnectionPickerLoading] = useState(false);
     const [connectionPickerError, setConnectionPickerError] = useState<string | null>(null);
     const [connectionOptions, setConnectionOptions] = useState<Connection[]>([]);
+    const [updateConfirmOpen, setUpdateConfirmOpen] = useState(false);
+    const [updateConfirmCount, setUpdateConfirmCount] = useState(0);
+    const [updateConfirmToken, setUpdateConfirmToken] = useState<string | null>(null);
+    const [updateConfirmTabId, setUpdateConfirmTabId] = useState<number | null>(null);
+    const [updateConfirmLoading, setUpdateConfirmLoading] = useState(false);
 
     const [entityDefinitions, setEntityDefinitions] = useState<EntityDefinition[]>([]);
     const [entityAttributesByLogical, setEntityAttributesByLogical] = useState<
@@ -249,6 +258,14 @@ export default function App() {
         if (error instanceof Error) return error.message;
         if (typeof error === "string") return error;
         return "Unknown error";
+    };
+
+    const resetUpdateConfirm = () => {
+        setUpdateConfirmOpen(false);
+        setUpdateConfirmCount(0);
+        setUpdateConfirmToken(null);
+        setUpdateConfirmTabId(null);
+        setUpdateConfirmLoading(false);
     };
 
     const formatFetchXml = (value: string): string => {
@@ -426,6 +443,37 @@ export default function App() {
             isExecuting: true,
             executeError: null,
         }));
+
+        if (isUpdateQuery(targetTab.query)) {
+            try {
+                const preview = await prepareUpdateSql(targetTab.query);
+                if (!preview.success) {
+                    updateTab(targetTab.id, (tab) => ({
+                        ...tab,
+                        executeError: preview.message || "Update preview failed",
+                        isExecuting: false,
+                    }));
+                    return;
+                }
+
+                setUpdateConfirmCount(preview.count);
+                setUpdateConfirmToken(preview.token);
+                setUpdateConfirmTabId(targetTab.id);
+                setUpdateConfirmOpen(true);
+
+                updateTab(targetTab.id, (tab) => ({
+                    ...tab,
+                    isExecuting: false,
+                }));
+            } catch (error) {
+                updateTab(targetTab.id, (tab) => ({
+                    ...tab,
+                    executeError: getErrorMessage(error),
+                    isExecuting: false,
+                }));
+            }
+            return;
+        }
 
         try {
             const response = await executeSql(targetTab.query);
@@ -647,6 +695,57 @@ export default function App() {
         }
     };
 
+    const handleConfirmUpdate = async () => {
+        if (!updateConfirmToken || updateConfirmTabId === null) return;
+        setUpdateConfirmLoading(true);
+        updateTab(updateConfirmTabId, (tab) => ({
+            ...tab,
+            isExecuting: true,
+            executeError: null,
+        }));
+
+        try {
+            const response = await executeUpdateSql(updateConfirmToken);
+            const summaryAttributes: ResultRow["attributes"] = {
+                updated: response.updated,
+                failed: response.failed,
+                message: response.message,
+            };
+            if (response.errors.length) {
+                summaryAttributes.firstError = response.errors[0];
+            }
+            const summaryRow: ResultRow = { attributes: summaryAttributes };
+
+            updateTab(updateConfirmTabId, (tab) => ({
+                ...tab,
+                results: [summaryRow],
+                queryMetadata: null,
+                executeError: null,
+                isExecuting: false,
+            }));
+        } catch (error) {
+            updateTab(updateConfirmTabId, (tab) => ({
+                ...tab,
+                executeError: getErrorMessage(error),
+                isExecuting: false,
+            }));
+        } finally {
+            setUpdateConfirmLoading(false);
+            resetUpdateConfirm();
+        }
+    };
+
+    const handleCancelUpdate = async () => {
+        if (updateConfirmToken) {
+            try {
+                await discardUpdateSql(updateConfirmToken);
+            } catch {
+                // Ignore discard errors; the batch will expire server-side.
+            }
+        }
+        resetUpdateConfirm();
+    };
+
     return (
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
@@ -745,6 +844,38 @@ export default function App() {
                                 </Button>
                             ))
                         )}
+                        </div>
+                    </div>
+                </ModalDialog>
+                <ModalDialog
+                    open={updateConfirmOpen}
+                    title="Confirm Update"
+                    onClose={handleCancelUpdate}
+                    closeLabel="Cancel"
+                    width="360px"
+                    actions={
+                        <>
+                            <Button
+                                appearance="subtle"
+                                onClick={handleCancelUpdate}
+                                disabled={updateConfirmLoading}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                appearance="primary"
+                                onClick={handleConfirmUpdate}
+                                disabled={updateConfirmLoading}
+                            >
+                                Update
+                            </Button>
+                        </>
+                    }
+                >
+                    <div className={styles.connectionPickerModal}>
+                        <div>
+                            You&apos;re about to update {updateConfirmCount} record
+                            {updateConfirmCount === 1 ? "" : "s"}. Are you sure?
                         </div>
                     </div>
                 </ModalDialog>

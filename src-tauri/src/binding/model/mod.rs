@@ -5,6 +5,8 @@ pub mod createconnectionpayload;
 pub mod createconnectionresponse;
 pub mod updateconnectionrequest;
 pub mod updateconnectionresponse;
+pub mod updatesqlexecuteresponse;
+pub mod updatesqlpreviewresponse;
 pub mod executesqlrequest;
 pub mod executesqlresponse;
 pub mod listentitydefinitionsrequest;

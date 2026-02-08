@@ -6,7 +6,7 @@ mod parser;
 
 pub use ast::{
     AggregateExpr, AggregateFunction, AggregateTarget, Expr, Literal, SelectColumns, SelectItem,
-    SelectItemKind, SelectStmt,
+    SelectItemKind, SelectStmt, UpdateAssignment, UpdateStmt,
 };
 pub use errors::{ParseError, SqlError, TranslationError};
 
@@ -24,6 +24,11 @@ pub fn parse(sql: &str) -> Result<SelectStmt, ParseError> {
     parser.parse_statement()
 }
 
+pub fn parse_update(sql: &str) -> Result<UpdateStmt, ParseError> {
+    let mut parser = parser::Parser::new(sql)?;
+    parser.parse_update_statement()
+}
+
 pub fn to_fetchxml(stmt: &SelectStmt) -> Result<FetchXmlQuery, TranslationError> {
     let entity_names = entity_names(&stmt.entity);
     let translation = fetchxml::to_fetchxml(stmt, &entity_names.entity_logical)?;
@@ -39,6 +44,28 @@ pub fn to_fetchxml(stmt: &SelectStmt) -> Result<FetchXmlQuery, TranslationError>
 pub fn sql_to_fetchxml(sql: &str) -> Result<FetchXmlQuery, SqlError> {
     let stmt = parse(sql)?;
     Ok(to_fetchxml(&stmt)?)
+}
+
+pub fn update_to_fetchxml(
+    stmt: &UpdateStmt,
+    id_attribute: &str,
+) -> Result<FetchXmlQuery, TranslationError> {
+    let select_stmt = SelectStmt {
+        columns: SelectColumns::Columns(vec![SelectItem {
+            kind: SelectItemKind::Attribute(id_attribute.to_string()),
+            alias: None,
+        }]),
+        entity: stmt.entity.clone(),
+        entity_alias: stmt.entity_alias.clone(),
+        joins: Vec::new(),
+        top: None,
+        distinct: false,
+        filter: stmt.filter.clone(),
+        group_by: Vec::new(),
+        order_by: Vec::new(),
+    };
+
+    to_fetchxml(&select_stmt)
 }
 
 struct EntityNames {
@@ -59,6 +86,11 @@ fn entity_names(raw: &str) -> EntityNames {
         entity_set,
         entity_logical: logical,
     }
+}
+
+pub fn resolve_entity_names(raw: &str) -> (String, String) {
+    let names = entity_names(raw);
+    (names.entity_set, names.entity_logical)
 }
 
 fn semantic_to_logical(name: &str) -> String {
