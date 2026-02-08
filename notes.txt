@@ -1,6 +1,0 @@
-
-38018 contact
-
-38013 with a parentcustomerid
-
-5 without parentcustomerid
