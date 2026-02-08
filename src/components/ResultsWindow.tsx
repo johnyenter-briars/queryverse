@@ -29,9 +29,12 @@ import {
 
 const DEFAULT_COL_WIDTH = 300;
 const MIN_COL_WIDTH = 120;
+const ROW_NUMBER_COL_WIDTH = 40;
+const ROW_NUMBER_MIN_WIDTH = 40;
 const ROW_HEIGHT = 36;
 const HEADER_HEIGHT = 40;
 const AUTO_FIT_COLUMNS = false;
+const ROW_NUMBER_LABEL = "Row #";
 
 function renderValue(value: Value): React.ReactNode {
     if (value === null || value === undefined) return "NULL";
@@ -118,11 +121,12 @@ export const ResultsWindow = React.memo(
 
         const columnSizingOptions = useMemo<TableColumnSizingOptions>(() => {
             const options: TableColumnSizingOptions = {};
-            for (const { key } of orderedAttributes) {
+            for (const { key, attribute } of orderedAttributes) {
+                const isRowNumber = attribute === ROW_NUMBER_LABEL;
                 options[key] = {
-                    defaultWidth: DEFAULT_COL_WIDTH,
-                    minWidth: MIN_COL_WIDTH,
-                    idealWidth: DEFAULT_COL_WIDTH,
+                    defaultWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : DEFAULT_COL_WIDTH,
+                    minWidth: isRowNumber ? ROW_NUMBER_MIN_WIDTH : MIN_COL_WIDTH,
+                    idealWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : DEFAULT_COL_WIDTH,
                 };
             }
             return options;

@@ -12,6 +12,7 @@ import {
     getSqlCompletionItems,
     getSqlTableNames,
 } from "../utility/editorIntellisense";
+import { analyzeSql, SqlParseContext } from "../utility/sqlParser";
 
 const DEFAULT_FONT_SIZE = 16;
 const MIN_FONT_SIZE = 10;
@@ -22,6 +23,7 @@ interface ICustomEditor {
     value: string;
     onChange: (value: string) => void;
     onEntitySelected?: (logicalName: string) => void;
+    onEntitiesSelected?: (logicalNames: string[]) => void;
     fontSize?: number;
     language?: string;
     readOnly?: boolean;
@@ -39,6 +41,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     value,
     onChange,
     onEntitySelected,
+    onEntitiesSelected,
     fontSize,
     language,
     readOnly,
@@ -57,6 +60,8 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         fontSize ?? DEFAULT_FONT_SIZE
     );
     const lastEntityRef = useRef<string | null>(null);
+    const lastEntitiesRef = useRef<string[]>([]);
+    const parseContextRef = useRef<SqlParseContext | null>(null);
 
     // Keep the editor responsive by buffering keystrokes locally and
     // committing to app state on a short debounce and on blur.
@@ -165,7 +170,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         const tableNames = getSqlTableNames(entityDefinitions);
 
         completionDisposableRef.current = monaco.languages.registerCompletionItemProvider("sql", {
-            triggerCharacters: [" ", ","],
+            triggerCharacters: [" ", ",", ".", "n", "N"],
             provideCompletionItems: (
                 model: MonacoEditor.ITextModel,
                 position: Position
@@ -177,12 +182,62 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                     entityDefinitions,
                     entityAttributes,
                     tableNames,
+                    parseContext: parseContextRef.current,
                 });
 
                 return { suggestions };
             },
         });
     }, [entityAttributes, entityDefinitions, language, monacoReady]);
+
+    useEffect(() => {
+        if ((language ?? "sql") !== "sql") return;
+        if (!monacoRef.current || !editorRef.current || !monacoReady) return;
+        if (!entityDefinitions?.length) return;
+
+        const monaco = monacoRef.current;
+        const model = editorRef.current.getModel();
+        if (!model) return;
+
+        const handle = window.setTimeout(() => {
+            const { context, error } = analyzeSql(localValue, entityDefinitions);
+            parseContextRef.current = context;
+            if (context?.tables?.length && onEntitiesSelected) {
+                const logicalNames = context.tables
+                    .map((table) => table.logicalName)
+                    .filter((name): name is string => Boolean(name));
+                if (
+                    logicalNames.length &&
+                    (logicalNames.length !== lastEntitiesRef.current.length ||
+                        logicalNames.some(
+                            (name, index) => name !== lastEntitiesRef.current[index]
+                        ))
+                ) {
+                    lastEntitiesRef.current = [...logicalNames];
+                    onEntitiesSelected(logicalNames);
+                }
+            }
+
+            if (error) {
+                const line = error.line ?? 1;
+                const column = error.column ?? 1;
+                monaco.editor.setModelMarkers(model, "sql-intellisense", [
+                    {
+                        severity: monaco.MarkerSeverity.Error,
+                        message: error.message,
+                        startLineNumber: line,
+                        startColumn: column,
+                        endLineNumber: line,
+                        endColumn: column + 1,
+                    },
+                ]);
+            } else {
+                monaco.editor.setModelMarkers(model, "sql-intellisense", []);
+            }
+        }, 300);
+
+        return () => window.clearTimeout(handle);
+    }, [entityDefinitions, language, localValue, monacoReady, onEntitiesSelected]);
 
     return (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -196,13 +251,13 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                     const nextValue = v || "";
                     setLocalValue(nextValue);
                     onChange(nextValue);
-                    if (onEntitySelected) {
-                        const selected = findSelectedEntity(
-                            nextValue,
-                            entityDefinitions
-                        );
-                        if (selected && selected !== lastEntityRef.current) {
-                            lastEntityRef.current = selected;
+                    const selected = findSelectedEntity(
+                        nextValue,
+                        entityDefinitions
+                    );
+                    if (selected !== lastEntityRef.current) {
+                        lastEntityRef.current = selected;
+                        if (selected && onEntitySelected) {
                             onEntitySelected(selected);
                         }
                     }

@@ -1,6 +1,6 @@
 use crate::sql::ast::{
-    AggregateExpr, AggregateFunction, AggregateTarget, CompareOp, Expr, Literal, OrderBy,
-    Predicate, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
+    AggregateExpr, AggregateFunction, AggregateTarget, CompareOp, Expr, JoinClause, JoinOn,
+    JoinType, Literal, OrderBy, Predicate, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
 };
 use crate::sql::errors::ParseError;
 use crate::sql::lexer::{Keyword, Lexer, Token, TokenKind};
@@ -57,6 +57,8 @@ impl Parser {
 
         self.expect_keyword(Keyword::From)?;
         let entity = self.parse_identifier()?;
+        let entity_alias = self.parse_optional_alias()?;
+        let joins = self.parse_joins()?;
 
         let filter = if self.consume_keyword(Keyword::Where) {
             Some(self.parse_expr()?)
@@ -87,6 +89,8 @@ impl Parser {
         let mut stmt = SelectStmt {
             columns,
             entity,
+            entity_alias,
+            joins,
             top,
             distinct,
             filter,
@@ -161,6 +165,48 @@ impl Parser {
         }
 
         Ok(None)
+    }
+
+    fn parse_joins(&mut self) -> Result<Vec<JoinClause>, ParseError> {
+        let mut joins = Vec::new();
+        loop {
+            let join_type = match &self.current().kind {
+                TokenKind::Keyword(Keyword::Join) => JoinType::Inner,
+                TokenKind::Keyword(Keyword::Inner) => {
+                    self.advance();
+                    JoinType::Inner
+                }
+                TokenKind::Keyword(Keyword::Left) => {
+                    self.advance();
+                    if self.consume_keyword(Keyword::Outer) {
+                        // optional OUTER
+                    }
+                    JoinType::Left
+                }
+                _ => {
+                    break;
+                }
+            };
+
+            if !self.consume_keyword(Keyword::Join) {
+                return Err(self.error_at_current(
+                    "Expected JOIN after INNER or LEFT/LEFT OUTER",
+                ));
+            }
+
+            let entity = self.parse_identifier()?;
+            let alias = self.parse_optional_alias()?;
+            self.expect_keyword(Keyword::On)?;
+            let on = self.parse_join_on()?;
+
+            joins.push(JoinClause {
+                join_type,
+                entity,
+                alias,
+                on,
+            });
+        }
+        Ok(joins)
     }
 
     fn parse_order_by(&mut self) -> Result<Vec<OrderBy>, ParseError> {
@@ -363,6 +409,15 @@ impl Parser {
             }
         };
 
+        if self.is_identifier() {
+            let right = self.parse_identifier()?;
+            return Ok(Predicate::ColumnCompare {
+                left: column,
+                op,
+                right,
+            });
+        }
+
         let value = self.parse_literal()?;
         Ok(Predicate::Compare { column, op, value })
     }
@@ -419,14 +474,64 @@ impl Parser {
     }
 
     fn parse_identifier(&mut self) -> Result<String, ParseError> {
-        match &self.current().kind {
+        let mut ident = match &self.current().kind {
             TokenKind::Identifier(value) => {
                 let value = value.clone();
                 self.advance();
-                Ok(value)
+                value
             }
-            _ => Err(self.error_at_current("Expected identifier")),
+            _ => return Err(self.error_at_current("Expected identifier")),
+        };
+
+        while self.consume_kind(TokenKind::Dot) {
+            match &self.current().kind {
+                TokenKind::Identifier(value) => {
+                    ident.push('.');
+                    ident.push_str(value);
+                    self.advance();
+                }
+                _ => return Err(self.error_at_current("Expected identifier")),
+            }
         }
+
+        Ok(ident)
+    }
+
+    fn parse_join_on(&mut self) -> Result<JoinOn, ParseError> {
+        let left = self.parse_identifier()?;
+        let op = match self.current().kind {
+            TokenKind::Eq => {
+                self.advance();
+                CompareOp::Eq
+            }
+            TokenKind::Neq => {
+                self.advance();
+                CompareOp::Ne
+            }
+            TokenKind::Lt => {
+                self.advance();
+                CompareOp::Lt
+            }
+            TokenKind::Lte => {
+                self.advance();
+                CompareOp::Lte
+            }
+            TokenKind::Gt => {
+                self.advance();
+                CompareOp::Gt
+            }
+            TokenKind::Gte => {
+                self.advance();
+                CompareOp::Gte
+            }
+            _ => {
+                return Err(self.error_at_current(
+                    "Expected a comparison operator in join condition",
+                ))
+            }
+        };
+        let right = self.parse_identifier()?;
+        Ok(JoinOn { left, op, right })
     }
 
     fn expect_number(&mut self) -> Result<i64, ParseError> {

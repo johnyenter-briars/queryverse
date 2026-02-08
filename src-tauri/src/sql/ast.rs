@@ -2,11 +2,34 @@
 pub struct SelectStmt {
     pub columns: SelectColumns,
     pub entity: String,
+    pub entity_alias: Option<String>,
+    pub joins: Vec<JoinClause>,
     pub top: Option<u32>,
     pub distinct: bool,
     pub filter: Option<Expr>,
     pub group_by: Vec<String>,
     pub order_by: Vec<OrderBy>,
+}
+
+#[derive(Debug, Clone)]
+pub struct JoinClause {
+    pub join_type: JoinType,
+    pub entity: String,
+    pub alias: Option<String>,
+    pub on: JoinOn,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum JoinType {
+    Inner,
+    Left,
+}
+
+#[derive(Debug, Clone)]
+pub struct JoinOn {
+    pub left: String,
+    pub op: CompareOp,
+    pub right: String,
 }
 
 #[derive(Debug, Clone)]
@@ -67,6 +90,11 @@ pub enum Predicate {
         column: String,
         op: CompareOp,
         value: Literal,
+    },
+    ColumnCompare {
+        left: String,
+        op: CompareOp,
+        right: String,
     },
     In {
         column: String,

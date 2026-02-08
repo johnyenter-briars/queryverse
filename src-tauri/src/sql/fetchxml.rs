@@ -1,6 +1,6 @@
 use crate::sql::ast::{
-    AggregateExpr, AggregateFunction, AggregateTarget, CompareOp, Expr, Literal, OrderBy,
-    Predicate, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
+    AggregateExpr, AggregateFunction, AggregateTarget, CompareOp, Expr, JoinClause, JoinType,
+    Literal, OrderBy, Predicate, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
 };
 use crate::sql::errors::TranslationError;
 
@@ -17,7 +17,8 @@ pub fn to_fetchxml(
 ) -> Result<FetchXmlTranslation, TranslationError> {
     let mut out = String::new();
     let aggregate_mode = select_aggregate_mode(stmt);
-    let column_outputs = projection_output_names(stmt, entity_name)?;
+    let column_outputs =
+        projection_output_names(stmt, entity_name, stmt.entity_alias.as_deref())?;
     let group_by = validate_group_by(stmt)?;
     let alias_map = build_alias_map(stmt, entity_name, aggregate_mode, &group_by)?;
 
@@ -37,6 +38,10 @@ pub fn to_fetchxml(
     out.push_str(&escape_xml(entity_name));
     out.push_str("\">");
 
+    let join_map = build_join_map(stmt);
+    let mut join_attributes: std::collections::HashMap<String, Vec<SelectItem>> =
+        std::collections::HashMap::new();
+
     match &stmt.columns {
         SelectColumns::All => {
             if aggregate_mode {
@@ -48,9 +53,38 @@ pub fn to_fetchxml(
         }
         SelectColumns::Columns(columns) => {
             for column in columns {
-                write_attribute(column, entity_name, aggregate_mode, &group_by, &mut out)?;
+                if let SelectItemKind::Attribute(name) = &column.kind {
+                    if let Some((Some(table), _attr)) = split_qualified(name) {
+                        if let Some(join_key) = join_map.resolve_join_key(table) {
+                            join_attributes
+                                .entry(join_key)
+                                .or_default()
+                                .push(column.clone());
+                            continue;
+                        }
+                    }
+                }
+
+                write_attribute(
+                    column,
+                    entity_name,
+                    stmt.entity_alias.as_deref(),
+                    aggregate_mode,
+                    &group_by,
+                    &mut out,
+                )?;
             }
         }
+    }
+
+    for join in &stmt.joins {
+        write_join(
+            join,
+            entity_name,
+            &join_map,
+            join_attributes.remove(&join_key(join)),
+            &mut out,
+        )?;
     }
 
     if let Some(filter) = &stmt.filter {
@@ -74,12 +108,14 @@ pub fn to_fetchxml(
 fn write_attribute(
     item: &SelectItem,
     entity_name: &str,
+    entity_alias: Option<&str>,
     aggregate_mode: bool,
     group_by: &std::collections::HashSet<String>,
     out: &mut String,
 ) -> Result<(), TranslationError> {
     match &item.kind {
         SelectItemKind::Attribute(name) => {
+            let (_, attribute_name) = split_qualified(name).unwrap_or((None, name.as_str()));
             if aggregate_mode {
                 if group_by.is_empty() || !group_by_matches_item(item, group_by) {
                     return Err(TranslationError::new(
@@ -89,10 +125,10 @@ fn write_attribute(
             }
 
             out.push_str("<attribute name=\"");
-            out.push_str(&escape_xml(name));
-            let display_alias = output_name(item, entity_name)?;
+            out.push_str(&escape_xml(attribute_name));
+            let display_alias = output_name(item, entity_name, entity_alias)?;
             let alias = if aggregate_mode {
-                Some(groupby_fetch_alias(name, &display_alias))
+                Some(groupby_fetch_alias(attribute_name, &display_alias))
             } else {
                 item.alias.clone()
             };
@@ -107,7 +143,7 @@ fn write_attribute(
         }
         SelectItemKind::Aggregate(aggregate) => {
             let function = aggregate.function;
-            let alias = aggregate_alias(item, entity_name)?;
+            let alias = aggregate_alias(item, entity_name, entity_alias)?;
             let attribute_name = aggregate_attribute_name(aggregate, entity_name)?;
 
             out.push_str("<attribute name=\"");
@@ -187,6 +223,11 @@ fn write_filter_item(expr: &Expr, out: &mut String) -> Result<(), TranslationErr
 fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), TranslationError> {
     match predicate {
         Predicate::Compare { column, op, value } => {
+            if split_qualified(column).and_then(|(table, _)| table).is_some() {
+                return Err(TranslationError::new(
+                    "Qualified column names in WHERE are not supported in v1 joins",
+                ));
+            }
             if matches!(value, Literal::Null) {
                 return Err(TranslationError::new(
                     "Use IS NULL instead of comparing to NULL",
@@ -205,6 +246,11 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             values,
             negated,
         } => {
+            if split_qualified(column).and_then(|(table, _)| table).is_some() {
+                return Err(TranslationError::new(
+                    "Qualified column names in WHERE are not supported in v1 joins",
+                ));
+            }
             if values.iter().any(|value| matches!(value, Literal::Null)) {
                 return Err(TranslationError::new(
                     "IN list cannot contain NULL",
@@ -231,6 +277,11 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             high,
             negated,
         } => {
+            if split_qualified(column).and_then(|(table, _)| table).is_some() {
+                return Err(TranslationError::new(
+                    "Qualified column names in WHERE are not supported in v1 joins",
+                ));
+            }
             if matches!(low, Literal::Null) || matches!(high, Literal::Null) {
                 return Err(TranslationError::new(
                     "BETWEEN bounds cannot be NULL",
@@ -256,6 +307,11 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             out.push_str("</condition>");
         }
         Predicate::IsNull { column, negated } => {
+            if split_qualified(column).and_then(|(table, _)| table).is_some() {
+                return Err(TranslationError::new(
+                    "Qualified column names in WHERE are not supported in v1 joins",
+                ));
+            }
             out.push_str("<condition attribute=\"");
             out.push_str(&escape_xml(column));
             out.push_str("\" operator=\"");
@@ -267,6 +323,11 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             pattern,
             negated,
         } => {
+            if split_qualified(column).and_then(|(table, _)| table).is_some() {
+                return Err(TranslationError::new(
+                    "Qualified column names in WHERE are not supported in v1 joins",
+                ));
+            }
             out.push_str("<condition attribute=\"");
             out.push_str(&escape_xml(column));
             out.push_str("\" operator=\"");
@@ -274,6 +335,11 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             out.push_str("\" value=\"");
             out.push_str(&escape_xml(pattern));
             out.push_str("\" />");
+        }
+        Predicate::ColumnCompare { .. } => {
+            return Err(TranslationError::new(
+                "Column-to-column predicates are only supported in JOIN conditions",
+            ))
         }
     }
 
@@ -289,6 +355,144 @@ fn compare_op_to_fetchxml(op: CompareOp) -> &'static str {
         CompareOp::Gt => "gt",
         CompareOp::Gte => "ge",
     }
+}
+
+fn split_qualified(value: &str) -> Option<(Option<&str>, &str)> {
+    let mut parts = value.split('.');
+    let first = parts.next()?;
+    let second = parts.next();
+    if let Some(second) = second {
+        Some((Some(first), second))
+    } else {
+        Some((None, first))
+    }
+}
+
+fn strip_base_prefix(value: &str, base_entity: &str, base_alias: Option<&str>) -> String {
+    if let Some((table, column)) = split_qualified(value) {
+        if let Some(table) = table {
+            if table.eq_ignore_ascii_case(base_entity) {
+                return column.to_string();
+            }
+            if let Some(alias) = base_alias {
+                if table.eq_ignore_ascii_case(alias) {
+                    return column.to_string();
+                }
+            }
+        }
+    }
+    value.to_string()
+}
+
+#[derive(Debug)]
+struct JoinMap {
+    base: String,
+    base_alias: Option<String>,
+    joins: Vec<(String, Option<String>)>,
+}
+
+impl JoinMap {
+    fn resolve_join_key(&self, table: &str) -> Option<String> {
+        let key = table.to_ascii_lowercase();
+        for (name, alias) in &self.joins {
+            if name.eq_ignore_ascii_case(&key) {
+                return Some(name.to_ascii_lowercase());
+            }
+            if let Some(alias) = alias {
+                if alias.eq_ignore_ascii_case(&key) {
+                    return Some(name.to_ascii_lowercase());
+                }
+            }
+        }
+        None
+    }
+
+    fn matches_base(&self, table: &str) -> bool {
+        if self.base.eq_ignore_ascii_case(table) {
+            return true;
+        }
+        if let Some(alias) = &self.base_alias {
+            if alias.eq_ignore_ascii_case(table) {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+fn build_join_map(stmt: &SelectStmt) -> JoinMap {
+    JoinMap {
+        base: stmt.entity.to_ascii_lowercase(),
+        base_alias: stmt.entity_alias.clone(),
+        joins: stmt
+            .joins
+            .iter()
+            .map(|join| (join.entity.to_ascii_lowercase(), join.alias.clone()))
+            .collect(),
+    }
+}
+
+fn join_key(join: &JoinClause) -> String {
+    join.entity.to_ascii_lowercase()
+}
+
+fn write_join(
+    join: &JoinClause,
+    base_entity: &str,
+    join_map: &JoinMap,
+    attributes: Option<Vec<SelectItem>>,
+    out: &mut String,
+) -> Result<(), TranslationError> {
+    let (left_table, left_col) = split_qualified(&join.on.left)
+        .and_then(|(table, col)| table.map(|table| (table, col)))
+        .ok_or_else(|| TranslationError::new("JOIN condition must use qualified columns"))?;
+    let (right_table, right_col) = split_qualified(&join.on.right)
+        .and_then(|(table, col)| table.map(|table| (table, col)))
+        .ok_or_else(|| TranslationError::new("JOIN condition must use qualified columns"))?;
+
+    let (from, to) = if join_map.matches_base(left_table) {
+        (right_col, left_col)
+    } else if join_map.matches_base(right_table) {
+        (left_col, right_col)
+    } else {
+        return Err(TranslationError::new(
+            "JOIN must compare base entity to joined entity",
+        ));
+    };
+
+    out.push_str("<link-entity name=\"");
+    out.push_str(&escape_xml(&join.entity));
+    out.push_str("\" from=\"");
+    out.push_str(&escape_xml(from));
+    out.push_str("\" to=\"");
+    out.push_str(&escape_xml(to));
+    out.push_str("\" link-type=\"");
+    out.push_str(match join.join_type {
+        JoinType::Inner => "inner",
+        JoinType::Left => "outer",
+    });
+    let alias = join.alias.as_ref().unwrap_or(&join.entity);
+    if !alias.is_empty() {
+        out.push_str("\" alias=\"");
+        out.push_str(&escape_xml(alias));
+    }
+    out.push_str("\">");
+
+    if let Some(attrs) = attributes {
+        for item in attrs {
+            write_attribute(
+                &item,
+                base_entity,
+                None,
+                false,
+                &std::collections::HashSet::new(),
+                out,
+            )?;
+        }
+    }
+
+    out.push_str("</link-entity>");
+    Ok(())
 }
 
 fn literal_to_string(literal: &Literal) -> String {
@@ -336,14 +540,16 @@ fn build_alias_map(
             match &item.kind {
                 SelectItemKind::Attribute(name) => {
                     if group_by_matches_item(item, group_by) {
-                        let display_alias = output_name(item, entity_name)?;
+                        let display_alias =
+                            output_name(item, entity_name, stmt.entity_alias.as_deref())?;
                         let fetch_alias = groupby_fetch_alias(name, &display_alias);
                         map.insert(display_alias.clone(), fetch_alias.clone());
                         map.entry(name.clone()).or_insert(fetch_alias);
                     }
                 }
                 SelectItemKind::Aggregate(_) => {
-                    let display_alias = output_name(item, entity_name)?;
+                    let display_alias =
+                        output_name(item, entity_name, stmt.entity_alias.as_deref())?;
                     map.insert(display_alias.clone(), display_alias);
                 }
             }
@@ -428,29 +634,40 @@ fn validate_group_by(
 fn projection_output_names(
     stmt: &SelectStmt,
     entity_name: &str,
+    entity_alias: Option<&str>,
 ) -> Result<Vec<String>, TranslationError> {
     match &stmt.columns {
         SelectColumns::All => Ok(Vec::new()),
         SelectColumns::Columns(items) => items
             .iter()
-            .map(|item| output_name(item, entity_name))
+            .map(|item| output_name(item, entity_name, entity_alias))
             .collect(),
     }
 }
 
-fn output_name(item: &SelectItem, _entity_name: &str) -> Result<String, TranslationError> {
+fn output_name(
+    item: &SelectItem,
+    entity_name: &str,
+    entity_alias: Option<&str>,
+) -> Result<String, TranslationError> {
     if let Some(alias) = &item.alias {
         return Ok(alias.clone());
     }
 
     match &item.kind {
-        SelectItemKind::Attribute(name) => Ok(name.clone()),
+        SelectItemKind::Attribute(name) => {
+            Ok(strip_base_prefix(name, entity_name, entity_alias))
+        }
         SelectItemKind::Aggregate(aggregate) => Ok(default_aggregate_alias(aggregate)),
     }
 }
 
-fn aggregate_alias(item: &SelectItem, entity_name: &str) -> Result<String, TranslationError> {
-    output_name(item, entity_name)
+fn aggregate_alias(
+    item: &SelectItem,
+    entity_name: &str,
+    entity_alias: Option<&str>,
+) -> Result<String, TranslationError> {
+    output_name(item, entity_name, entity_alias)
 }
 
 fn default_aggregate_alias(aggregate: &AggregateExpr) -> String {

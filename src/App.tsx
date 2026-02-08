@@ -858,7 +858,12 @@ export default function App() {
                                     }
                                     entityAttributes={entityAttributesByLogical}
                                     onEntitySelected={handleLoadEntityAttributes}
-                                    onChange={(value) => {
+                                    onEntitiesSelected={(logicalNames) => {
+                                        logicalNames.forEach((name) => {
+                                            handleLoadEntityAttributes(name);
+                                        });
+                                    }}
+                                    onChange={() => {
                                         if (activeTab.kind !== "query") return;
                                         if (activeTab.isEditorDirty) return;
                                         updateTab(activeTab.id, (tab) =>
