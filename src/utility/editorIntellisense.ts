@@ -74,14 +74,6 @@ const isInUpdateWhereClause = (text: string, cursorOffset: number) => {
     if (nextKeyword !== -1 && cursorOffset > nextKeyword) return false;
     return cursorOffset >= whereIndex + 5;
 };
-const isInUpdateTarget = (text: string, cursorOffset: number) => {
-    const lower = text.toLowerCase();
-    const updateIndex = lower.lastIndexOf("update", cursorOffset);
-    if (updateIndex === -1) return false;
-    const setIndex = lower.indexOf("set", updateIndex);
-    if (setIndex !== -1 && cursorOffset > setIndex) return false;
-    return cursorOffset >= updateIndex + 6;
-};
 
 const isInSetClause = (text: string, cursorOffset: number) => {
     const lower = text.toLowerCase();
@@ -179,12 +171,14 @@ export const getSqlCompletionItems = ({
     const suggestions: languages.CompletionItem[] = [];
     const names = tableNames?.length ? tableNames : getSqlTableNames(entityDefinitions);
 
+    // Cursor and text context for completion decisions.
     const lineText = model.getLineContent(position.lineNumber);
     const prefix = lineText.slice(0, Math.max(position.column - 1, 0));
     const fullText = model.getValue();
     const cursorOffset = model.getOffsetAt(position);
     const textUpToCursor = fullText.slice(0, cursorOffset);
 
+    // Table name suggestions after FROM/JOIN/UPDATE targets.
     const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
     const joinMatch = textUpToCursor.match(
         /(?:^|\s)(?:inner|left|right|full|outer)?\s*join\s+([A-Za-z0-9_\[\]\"]*)$/i
@@ -212,6 +206,7 @@ export const getSqlCompletionItems = ({
         );
     }
 
+    // Column suggestions after a recognized alias/table prefix (e.g., `a.`).
     const aliasContext = getAliasContext(textUpToCursor);
     if (aliasContext && entityAttributes) {
         const aliasKey = normalizeTableName(aliasContext.alias);
@@ -245,6 +240,7 @@ export const getSqlCompletionItems = ({
         if (suggestions.length) return suggestions;
     }
 
+    // Alias/table suggestions inside select/where/join-on clauses.
     const isInJoinOn = isInJoinOnClause(fullText, cursorOffset);
     if (
         parseContext?.tables?.length &&
@@ -285,6 +281,7 @@ export const getSqlCompletionItems = ({
         if (suggestions.length) return suggestions;
     }
 
+    // Column suggestions for SELECT/WHERE/SET contexts without an alias prefix.
     const inUpdateSet = isInSetClause(fullText, cursorOffset);
     const inUpdateWhere = isInUpdateWhereClause(fullText, cursorOffset);
     if (
@@ -331,6 +328,7 @@ export const getSqlCompletionItems = ({
             }
         }
 
+        // Default column suggestions for single-table or inferred entity context.
         const tablesInScope = parseContext?.tables?.length
             ? parseContext.tables
                   .map((table) => table.logicalName)
