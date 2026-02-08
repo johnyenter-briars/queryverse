@@ -60,6 +60,69 @@ export const isInWhereClause = (text: string, cursorOffset: number) => {
     return cursorOffset >= whereIndex + 5;
 };
 
+const isInUpdateWhereClause = (text: string, cursorOffset: number) => {
+    const lower = text.toLowerCase();
+    const whereIndex = lower.lastIndexOf("where", cursorOffset);
+    if (whereIndex === -1) return false;
+    const updateIndex = lower.lastIndexOf("update", whereIndex);
+    if (updateIndex === -1) return false;
+    const nextKeyword = findNextKeyword(lower, whereIndex + 5, [
+        "order by",
+        "group by",
+        "having",
+    ]);
+    if (nextKeyword !== -1 && cursorOffset > nextKeyword) return false;
+    return cursorOffset >= whereIndex + 5;
+};
+const isInUpdateTarget = (text: string, cursorOffset: number) => {
+    const lower = text.toLowerCase();
+    const updateIndex = lower.lastIndexOf("update", cursorOffset);
+    if (updateIndex === -1) return false;
+    const setIndex = lower.indexOf("set", updateIndex);
+    if (setIndex !== -1 && cursorOffset > setIndex) return false;
+    return cursorOffset >= updateIndex + 6;
+};
+
+const isInSetClause = (text: string, cursorOffset: number) => {
+    const lower = text.toLowerCase();
+    const setIndex = lower.lastIndexOf("set", cursorOffset);
+    if (setIndex === -1) return false;
+    const updateIndex = lower.lastIndexOf("update", setIndex);
+    if (updateIndex === -1) return false;
+    const nextKeyword = findNextKeyword(lower, setIndex + 3, [
+        "where",
+        "order by",
+        "group by",
+        "having",
+    ]);
+    if (nextKeyword !== -1 && cursorOffset > nextKeyword) return false;
+    return cursorOffset >= setIndex + 3;
+};
+
+const findUpdateTargetEntity = (
+    text: string,
+    entityDefinitions?: EntityDefinition[]
+) => findUpdateEntity(text, entityDefinitions);
+
+export const findUpdateEntity = (
+    text: string,
+    entityDefinitions?: EntityDefinition[]
+): string | null => {
+    if (!entityDefinitions?.length) return null;
+    const matches = [...text.matchAll(/\bupdate\s+([A-Za-z0-9_\[\]\"]+)/gi)];
+    if (matches.length === 0) return null;
+    const rawName = matches[matches.length - 1]?.[1];
+    if (!rawName) return null;
+    const normalized = normalizeTableName(rawName);
+    const match = entityDefinitions.find((definition) => {
+        const logical = normalizeTableName(definition.LogicalName);
+        const schema = normalizeTableName(definition.SchemaName);
+        const entitySet = normalizeTableName(definition.EntitySetName);
+        return normalized === logical || normalized === schema || normalized === entitySet;
+    });
+    return match?.LogicalName ?? null;
+};
+
 const isInJoinOnClause = (text: string, cursorOffset: number) => {
     const lower = text.toLowerCase();
     const onIndex = lower.lastIndexOf(" on ", cursorOffset);
@@ -126,9 +189,10 @@ export const getSqlCompletionItems = ({
     const joinMatch = textUpToCursor.match(
         /(?:^|\s)(?:inner|left|right|full|outer)?\s*join\s+([A-Za-z0-9_\[\]\"]*)$/i
     );
+    const updateMatch = prefix.match(/\bupdate\s+([A-Za-z0-9_\[\]\"]*)$/i);
 
-    if (match || joinMatch) {
-        const current = (joinMatch?.[1] ?? match?.[1] ?? "");
+    if (match || joinMatch || updateMatch) {
+        const current = (joinMatch?.[1] ?? match?.[1] ?? updateMatch?.[1] ?? "");
         const range = new monaco.Range(
             position.lineNumber,
             position.column - current.length,
@@ -221,11 +285,52 @@ export const getSqlCompletionItems = ({
         if (suggestions.length) return suggestions;
     }
 
+    const inUpdateSet = isInSetClause(fullText, cursorOffset);
+    const inUpdateWhere = isInUpdateWhereClause(fullText, cursorOffset);
     if (
         entityAttributes &&
         (isInSelectList(fullText, cursorOffset) ||
-            isInWhereClause(fullText, cursorOffset))
+            isInWhereClause(fullText, cursorOffset) ||
+            inUpdateSet ||
+            inUpdateWhere)
     ) {
+        if (inUpdateSet || inUpdateWhere) {
+            const updateTarget =
+                parseContext?.tables?.[0]?.logicalName ??
+                findUpdateTargetEntity(fullText, entityDefinitions);
+            const attributes = updateTarget
+                ? entityAttributes[updateTarget]
+                : undefined;
+            if (attributes?.length) {
+                const word = model.getWordUntilPosition(position);
+                const range = new monaco.Range(
+                    position.lineNumber,
+                    word.startColumn,
+                    position.lineNumber,
+                    word.endColumn
+                );
+                const current = word.word.toLowerCase();
+
+                suggestions.push(
+                    ...attributes
+                        .filter(
+                            (attribute) =>
+                                attribute.LogicalName.toLowerCase().startsWith(current) ||
+                                attribute.SchemaName.toLowerCase().startsWith(current)
+                        )
+                        .map((attribute) => ({
+                            label: attribute.LogicalName,
+                            detail: attribute.AttributeType ?? undefined,
+                            kind: monaco.languages.CompletionItemKind.Field,
+                            insertText: attribute.LogicalName,
+                            range,
+                        }))
+                );
+
+                if (suggestions.length) return suggestions;
+            }
+        }
+
         const tablesInScope = parseContext?.tables?.length
             ? parseContext.tables
                   .map((table) => table.logicalName)
