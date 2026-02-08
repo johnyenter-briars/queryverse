@@ -11,6 +11,7 @@ export type SqlTableRef = {
     raw: string;
     normalized: string;
     logicalName?: string;
+    aliases: string[];
 };
 
 export type SqlParseContext = {
@@ -68,7 +69,12 @@ const pushTable = (
     if (!raw) return;
     const normalized = normalizeTableName(raw);
     const logicalName = nameMap.get(normalized);
-    const tableRef: SqlTableRef = { raw, normalized, logicalName };
+    const tableRef: SqlTableRef = {
+        raw,
+        normalized,
+        logicalName,
+        aliases: alias ? [alias] : [],
+    };
     tables.push(tableRef);
     aliases[normalized] = tableRef;
     if (alias) {

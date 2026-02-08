@@ -60,6 +60,22 @@ export const isInWhereClause = (text: string, cursorOffset: number) => {
     return cursorOffset >= whereIndex + 5;
 };
 
+const isInJoinOnClause = (text: string, cursorOffset: number) => {
+    const lower = text.toLowerCase();
+    const onIndex = lower.lastIndexOf(" on ", cursorOffset);
+    if (onIndex === -1) return false;
+    const joinIndex = lower.lastIndexOf("join", onIndex);
+    if (joinIndex === -1) return false;
+    const nextKeyword = findNextKeyword(lower, onIndex + 4, [
+        "where",
+        "order by",
+        "group by",
+        "having",
+    ]);
+    if (nextKeyword !== -1 && cursorOffset > nextKeyword) return false;
+    return cursorOffset >= onIndex + 4;
+};
+
 export const getSqlTableNames = (entityDefinitions?: EntityDefinition[]) => {
     if (!entityDefinitions?.length) return [];
     const names = new Set<string>();
@@ -162,6 +178,46 @@ export const getSqlCompletionItems = ({
                     }))
             );
         }
+        if (suggestions.length) return suggestions;
+    }
+
+    const isInJoinOn = isInJoinOnClause(fullText, cursorOffset);
+    if (
+        parseContext?.tables?.length &&
+        (isInSelectList(fullText, cursorOffset) ||
+            isInWhereClause(fullText, cursorOffset) ||
+            isInJoinOn)
+    ) {
+        const word = model.getWordUntilPosition(position);
+        const range = new monaco.Range(
+            position.lineNumber,
+            word.startColumn,
+            position.lineNumber,
+            word.endColumn
+        );
+        const current = word.word.toLowerCase();
+
+        const aliasCandidates = new Map<string, string>();
+        for (const table of parseContext.tables) {
+            if (table.raw) {
+                aliasCandidates.set(table.raw, table.raw);
+            }
+            for (const alias of table.aliases) {
+                aliasCandidates.set(alias, alias);
+            }
+        }
+
+        suggestions.push(
+            ...Array.from(aliasCandidates.keys())
+                .filter((name) => name.toLowerCase().startsWith(current))
+                .map((name) => ({
+                    label: name,
+                    kind: monaco.languages.CompletionItemKind.Struct,
+                    insertText: name,
+                    range,
+                }))
+        );
+
         if (suggestions.length) return suggestions;
     }
 
