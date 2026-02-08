@@ -244,4 +244,24 @@ mod tests {
             vec!["systemuser.fullname".to_string(), "accountid".to_string()]
         );
     }
+
+    #[test]
+    fn translates_left_join_to_outer_link_entity() {
+        let sql = "select account.accountid, contact.fullname from account left join contact on contact.parentcustomerid = account.accountid";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+        assert!(result.fetchxml.contains("<entity name=\"account\">"));
+        assert!(result.fetchxml.contains("link-entity name=\"contact\""));
+        assert!(result.fetchxml.contains("from=\"parentcustomerid\""));
+        assert!(result.fetchxml.contains("to=\"accountid\""));
+        assert!(result.fetchxml.contains("link-type=\"outer\""));
+        assert!(result.fetchxml.contains("attribute name=\"accountid\""));
+        assert!(result.fetchxml.contains("attribute name=\"fullname\""));
+    }
+
+    #[test]
+    fn translates_left_outer_join_to_outer_link_entity() {
+        let sql = "select account.accountid from account left outer join contact on contact.parentcustomerid = account.accountid";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+        assert!(result.fetchxml.contains("link-type=\"outer\""));
+    }
 }

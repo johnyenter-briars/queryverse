@@ -469,6 +469,7 @@ fn write_join(
     out.push_str("\" link-type=\"");
     out.push_str(match join.join_type {
         JoinType::Inner => "inner",
+        JoinType::Left => "outer",
     });
     let alias = join.alias.as_ref().unwrap_or(&join.entity);
     if !alias.is_empty() {

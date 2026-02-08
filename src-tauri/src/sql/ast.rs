@@ -22,6 +22,7 @@ pub struct JoinClause {
 #[derive(Debug, Clone, Copy)]
 pub enum JoinType {
     Inner,
+    Left,
 }
 
 #[derive(Debug, Clone)]

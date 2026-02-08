@@ -176,13 +176,22 @@ impl Parser {
                     self.advance();
                     JoinType::Inner
                 }
+                TokenKind::Keyword(Keyword::Left) => {
+                    self.advance();
+                    if self.consume_keyword(Keyword::Outer) {
+                        // optional OUTER
+                    }
+                    JoinType::Left
+                }
                 _ => {
                     break;
                 }
             };
 
             if !self.consume_keyword(Keyword::Join) {
-                return Err(self.error_at_current("Expected JOIN after INNER"));
+                return Err(self.error_at_current(
+                    "Expected JOIN after INNER or LEFT/LEFT OUTER",
+                ));
             }
 
             let entity = self.parse_identifier()?;
