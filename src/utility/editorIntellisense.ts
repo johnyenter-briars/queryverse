@@ -3,9 +3,20 @@ import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { EntityAttribute } from "../binding/model/EntityAttribute";
 import { SqlParseContext } from "./sqlParser";
 
+/**
+ * Normalize a table or alias identifier for case-insensitive matching.
+ * @param input Raw identifier text.
+ * @returns Normalized identifier.
+ */
 const normalizeTableName = (input: string) =>
     input.replace(/^[\[\"]+|[\]\"]+$/g, "").toLowerCase();
 
+/**
+ * Resolve the primary entity from the last FROM clause in the SQL text.
+ * @param text Full SQL text.
+ * @param entityDefinitions Known entity metadata.
+ * @returns Logical entity name or null.
+ */
 export const findSelectedEntity = (
     text: string,
     entityDefinitions?: EntityDefinition[]
@@ -25,6 +36,12 @@ export const findSelectedEntity = (
     return match?.LogicalName ?? null;
 };
 
+/**
+ * Determine whether the cursor is positioned inside the SELECT list.
+ * @param text Full SQL text.
+ * @param cursorOffset Cursor offset in the text.
+ * @returns True when inside the SELECT list.
+ */
 export const isInSelectList = (text: string, cursorOffset: number) => {
     const lower = text.toLowerCase();
     const selectIndex = lower.lastIndexOf("select", cursorOffset);
@@ -34,6 +51,13 @@ export const isInSelectList = (text: string, cursorOffset: number) => {
     return true;
 };
 
+/**
+ * Find the next occurrence of any keyword after a given index.
+ * @param text Full SQL text (lowercase expected by caller).
+ * @param start Start index.
+ * @param keywords Keywords to search for.
+ * @returns Index of the next keyword or -1.
+ */
 const findNextKeyword = (text: string, start: number, keywords: string[]) => {
     let next = -1;
     for (const keyword of keywords) {
@@ -45,6 +69,12 @@ const findNextKeyword = (text: string, start: number, keywords: string[]) => {
     return next;
 };
 
+/**
+ * Determine whether the cursor is positioned inside a SELECT ... WHERE clause.
+ * @param text Full SQL text.
+ * @param cursorOffset Cursor offset in the text.
+ * @returns True when inside a SELECT WHERE clause.
+ */
 export const isInWhereClause = (text: string, cursorOffset: number) => {
     const lower = text.toLowerCase();
     const whereIndex = lower.lastIndexOf("where", cursorOffset);
@@ -60,6 +90,12 @@ export const isInWhereClause = (text: string, cursorOffset: number) => {
     return cursorOffset >= whereIndex + 5;
 };
 
+/**
+ * Determine whether the cursor is positioned inside an UPDATE ... WHERE clause.
+ * @param text Full SQL text.
+ * @param cursorOffset Cursor offset in the text.
+ * @returns True when inside an UPDATE WHERE clause.
+ */
 const isInUpdateWhereClause = (text: string, cursorOffset: number) => {
     const lower = text.toLowerCase();
     const whereIndex = lower.lastIndexOf("where", cursorOffset);
@@ -75,6 +111,12 @@ const isInUpdateWhereClause = (text: string, cursorOffset: number) => {
     return cursorOffset >= whereIndex + 5;
 };
 
+/**
+ * Determine whether the cursor is positioned inside an UPDATE ... SET clause.
+ * @param text Full SQL text.
+ * @param cursorOffset Cursor offset in the text.
+ * @returns True when inside an UPDATE SET clause.
+ */
 const isInSetClause = (text: string, cursorOffset: number) => {
     const lower = text.toLowerCase();
     const setIndex = lower.lastIndexOf("set", cursorOffset);
@@ -91,11 +133,23 @@ const isInSetClause = (text: string, cursorOffset: number) => {
     return cursorOffset >= setIndex + 3;
 };
 
+/**
+ * Map an UPDATE target to a logical entity name, if possible.
+ * @param text Full SQL text.
+ * @param entityDefinitions Known entity metadata.
+ * @returns Logical entity name or null.
+ */
 const findUpdateTargetEntity = (
     text: string,
     entityDefinitions?: EntityDefinition[]
 ) => findUpdateEntity(text, entityDefinitions);
 
+/**
+ * Resolve the update target entity from the last UPDATE clause in the SQL text.
+ * @param text Full SQL text.
+ * @param entityDefinitions Known entity metadata.
+ * @returns Logical entity name or null.
+ */
 export const findUpdateEntity = (
     text: string,
     entityDefinitions?: EntityDefinition[]
@@ -115,6 +169,12 @@ export const findUpdateEntity = (
     return match?.LogicalName ?? null;
 };
 
+/**
+ * Determine whether the cursor is positioned inside a JOIN ... ON clause.
+ * @param text Full SQL text.
+ * @param cursorOffset Cursor offset in the text.
+ * @returns True when inside a JOIN ON clause.
+ */
 const isInJoinOnClause = (text: string, cursorOffset: number) => {
     const lower = text.toLowerCase();
     const onIndex = lower.lastIndexOf(" on ", cursorOffset);
@@ -131,6 +191,11 @@ const isInJoinOnClause = (text: string, cursorOffset: number) => {
     return cursorOffset >= onIndex + 4;
 };
 
+/**
+ * Extract distinct logical table names from entity definitions.
+ * @param entityDefinitions Known entity metadata.
+ * @returns Sorted logical table names.
+ */
 export const getSqlTableNames = (entityDefinitions?: EntityDefinition[]) => {
     if (!entityDefinitions?.length) return [];
     const names = new Set<string>();
@@ -150,6 +215,11 @@ type SqlCompletionContext = {
     parseContext?: SqlParseContext | null;
 };
 
+/**
+ * Detect an alias prefix pattern (e.g., `a.`) and return its context.
+ * @param textUpToCursor SQL text up to the cursor.
+ * @returns Alias context or null.
+ */
 const getAliasContext = (textUpToCursor: string) => {
     const match = textUpToCursor.match(
         /([A-Za-z0-9_\[\]\"]+)\.([A-Za-z0-9_\[\]\"]*)$/i
@@ -158,6 +228,11 @@ const getAliasContext = (textUpToCursor: string) => {
     return { alias: match[1], columnPrefix: match[2] ?? "" };
 };
 
+/**
+ * Build completion items for SQL based on cursor position and parse context.
+ * @param params Completion context inputs.
+ * @returns Monaco completion items.
+ */
 export const getSqlCompletionItems = ({
     monaco,
     model,
