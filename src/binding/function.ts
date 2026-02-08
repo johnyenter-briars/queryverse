@@ -20,6 +20,8 @@ import { Settings } from "./model/Settings";
 import { SettingsResponse } from "./model/SettingsResponse";
 import { UpdateSqlPreviewResponse } from "./model/UpdateSqlPreviewResponse";
 import { UpdateSqlExecuteResponse } from "./model/UpdateSqlExecuteResponse";
+import { DeleteSqlPreviewResponse } from "./model/DeleteSqlPreviewResponse";
+import { DeleteSqlExecuteResponse } from "./model/DeleteSqlExecuteResponse";
 
 export const executeSql = async (
     sql: string
@@ -196,6 +198,38 @@ export const executeUpdateSql = async (
 
 export const discardUpdateSql = async (token: string): Promise<boolean> => {
     const response: boolean = await invoke("discard_update_sql", { token });
+
+    console.log(response);
+
+    return response;
+};
+
+export const prepareDeleteSql = async (
+    sql: string
+): Promise<DeleteSqlPreviewResponse> => {
+    const response: DeleteSqlPreviewResponse = await invoke("prepare_delete_sql", {
+        sql,
+    });
+
+    console.log(response);
+
+    return response;
+};
+
+export const executeDeleteSql = async (
+    token: string
+): Promise<DeleteSqlExecuteResponse> => {
+    const response: DeleteSqlExecuteResponse = await invoke("execute_delete_sql", {
+        token,
+    });
+
+    console.log(response);
+
+    return response;
+};
+
+export const discardDeleteSql = async (token: string): Promise<boolean> => {
+    const response: boolean = await invoke("discard_delete_sql", { token });
 
     console.log(response);
 

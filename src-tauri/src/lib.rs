@@ -14,8 +14,9 @@ use crate::binding::function::{
     file::{open_sql_file, open_sql_file_path, save_sql_file, save_sql_file_as},
     launch::get_launch_context,
     query::{
-        discard_update_sql, execute_sql, execute_update_sql, list_entity_attributes,
-        list_entity_definitions, parse_sql_to_fetchxml, prepare_update_sql,
+        discard_delete_sql, discard_update_sql, execute_delete_sql, execute_sql,
+        execute_update_sql, list_entity_attributes, list_entity_definitions,
+        parse_sql_to_fetchxml, prepare_delete_sql, prepare_update_sql,
     },
     settings::{get_settings, save_settings},
 };
@@ -25,6 +26,7 @@ pub struct Database {
     pub selected_connection_id: Mutex<Option<Uuid>>,
     pub token_cache: Mutex<HashMap<Uuid, CachedToken>>,
     pub update_batches: Mutex<HashMap<String, UpdateBatch>>,
+    pub delete_batches: Mutex<HashMap<String, DeleteBatch>>,
 }
 
 #[derive(Debug, Clone)]
@@ -35,6 +37,15 @@ pub struct UpdateBatch {
     pub primary_id_attribute: String,
     pub ids: Vec<String>,
     pub updates: HashMap<String, JsonValue>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DeleteBatch {
+    pub connection_id: Uuid,
+    pub entity_set: String,
+    pub entity_logical: String,
+    pub primary_id_attribute: String,
+    pub ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize)]
@@ -64,6 +75,7 @@ impl Default for Database {
             selected_connection_id: Mutex::new(None),
             token_cache: Mutex::new(HashMap::new()),
             update_batches: Mutex::new(HashMap::new()),
+            delete_batches: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -148,6 +160,9 @@ pub fn run() {
             prepare_update_sql,
             execute_update_sql,
             discard_update_sql,
+            prepare_delete_sql,
+            execute_delete_sql,
+            discard_delete_sql,
             get_launch_context,
             open_sql_file,
             open_sql_file_path,

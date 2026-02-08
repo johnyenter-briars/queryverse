@@ -7,6 +7,8 @@ pub mod updateconnectionrequest;
 pub mod updateconnectionresponse;
 pub mod updatesqlexecuteresponse;
 pub mod updatesqlpreviewresponse;
+pub mod deletesqlexecuteresponse;
+pub mod deletesqlpreviewresponse;
 pub mod executesqlrequest;
 pub mod executesqlresponse;
 pub mod listentitydefinitionsrequest;

@@ -369,6 +369,35 @@ impl QueryEngine {
 
         Ok(())
     }
+
+    pub async fn delete_entity(
+        &self,
+        entity_set: &str,
+        id: &str,
+    ) -> Result<(), std::string::String> {
+        let trimmed = id.trim_matches(|ch| ch == '{' || ch == '}');
+        let url = format!(
+            "{}/api/data/v9.2/{}({})",
+            self.base_url, entity_set, trimmed
+        );
+
+        let resp = self
+            .client
+            .delete(&url)
+            .bearer_auth(&self.token)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {e}"))?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("Dataverse API error ({}): {}", status, body));
+        }
+
+        Ok(())
+    }
 }
 
 fn apply_paging(

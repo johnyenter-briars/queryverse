@@ -26,6 +26,13 @@ pub struct UpdateAssignment {
 }
 
 #[derive(Debug, Clone)]
+pub struct DeleteStmt {
+    pub entity: String,
+    pub entity_alias: Option<String>,
+    pub filter: Option<Expr>,
+}
+
+#[derive(Debug, Clone)]
 pub struct JoinClause {
     pub join_type: JoinType,
     pub entity: String,

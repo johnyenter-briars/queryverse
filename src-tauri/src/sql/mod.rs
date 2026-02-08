@@ -5,8 +5,8 @@ mod lexer;
 mod parser;
 
 pub use ast::{
-    AggregateExpr, AggregateFunction, AggregateTarget, Expr, Literal, SelectColumns, SelectItem,
-    SelectItemKind, SelectStmt, UpdateAssignment, UpdateStmt,
+    AggregateExpr, AggregateFunction, AggregateTarget, DeleteStmt, Expr, Literal, SelectColumns,
+    SelectItem, SelectItemKind, SelectStmt, UpdateAssignment, UpdateStmt,
 };
 pub use errors::{ParseError, SqlError, TranslationError};
 
@@ -29,6 +29,11 @@ pub fn parse_update(sql: &str) -> Result<UpdateStmt, ParseError> {
     parser.parse_update_statement()
 }
 
+pub fn parse_delete(sql: &str) -> Result<DeleteStmt, ParseError> {
+    let mut parser = parser::Parser::new(sql)?;
+    parser.parse_delete_statement()
+}
+
 pub fn to_fetchxml(stmt: &SelectStmt) -> Result<FetchXmlQuery, TranslationError> {
     let entity_names = entity_names(&stmt.entity);
     let translation = fetchxml::to_fetchxml(stmt, &entity_names.entity_logical)?;
@@ -48,6 +53,28 @@ pub fn sql_to_fetchxml(sql: &str) -> Result<FetchXmlQuery, SqlError> {
 
 pub fn update_to_fetchxml(
     stmt: &UpdateStmt,
+    id_attribute: &str,
+) -> Result<FetchXmlQuery, TranslationError> {
+    let select_stmt = SelectStmt {
+        columns: SelectColumns::Columns(vec![SelectItem {
+            kind: SelectItemKind::Attribute(id_attribute.to_string()),
+            alias: None,
+        }]),
+        entity: stmt.entity.clone(),
+        entity_alias: stmt.entity_alias.clone(),
+        joins: Vec::new(),
+        top: None,
+        distinct: false,
+        filter: stmt.filter.clone(),
+        group_by: Vec::new(),
+        order_by: Vec::new(),
+    };
+
+    to_fetchxml(&select_stmt)
+}
+
+pub fn delete_to_fetchxml(
+    stmt: &DeleteStmt,
     id_attribute: &str,
 ) -> Result<FetchXmlQuery, TranslationError> {
     let select_stmt = SelectStmt {
