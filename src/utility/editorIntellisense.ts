@@ -112,6 +112,27 @@ const isInUpdateWhereClause = (text: string, cursorOffset: number) => {
 };
 
 /**
+ * Determine whether the cursor is positioned inside a DELETE ... WHERE clause.
+ * @param text Full SQL text.
+ * @param cursorOffset Cursor offset in the text.
+ * @returns True when inside a DELETE WHERE clause.
+ */
+const isInDeleteWhereClause = (text: string, cursorOffset: number) => {
+    const lower = text.toLowerCase();
+    const whereIndex = lower.lastIndexOf("where", cursorOffset);
+    if (whereIndex === -1) return false;
+    const deleteIndex = lower.lastIndexOf("delete", whereIndex);
+    if (deleteIndex === -1) return false;
+    const nextKeyword = findNextKeyword(lower, whereIndex + 5, [
+        "order by",
+        "group by",
+        "having",
+    ]);
+    if (nextKeyword !== -1 && cursorOffset > nextKeyword) return false;
+    return cursorOffset >= whereIndex + 5;
+};
+
+/**
  * Determine whether the cursor is positioned inside an UPDATE ... SET clause.
  * @param text Full SQL text.
  * @param cursorOffset Cursor offset in the text.
@@ -145,6 +166,33 @@ export const findUpdateEntity = (
 ): string | null => {
     if (!entityDefinitions?.length) return null;
     const matches = [...text.matchAll(/\bupdate\s+([A-Za-z0-9_\[\]\"]+)/gi)];
+    if (matches.length === 0) return null;
+    const rawName = matches[matches.length - 1]?.[1];
+    if (!rawName) return null;
+    const normalized = normalizeTableName(rawName);
+    const match = entityDefinitions.find((definition) => {
+        const logical = normalizeTableName(definition.LogicalName);
+        const schema = normalizeTableName(definition.SchemaName);
+        const entitySet = normalizeTableName(definition.EntitySetName);
+        return normalized === logical || normalized === schema || normalized === entitySet;
+    });
+    return match?.LogicalName ?? null;
+};
+
+/**
+ * Resolve the delete target entity from the last DELETE clause in the SQL text.
+ * @param text Full SQL text.
+ * @param entityDefinitions Known entity metadata.
+ * @returns Logical entity name or null.
+ */
+export const findDeleteEntity = (
+    text: string,
+    entityDefinitions?: EntityDefinition[]
+): string | null => {
+    if (!entityDefinitions?.length) return null;
+    const matches = [
+        ...text.matchAll(/\bdelete\s+(?:from\s+)?([A-Za-z0-9_\[\]\"]+)/gi),
+    ];
     if (matches.length === 0) return null;
     const rawName = matches[matches.length - 1]?.[1];
     if (!rawName) return null;
@@ -253,15 +301,23 @@ export const getSqlCompletionItems = ({
     const cursorOffset = model.getOffsetAt(position);
     const textUpToCursor = fullText.slice(0, cursorOffset);
 
-    // Table name suggestions after FROM/JOIN/UPDATE targets.
+    // Table name suggestions after FROM/JOIN/UPDATE/DELETE targets.
     const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
     const joinMatch = textUpToCursor.match(
         /(?:^|\s)(?:inner|left|right|full|outer)?\s*join\s+([A-Za-z0-9_\[\]\"]*)$/i
     );
     const updateMatch = prefix.match(/\bupdate\s+([A-Za-z0-9_\[\]\"]*)$/i);
+    const deleteMatch = prefix.match(
+        /\bdelete\s+(?:from\s+)?([A-Za-z0-9_\[\]\"]*)$/i
+    );
 
-    if (match || joinMatch || updateMatch) {
-        const current = (joinMatch?.[1] ?? match?.[1] ?? updateMatch?.[1] ?? "");
+    if (match || joinMatch || updateMatch || deleteMatch) {
+        const current =
+            (joinMatch?.[1] ??
+                match?.[1] ??
+                updateMatch?.[1] ??
+                deleteMatch?.[1] ??
+                "");
         const range = new monaco.Range(
             position.lineNumber,
             position.column - current.length,
@@ -359,17 +415,20 @@ export const getSqlCompletionItems = ({
     // Column suggestions for SELECT/WHERE/SET contexts without an alias prefix.
     const inUpdateSet = isInSetClause(fullText, cursorOffset);
     const inUpdateWhere = isInUpdateWhereClause(fullText, cursorOffset);
+    const inDeleteWhere = isInDeleteWhereClause(fullText, cursorOffset);
     if (
         entityAttributes &&
         (isInSelectList(fullText, cursorOffset) ||
             isInWhereClause(fullText, cursorOffset) ||
             inUpdateSet ||
-            inUpdateWhere)
+            inUpdateWhere ||
+            inDeleteWhere)
     ) {
-        if (inUpdateSet || inUpdateWhere) {
-            const updateTarget =
-                parseContext?.tables?.[0]?.logicalName ??
-                findUpdateTargetEntity(fullText, entityDefinitions);
+        if (inUpdateSet || inUpdateWhere || inDeleteWhere) {
+            const updateTarget = inDeleteWhere
+                ? findDeleteEntity(fullText, entityDefinitions)
+                : parseContext?.tables?.[0]?.logicalName ??
+                  findUpdateTargetEntity(fullText, entityDefinitions);
             const attributes = updateTarget
                 ? entityAttributes[updateTarget]
                 : undefined;
