@@ -29,8 +29,8 @@ import {
 
 const DEFAULT_COL_WIDTH = 300;
 const MIN_COL_WIDTH = 120;
-const ROW_NUMBER_COL_WIDTH = 72;
-const ROW_NUMBER_MIN_WIDTH = 56;
+const ROW_NUMBER_COL_WIDTH = 40;
+const ROW_NUMBER_MIN_WIDTH = 40;
 const ROW_HEIGHT = 36;
 const HEADER_HEIGHT = 40;
 const AUTO_FIT_COLUMNS = false;
