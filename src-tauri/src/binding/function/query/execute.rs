@@ -11,7 +11,7 @@ use crate::{
     sql::{self, aggregate},
     Database, LogLevel,
 };
-use powerplatform_dataverse_client::dataverse::{entity::Value, queryengine::QueryEngine};
+use powerplatform_dataverse_client::dataverse::{entity::Value, servicecilent::ServiceClient};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,7 +80,7 @@ pub async fn execute_sql(
         return Err("Connection is missing a Dataverse URL".to_string());
     }
 
-    let query_engine = QueryEngine::new(&dataverse_url, &token, context.log_level);
+    let query_engine = ServiceClient::new(&dataverse_url, &token, context.log_level);
 
     let (rows, message, success): (Vec<ResultRow>, String, bool) =
         if let Some(plan) = aggregate::aggregate_fallback_plan(&stmt) {

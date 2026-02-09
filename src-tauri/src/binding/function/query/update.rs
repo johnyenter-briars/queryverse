@@ -1,3 +1,4 @@
+use powerplatform_dataverse_client::dataverse::servicecilent::ServiceClient;
 use uuid::Uuid;
 
 use crate::{
@@ -8,7 +9,6 @@ use crate::{
     },
     sql, Database, LogLevel,
 };
-use powerplatform_dataverse_client::dataverse::queryengine::QueryEngine;
 
 use super::helpers::{
     build_update_attributes, normalize_ident, resolve_primary_id_attribute, value_to_string,
@@ -56,7 +56,7 @@ pub async fn prepare_update_sql(
         return Err("Connection is missing a Dataverse URL".to_string());
     }
 
-    let query_engine = QueryEngine::new(&dataverse_url, &token, context.log_level);
+    let query_engine = ServiceClient::new(&dataverse_url, &token, context.log_level);
 
     let (entity_set, entity_logical) = sql::resolve_entity_names(&stmt.entity);
     let primary_id_attribute =
@@ -167,7 +167,7 @@ pub async fn execute_update_sql(
         return Err("Connection is missing a Dataverse URL".to_string());
     }
 
-    let query_engine = QueryEngine::new(&dataverse_url, &token, context.log_level);
+    let query_engine = ServiceClient::new(&dataverse_url, &token, context.log_level);
 
     let mut updated = 0usize;
     let mut failed = 0usize;

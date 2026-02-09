@@ -5,7 +5,7 @@ use crate::{
     },
     Database,
 };
-use powerplatform_dataverse_client::dataverse::{entityattribute::EntityAttribute, entitydefinition::EntityDefinition, queryengine::QueryEngine};
+use powerplatform_dataverse_client::dataverse::{entityattribute::EntityAttribute, entitydefinition::EntityDefinition, servicecilent::ServiceClient};
 
 #[tauri::command]
 pub async fn list_entity_definitions(
@@ -35,7 +35,7 @@ pub async fn list_entity_definitions(
         return Err("Connection is missing a Dataverse URL".to_string());
     }
 
-    let query_engine = QueryEngine::new(&dataverse_url, &token, context.log_level);
+    let query_engine = ServiceClient::new(&dataverse_url, &token, context.log_level);
     let value = query_engine.list_entity_definitions().await?;
 
     Ok(MultipleResponse {
@@ -74,7 +74,7 @@ pub async fn list_entity_attributes(
         return Err("Connection is missing a Dataverse URL".to_string());
     }
 
-    let query_engine = QueryEngine::new(&dataverse_url, &token, context.log_level);
+    let query_engine = ServiceClient::new(&dataverse_url, &token, context.log_level);
     let value = query_engine
         .list_entity_attributes(&logical_name)
         .await?;
