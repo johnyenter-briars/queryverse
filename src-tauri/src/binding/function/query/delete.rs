@@ -1,4 +1,4 @@
-use powerplatform_dataverse_client::dataverse::servicecilent::ServiceClient;
+use powerplatform_dataverse_client::dataverse::serviceclient::ServiceClient;
 use uuid::Uuid;
 
 use crate::{

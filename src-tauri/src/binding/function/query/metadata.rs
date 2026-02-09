@@ -5,7 +5,7 @@ use crate::{
     },
     Database,
 };
-use powerplatform_dataverse_client::dataverse::{entityattribute::EntityAttribute, entitydefinition::EntityDefinition, servicecilent::ServiceClient};
+use powerplatform_dataverse_client::dataverse::{entityattribute::EntityAttribute, entitydefinition::EntityDefinition, serviceclient::ServiceClient};
 
 #[tauri::command]
 pub async fn list_entity_definitions(

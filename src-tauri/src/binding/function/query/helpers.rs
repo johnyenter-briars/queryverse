@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::{
     sql,
 };
-use powerplatform_dataverse_client::dataverse::{entity::Value, servicecilent::ServiceClient};
+use powerplatform_dataverse_client::dataverse::{entity::Value, serviceclient::ServiceClient};
 
 pub(crate) async fn resolve_primary_id_attribute(
     service_client: &ServiceClient,

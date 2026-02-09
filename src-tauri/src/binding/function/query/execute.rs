@@ -11,7 +11,7 @@ use crate::{
     sql::{self, aggregate},
     Database, LogLevel,
 };
-use powerplatform_dataverse_client::dataverse::{entity::Value, servicecilent::ServiceClient};
+use powerplatform_dataverse_client::dataverse::{entity::Value, serviceclient::ServiceClient};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
