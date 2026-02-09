@@ -6,9 +6,9 @@ use crate::{
         updatesqlexecuteresponse::UpdateSqlExecuteResponse,
         updatesqlpreviewresponse::UpdateSqlPreviewResponse,
     },
-    dataverse::queryengine::QueryEngine,
     sql, Database, LogLevel,
 };
+use powerplatform_dataverse_client::dataverse::queryengine::QueryEngine;
 
 use super::helpers::{
     build_update_attributes, normalize_ident, resolve_primary_id_attribute, value_to_string,
@@ -82,7 +82,7 @@ pub async fn prepare_update_sql(
         })?;
 
     let mut ids: Vec<String> = Vec::new();
-    for entity in entities.value {
+    for entity in entities {
         let value = entity
             .attributes
             .get(&primary_id_attribute)

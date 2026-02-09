@@ -8,9 +8,9 @@ use crate::{
         executesqlrequest::ExecuteSqlRequest,
         executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
     },
-    dataverse::queryengine::QueryEngine,
     sql, Database, LogLevel,
 };
+use powerplatform_dataverse_client::dataverse::queryengine::QueryEngine;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -104,7 +104,7 @@ pub async fn execute_sql(
                     &parsed.fetchxml,
                     &plan,
                 )?;
-                let resp = query_engine
+                let entities = query_engine
                     .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
                     .await
                     .map_err(|error| {
@@ -112,11 +112,11 @@ pub async fn execute_sql(
                         error
                     })?;
 
-                let rows = aggregate_rows(resp.value, &plan, &columns_order);
-                (rows, resp.message, resp.success)
+                let rows = aggregate_rows(entities, &plan, &columns_order);
+                (rows, "Multiple results found".to_string(), true)
             }
         } else {
-            let resp = query_engine
+            let entities = query_engine
                 .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
                 .await
                 .map_err(|error| {
@@ -125,12 +125,12 @@ pub async fn execute_sql(
                 })?;
 
             (
-                resp.value
+                entities
                     .into_iter()
                     .map(|entity| entity_to_result_row(entity, &columns_order))
                     .collect(),
-                resp.message,
-                resp.success,
+                "Multiple results found".to_string(),
+                true,
             )
         };
 

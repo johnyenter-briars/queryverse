@@ -7,9 +7,9 @@ use crate::{
         },
         response::MultipleResponse,
     },
-    dataverse::queryengine::QueryEngine,
     Database,
 };
+use powerplatform_dataverse_client::dataverse::queryengine::QueryEngine;
 
 #[tauri::command]
 pub async fn list_entity_definitions(

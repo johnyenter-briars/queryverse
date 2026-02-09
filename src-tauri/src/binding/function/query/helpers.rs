@@ -3,9 +3,9 @@ use std::collections::HashMap;
 
 use crate::{
     binding::model::dataverse::entity::Value as RowValue,
-    dataverse::queryengine::QueryEngine,
     sql,
 };
+use powerplatform_dataverse_client::dataverse::queryengine::QueryEngine;
 
 pub(crate) async fn resolve_primary_id_attribute(
     query_engine: &QueryEngine,

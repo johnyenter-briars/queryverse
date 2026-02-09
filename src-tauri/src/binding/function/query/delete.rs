@@ -6,9 +6,9 @@ use crate::{
         deletesqlexecuteresponse::DeleteSqlExecuteResponse,
         deletesqlpreviewresponse::DeleteSqlPreviewResponse,
     },
-    dataverse::queryengine::QueryEngine,
     sql, Database, LogLevel,
 };
+use powerplatform_dataverse_client::dataverse::queryengine::QueryEngine;
 
 use super::helpers::{resolve_primary_id_attribute, value_to_string};
 
@@ -68,7 +68,7 @@ pub async fn prepare_delete_sql(
         })?;
 
     let mut ids: Vec<String> = Vec::new();
-    for entity in entities.value {
+    for entity in entities {
         let value = entity
             .attributes
             .get(&primary_id_attribute)
