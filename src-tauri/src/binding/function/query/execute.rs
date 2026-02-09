@@ -80,13 +80,13 @@ pub async fn execute_sql(
         return Err("Connection is missing a Dataverse URL".to_string());
     }
 
-    let query_engine = ServiceClient::new(&dataverse_url, &token, context.log_level);
+    let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
 
     let (rows, message, success): (Vec<ResultRow>, String, bool) =
         if let Some(plan) = aggregate::aggregate_fallback_plan(&stmt) {
             if plan.is_count_only() {
                 let count_fetchxml = aggregate::demote_count_fetchxml(&parsed.fetchxml)?;
-                let total = query_engine
+                let total = service_client
                     .retrieve_multiple_fetchxml_count(&parsed.entity_set, &count_fetchxml)
                     .await
                     .map_err(|error| {
@@ -108,7 +108,7 @@ pub async fn execute_sql(
                     &parsed.fetchxml,
                     &plan,
                 )?;
-                let entities = query_engine
+                let entities = service_client
                     .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
                     .await
                     .map_err(|error| {
@@ -120,7 +120,7 @@ pub async fn execute_sql(
                 (rows, "Multiple results found".to_string(), true)
             }
         } else {
-            let entities = query_engine
+            let entities = service_client
                 .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
                 .await
                 .map_err(|error| {

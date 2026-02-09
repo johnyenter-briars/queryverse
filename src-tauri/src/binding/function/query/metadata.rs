@@ -35,8 +35,8 @@ pub async fn list_entity_definitions(
         return Err("Connection is missing a Dataverse URL".to_string());
     }
 
-    let query_engine = ServiceClient::new(&dataverse_url, &token, context.log_level);
-    let value = query_engine.list_entity_definitions().await?;
+    let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
+    let value = service_client.list_entity_definitions().await?;
 
     Ok(MultipleResponse {
         message: "Metadata retrieved.".to_string(),
@@ -74,8 +74,8 @@ pub async fn list_entity_attributes(
         return Err("Connection is missing a Dataverse URL".to_string());
     }
 
-    let query_engine = ServiceClient::new(&dataverse_url, &token, context.log_level);
-    let value = query_engine
+    let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
+    let value = service_client
         .list_entity_attributes(&logical_name)
         .await?;
 

@@ -50,16 +50,16 @@ pub async fn prepare_delete_sql(
         return Err("Connection is missing a Dataverse URL".to_string());
     }
 
-    let query_engine = ServiceClient::new(&dataverse_url, &token, context.log_level);
+    let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
 
     let (entity_set, entity_logical) = sql::resolve_entity_names(&stmt.entity);
     let primary_id_attribute =
-        resolve_primary_id_attribute(&query_engine, &entity_logical, &entity_set).await?;
+        resolve_primary_id_attribute(&service_client, &entity_logical, &entity_set).await?;
 
     let fetch = sql::delete_to_fetchxml(&stmt, &primary_id_attribute)
         .map_err(|e| e.to_string())?;
 
-    let entities = query_engine
+    let entities = service_client
         .retrieve_multiple_fetchxml(&fetch.entity_set, &fetch.fetchxml)
         .await
         .map_err(|error| {
@@ -146,14 +146,14 @@ pub async fn execute_delete_sql(
         return Err("Connection is missing a Dataverse URL".to_string());
     }
 
-    let query_engine = ServiceClient::new(&dataverse_url, &token, context.log_level);
+    let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
 
     let mut deleted = 0usize;
     let mut failed = 0usize;
     let mut errors: Vec<String> = Vec::new();
 
     for id in &batch.ids {
-        let result = query_engine
+        let result = service_client
             .delete_entity(&batch.entity_set, id)
             .await;
         match result {

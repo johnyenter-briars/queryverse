@@ -7,12 +7,12 @@ use crate::{
 use powerplatform_dataverse_client::dataverse::{entity::Value, servicecilent::ServiceClient};
 
 pub(crate) async fn resolve_primary_id_attribute(
-    query_engine: &ServiceClient,
+    service_client: &ServiceClient,
     entity_logical: &str,
     entity_set: &str,
 ) -> Result<String, String> {
     //TODO: i think this function should take in the entity definitions directly. I think we have them cached at this point in time
-    let definitions = query_engine.list_entity_definitions().await?;
+    let definitions = service_client.list_entity_definitions().await?;
     let target_logical = normalize_ident(entity_logical);
     let target_set = normalize_ident(entity_set);
 
