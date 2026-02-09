@@ -2,13 +2,11 @@ use serde::Serialize;
 use std::collections::HashMap;
 
 use crate::{
-    auth::{connection::load_connections, token::get_access_token},
-    binding::model::{
-        dataverse::entity::{Entity, ResultRow, Value as RowValue},
+    Database, LogLevel, auth::{connection::load_connections, token::get_access_token}, binding::model::{
+        dataverse::entity::{Entity, Value as RowValue},
         executesqlrequest::ExecuteSqlRequest,
-        executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
-    },
-    sql, Database, LogLevel,
+        executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata}, resultrow::ResultRow,
+    }, sql
 };
 use powerplatform_dataverse_client::dataverse::queryengine::QueryEngine;
 

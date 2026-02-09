@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::binding::model::dataverse::entity::ResultRow;
+use crate::binding::model::resultrow::ResultRow;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

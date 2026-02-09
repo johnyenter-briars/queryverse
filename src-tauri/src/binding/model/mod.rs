@@ -17,6 +17,7 @@ pub mod listconnectionsresponse;
 pub mod connection;
 pub mod dataverse;
 pub mod response;
+pub mod resultrow;
 pub mod opensqlfileresponse;
 pub mod savesqlfilerequest;
 pub mod savesqlfileasrequest;
