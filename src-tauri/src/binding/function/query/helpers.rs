@@ -2,10 +2,9 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 
 use crate::{
-    binding::model::dataverse::entity::Value as RowValue,
     sql,
 };
-use powerplatform_dataverse_client::dataverse::queryengine::QueryEngine;
+use powerplatform_dataverse_client::dataverse::{entity::Value, queryengine::QueryEngine};
 
 pub(crate) async fn resolve_primary_id_attribute(
     query_engine: &QueryEngine,
@@ -78,13 +77,13 @@ fn literal_to_json(literal: &sql::Literal) -> Result<JsonValue, String> {
     }
 }
 
-pub(crate) fn value_to_string(value: &RowValue) -> Option<String> {
+pub(crate) fn value_to_string(value: &Value) -> Option<String> {
     match value {
-        RowValue::String(value) => Some(value.clone()),
-        RowValue::Int(value) => Some(value.to_string()),
-        RowValue::Float(value) => Some(value.to_string()),
-        RowValue::Boolean(value) => Some(value.to_string()),
-        RowValue::Null => None,
+        Value::String(value) => Some(value.clone()),
+        Value::Int(value) => Some(value.to_string()),
+        Value::Float(value) => Some(value.to_string()),
+        Value::Boolean(value) => Some(value.to_string()),
+        Value::Null => None,
     }
 }
 

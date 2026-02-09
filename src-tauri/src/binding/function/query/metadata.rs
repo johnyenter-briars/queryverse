@@ -1,15 +1,11 @@
 use crate::{
     auth::{connection::load_connections, token::get_access_token},
     binding::model::{
-        dataverse::{
-            entityattribute::EntityAttribute,
-            entitydefinition::EntityDefinition,
-        },
         response::MultipleResponse,
     },
     Database,
 };
-use powerplatform_dataverse_client::dataverse::queryengine::QueryEngine;
+use powerplatform_dataverse_client::dataverse::{entityattribute::EntityAttribute, entitydefinition::EntityDefinition, queryengine::QueryEngine};
 
 #[tauri::command]
 pub async fn list_entity_definitions(

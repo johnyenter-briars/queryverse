@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use crate::{
     auth::{connection::load_connections, token::get_access_token},
     binding::model::{
-        dataverse::entity::Value as RowValue,
         executesqlrequest::ExecuteSqlRequest,
         executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
         resultrow::ResultRow,
@@ -12,7 +11,7 @@ use crate::{
     sql::{self, aggregate},
     Database, LogLevel,
 };
-use powerplatform_dataverse_client::dataverse::queryengine::QueryEngine;
+use powerplatform_dataverse_client::dataverse::{entity::Value, queryengine::QueryEngine};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,8 +98,8 @@ pub async fn execute_sql(
                 let output = plan.count_output().ok_or_else(|| {
                     "Count aggregate output was unavailable.".to_string()
                 })?;
-                attributes.insert(output.to_string(), RowValue::Int(total as i64));
-                attributes.insert(aggregate::ROW_NUMBER_ATTRIBUTE.to_string(), RowValue::Int(1));
+                attributes.insert(output.to_string(), Value::Int(total as i64));
+                attributes.insert(aggregate::ROW_NUMBER_ATTRIBUTE.to_string(), Value::Int(1));
                 aggregate::ensure_columns(&mut attributes, &columns_order);
 
                 (vec![ResultRow { attributes }], "Count retrieved.".to_string(), true)

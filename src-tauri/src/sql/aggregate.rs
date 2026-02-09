@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use crate::binding::model::dataverse::entity::{Entity, Value as RowValue};
+use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
+
 use crate::binding::model::resultrow::ResultRow;
 use crate::sql::{
     AggregateFunction, AggregateTarget, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
@@ -28,9 +29,9 @@ pub fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultR
     ResultRow { attributes }
 }
 
-pub fn ensure_columns(attributes: &mut HashMap<String, RowValue>, columns_order: &[String]) {
+pub fn ensure_columns(attributes: &mut HashMap<String, Value>, columns_order: &[String]) {
     for column in columns_order {
-        attributes.entry(column.clone()).or_insert(RowValue::Null);
+        attributes.entry(column.clone()).or_insert(Value::Null);
     }
 }
 
@@ -245,7 +246,8 @@ pub fn aggregate_rows(
 
     for entity in entities {
         let mut key_parts: Vec<String> = Vec::new();
-        let mut group_values: HashMap<String, RowValue> = HashMap::new();
+        let mut group_values: HashMap<String, Value> = HashMap::new();
+        
 
         for column in &plan.group_columns {
             let value = get_entity_value(&entity, &column.source);
@@ -264,7 +266,7 @@ pub fn aggregate_rows(
     let mut row_number = 1i64;
     for (_, group) in groups {
         let mut attributes = group.finalize();
-        attributes.insert(ROW_NUMBER_ATTRIBUTE.to_string(), RowValue::Int(row_number));
+        attributes.insert(ROW_NUMBER_ATTRIBUTE.to_string(), Value::Int(row_number));
         ensure_columns(&mut attributes, columns_order);
         rows.push(ResultRow { attributes });
         row_number += 1;
@@ -291,8 +293,8 @@ struct AggregateAccumulator {
     count: i64,
     sum: f64,
     sum_is_int: bool,
-    min: Option<RowValue>,
-    max: Option<RowValue>,
+    min: Option<Value>,
+    max: Option<Value>,
     numeric_count: i64,
 }
 
@@ -316,7 +318,7 @@ impl AggregateAccumulator {
             AggregateFunction::Count => {
                 if let Some(target) = &self.target {
                     let value = get_entity_value(entity, target);
-                    if !matches!(value, RowValue::Null) {
+                    if !matches!(value, Value::Null) {
                         self.count += 1;
                     }
                 } else {
@@ -337,7 +339,7 @@ impl AggregateAccumulator {
             AggregateFunction::Min => {
                 let Some(target) = &self.target else { return; };
                 let value = get_entity_value(entity, target);
-                if matches!(value, RowValue::Null) {
+                if matches!(value, Value::Null) {
                     return;
                 }
                 if let Some(current) = &self.min {
@@ -351,7 +353,7 @@ impl AggregateAccumulator {
             AggregateFunction::Max => {
                 let Some(target) = &self.target else { return; };
                 let value = get_entity_value(entity, target);
-                if matches!(value, RowValue::Null) {
+                if matches!(value, Value::Null) {
                     return;
                 }
                 if let Some(current) = &self.max {
@@ -365,38 +367,38 @@ impl AggregateAccumulator {
         }
     }
 
-    fn finalize(&self) -> RowValue {
+    fn finalize(&self) -> Value {
         match self.function {
-            AggregateFunction::Count => RowValue::Int(self.count),
+            AggregateFunction::Count => Value::Int(self.count),
             AggregateFunction::Sum => {
                 if self.numeric_count == 0 {
-                    RowValue::Null
+                    Value::Null
                 } else if self.sum_is_int {
-                    RowValue::Int(self.sum as i64)
+                    Value::Int(self.sum as i64)
                 } else {
-                    RowValue::Float(self.sum)
+                    Value::Float(self.sum)
                 }
             }
             AggregateFunction::Avg => {
                 if self.numeric_count == 0 {
-                    RowValue::Null
+                    Value::Null
                 } else {
-                    RowValue::Float(self.sum / self.numeric_count as f64)
+                    Value::Float(self.sum / self.numeric_count as f64)
                 }
             }
-            AggregateFunction::Min => self.min.clone().unwrap_or(RowValue::Null),
-            AggregateFunction::Max => self.max.clone().unwrap_or(RowValue::Null),
+            AggregateFunction::Min => self.min.clone().unwrap_or(Value::Null),
+            AggregateFunction::Max => self.max.clone().unwrap_or(Value::Null),
         }
     }
 }
 
 struct AggregateGroup {
-    values: HashMap<String, RowValue>,
+    values: HashMap<String, Value>,
     accumulators: Vec<AggregateAccumulator>,
 }
 
 impl AggregateGroup {
-    fn new(values: HashMap<String, RowValue>, specs: &[AggregateSpec]) -> Self {
+    fn new(values: HashMap<String, Value>, specs: &[AggregateSpec]) -> Self {
         Self {
             values,
             accumulators: specs.iter().map(AggregateAccumulator::new).collect(),
@@ -409,7 +411,7 @@ impl AggregateGroup {
         }
     }
 
-    fn finalize(mut self) -> HashMap<String, RowValue> {
+    fn finalize(mut self) -> HashMap<String, Value> {
         for acc in &self.accumulators {
             self.values.insert(acc.output.clone(), acc.finalize());
         }
@@ -417,46 +419,46 @@ impl AggregateGroup {
     }
 }
 
-fn get_entity_value(entity: &Entity, key: &str) -> RowValue {
+fn get_entity_value(entity: &Entity, key: &str) -> Value {
     entity
         .attributes
         .get(key)
         .cloned()
-        .unwrap_or(RowValue::Null)
+        .unwrap_or(Value::Null)
 }
 
-fn numeric_value(value: &RowValue) -> Option<(f64, bool)> {
+fn numeric_value(value: &Value) -> Option<(f64, bool)> {
     match value {
-        RowValue::Int(i) => Some((*i as f64, true)),
-        RowValue::Float(f) => Some((*f, false)),
+        Value::Int(i) => Some((*i as f64, true)),
+        Value::Float(f) => Some((*f, false)),
         _ => None,
     }
 }
 
-fn value_key(value: &RowValue) -> String {
+fn value_key(value: &Value) -> String {
     match value {
-        RowValue::Int(i) => i.to_string(),
-        RowValue::Float(f) => f.to_string(),
-        RowValue::String(s) => s.clone(),
-        RowValue::Boolean(b) => b.to_string(),
-        RowValue::Null => "null".to_string(),
+        Value::Int(i) => i.to_string(),
+        Value::Float(f) => f.to_string(),
+        Value::String(s) => s.clone(),
+        Value::Boolean(b) => b.to_string(),
+        Value::Null => "null".to_string(),
     }
 }
 
-fn compare_values(left: &RowValue, right: &RowValue) -> std::cmp::Ordering {
+fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
     match (left, right) {
-        (RowValue::Int(a), RowValue::Int(b)) => a.cmp(b),
-        (RowValue::Int(a), RowValue::Float(b)) => {
+        (Value::Int(a), Value::Int(b)) => a.cmp(b),
+        (Value::Int(a), Value::Float(b)) => {
             (*a as f64).partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
         }
-        (RowValue::Float(a), RowValue::Int(b)) => {
+        (Value::Float(a), Value::Int(b)) => {
             a.partial_cmp(&(*b as f64)).unwrap_or(std::cmp::Ordering::Equal)
         }
-        (RowValue::Float(a), RowValue::Float(b)) => {
+        (Value::Float(a), Value::Float(b)) => {
             a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
         }
-        (RowValue::String(a), RowValue::String(b)) => a.cmp(b),
-        (RowValue::Boolean(a), RowValue::Boolean(b)) => a.cmp(b),
+        (Value::String(a), Value::String(b)) => a.cmp(b),
+        (Value::Boolean(a), Value::Boolean(b)) => a.cmp(b),
         _ => value_key(left).cmp(&value_key(right)),
     }
 }
