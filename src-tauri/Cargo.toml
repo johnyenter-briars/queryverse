@@ -26,7 +26,8 @@ serde_json = "1.0"
 jsonwebtoken = "9.0"
 dirs = "6.0"
 chrono = { version = "0.4", features = ["clock", "serde"] }
-powerplatform-dataverse-client = "0.1.0"
+powerplatform-dataverse-client = { path = "../../powerplatform-dataverse-client" }
+
 
 [dependencies.uuid]
 version = "1.18.1"
