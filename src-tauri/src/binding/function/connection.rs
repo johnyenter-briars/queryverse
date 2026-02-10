@@ -1,7 +1,6 @@
 use uuid::Uuid;
 
 use crate::auth::connection::{load_connections, save_connection, save_connections, utc_timestamp};
-use crate::auth::credentials::{exchange_authorization_code, validate_client_credentials};
 use crate::auth::token::prime_token_cache;
 use crate::binding::model::{
     connection::Connection, createconnectionpayload::CreateConnectionPayload,
@@ -12,6 +11,9 @@ use crate::binding::model::{
     updateconnectionresponse::UpdateConnectionResponse,
 };
 use crate::Database;
+use powerplatform_dataverse_client::auth::credentials::{
+    exchange_authorization_code, validate_client_credentials,
+};
 
 #[tauri::command]
 pub async fn create_connection(

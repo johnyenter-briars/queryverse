@@ -1,5 +1,4 @@
 pub mod binding;
-pub mod dataverse;
 pub mod auth;
 pub mod sql;
 
@@ -20,7 +19,8 @@ use crate::binding::function::{
     },
     settings::{get_settings, save_settings},
 };
-use crate::auth::token::CachedToken;
+use powerplatform_dataverse_client::auth::token::CachedToken;
+pub use powerplatform_dataverse_client::LogLevel;
 
 pub struct Database {
     pub selected_connection_id: Mutex<Option<Uuid>>,
@@ -46,19 +46,6 @@ pub struct DeleteBatch {
     pub entity_logical: String,
     pub primary_id_attribute: String,
     pub ids: Vec<String>,
-}
-
-#[derive(Debug, Clone, Copy, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum LogLevel {
-    Debug,
-    Information,
-}
-
-impl Default for LogLevel {
-    fn default() -> Self {
-        LogLevel::Information
-    }
 }
 
 #[derive(Default, serde::Serialize)]

@@ -2,17 +2,17 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 
 use crate::{
-    binding::model::dataverse::entity::Value as RowValue,
-    dataverse::queryengine::QueryEngine,
     sql,
 };
+use powerplatform_dataverse_client::dataverse::{entity::Value, serviceclient::ServiceClient};
 
 pub(crate) async fn resolve_primary_id_attribute(
-    query_engine: &QueryEngine,
+    service_client: &ServiceClient,
     entity_logical: &str,
     entity_set: &str,
 ) -> Result<String, String> {
-    let definitions = query_engine.list_entity_definitions().await?;
+    //TODO: i think this function should take in the entity definitions directly. I think we have them cached at this point in time
+    let definitions = service_client.list_entity_definitions().await?;
     let target_logical = normalize_ident(entity_logical);
     let target_set = normalize_ident(entity_set);
 
@@ -78,13 +78,13 @@ fn literal_to_json(literal: &sql::Literal) -> Result<JsonValue, String> {
     }
 }
 
-pub(crate) fn value_to_string(value: &RowValue) -> Option<String> {
+pub(crate) fn value_to_string(value: &Value) -> Option<String> {
     match value {
-        RowValue::String(value) => Some(value.clone()),
-        RowValue::Int(value) => Some(value.to_string()),
-        RowValue::Float(value) => Some(value.to_string()),
-        RowValue::Boolean(value) => Some(value.to_string()),
-        RowValue::Null => None,
+        Value::String(value) => Some(value.clone()),
+        Value::Int(value) => Some(value.to_string()),
+        Value::Float(value) => Some(value.to_string()),
+        Value::Boolean(value) => Some(value.to_string()),
+        Value::Null => None,
     }
 }
 

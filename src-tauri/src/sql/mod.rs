@@ -3,6 +3,7 @@ mod errors;
 mod fetchxml;
 mod lexer;
 mod parser;
+pub mod aggregate;
 
 pub use ast::{
     AggregateExpr, AggregateFunction, AggregateTarget, DeleteStmt, Expr, Literal, SelectColumns,

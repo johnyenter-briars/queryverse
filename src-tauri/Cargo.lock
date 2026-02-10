@@ -9,14 +9,13 @@ dependencies = [
  "chrono",
  "dirs",
  "jsonwebtoken",
- "reqwest",
+ "powerplatform-dataverse-client",
  "rfd",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
- "urlencoding",
  "uuid",
 ]
 
@@ -2954,6 +2953,16 @@ name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
+
+[[package]]
+name = "powerplatform-dataverse-client"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "urlencoding",
+]
 
 [[package]]
 name = "ppv-lite86"

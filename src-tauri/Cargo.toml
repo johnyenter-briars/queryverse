@@ -3,7 +3,7 @@ name = "QueryVerse"
 version = "0.1.0"
 description = "QueryVerse"
 authors = ["J + P"]
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -21,13 +21,13 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 rfd = "0.15"
-reqwest = { version = "0.12.24", features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-urlencoding = "2.1"
 jsonwebtoken = "9.0"
 dirs = "6.0"
 chrono = { version = "0.4", features = ["clock", "serde"] }
+powerplatform-dataverse-client = { path = "../../powerplatform-dataverse-client" }
+
 
 [dependencies.uuid]
 version = "1.18.1"
