@@ -95,7 +95,42 @@ pub async fn execute_sql(
 
     let (rows, message, success): (Vec<ResultRow>, String, bool) =
         if let Some(plan) = aggregate::aggregate_fallback_plan(&stmt) {
-            if plan.is_count_only() {
+            let is_joined = !stmt.joins.is_empty();
+            if is_joined {
+                let server = service_client
+                    .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
+                    .await;
+
+                match server {
+                    Ok(entities) => (
+                        entities
+                            .into_iter()
+                            .map(|entity| aggregate::entity_to_result_row(entity, &columns_order))
+                            .collect(),
+                        "Multiple results found".to_string(),
+                        true,
+                    ),
+                    Err(error) => {
+                        if error.contains("0x8004e023") {
+                            let demoted_fetchxml =
+                                aggregate::demote_aggregate_fetchxml(&parsed.fetchxml, &plan)?;
+                            let entities = service_client
+                                .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
+                                .await
+                                .map_err(|error| {
+                                    println!("Error: {error}");
+                                    error
+                                })?;
+
+                            let rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
+                            (rows, "Multiple results found".to_string(), true)
+                        } else {
+                            println!("Error: {error}");
+                            return Err(error);
+                        }
+                    }
+                }
+            } else if plan.is_count_only() {
                 let count_fetchxml = aggregate::demote_count_fetchxml(&parsed.fetchxml)?;
                 let total = service_client
                     .retrieve_multiple_fetchxml_count(&parsed.entity_set, &count_fetchxml)
