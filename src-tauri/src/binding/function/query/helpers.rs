@@ -1,18 +1,16 @@
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 
-use crate::{
-    sql,
+use crate::sql;
+use powerplatform_dataverse_client::dataverse::{
+    entity::Value, entityattribute::EntityAttribute, entitydefinition::EntityDefinition,
 };
-use powerplatform_dataverse_client::dataverse::{entity::Value, serviceclient::ServiceClient};
 
-pub(crate) async fn resolve_primary_id_attribute(
-    service_client: &ServiceClient,
+pub(crate) fn resolve_primary_id_attribute(
+    definitions: &[EntityDefinition],
     entity_logical: &str,
     entity_set: &str,
 ) -> Result<String, String> {
-    //TODO: i think this function should take in the entity definitions directly. I think we have them cached at this point in time
-    let definitions = service_client.list_entity_definitions().await?;
     let target_logical = normalize_ident(entity_logical);
     let target_set = normalize_ident(entity_set);
 
@@ -40,6 +38,39 @@ pub(crate) fn build_update_attributes(
         updates.insert(column, value);
     }
     Ok(updates)
+}
+
+pub(crate) fn validate_update_attributes(
+    assignments: &[sql::UpdateAssignment],
+    entity: &str,
+    entity_alias: Option<&str>,
+    attributes: &[EntityAttribute],
+) -> Result<(), String> {
+    let mut invalid: Vec<String> = Vec::new();
+
+    for assignment in assignments {
+        let column = normalize_update_column(&assignment.column, entity, entity_alias);
+        let normalized = normalize_ident(&column);
+        let matched = attributes.iter().find(|attribute| {
+            normalize_ident(&attribute.logical_name) == normalized
+                || normalize_ident(&attribute.schema_name) == normalized
+        });
+
+        if let Some(attribute) = matched {
+            if matches!(attribute.is_valid_for_update, Some(false)) {
+                invalid.push(column);
+            }
+        }
+    }
+
+    if invalid.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "UPDATE cannot modify read-only attributes: {}.",
+            invalid.join(", ")
+        ))
+    }
 }
 
 fn normalize_update_column(raw: &str, entity: &str, entity_alias: Option<&str>) -> String {

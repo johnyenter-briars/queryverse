@@ -11,8 +11,10 @@ use crate::{
 };
 
 use super::helpers::{
-    build_update_attributes, normalize_ident, resolve_primary_id_attribute, value_to_string,
+    build_update_attributes, normalize_ident, resolve_primary_id_attribute,
+    validate_update_attributes, value_to_string,
 };
+use super::metadata::{get_entity_attributes_cached, get_entity_definitions_cached};
 
 #[tauri::command]
 pub async fn prepare_update_sql(
@@ -59,8 +61,23 @@ pub async fn prepare_update_sql(
     let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
 
     let (entity_set, entity_logical) = sql::resolve_entity_names(&stmt.entity);
+    let definitions =
+        get_entity_definitions_cached(&service_client, &database, connection_id).await?;
     let primary_id_attribute =
-        resolve_primary_id_attribute(&service_client, &entity_logical, &entity_set).await?;
+        resolve_primary_id_attribute(&definitions, &entity_logical, &entity_set)?;
+
+    let attributes = get_entity_attributes_cached(
+        &service_client,
+        &database,
+        connection_id,
+        &entity_logical,
+        context.log_level,
+    )
+    .await
+    .map_err(|error| {
+        println!("Error: {error}");
+        error
+    })?;
 
     if stmt
         .assignments
@@ -69,6 +86,13 @@ pub async fn prepare_update_sql(
     {
         return Err("UPDATE cannot modify the primary ID attribute.".to_string());
     }
+
+    validate_update_attributes(
+        &stmt.assignments,
+        &stmt.entity,
+        stmt.entity_alias.as_deref(),
+        &attributes,
+    )?;
 
     let fetch = sql::update_to_fetchxml(&stmt, &primary_id_attribute)
         .map_err(|e| e.to_string())?;

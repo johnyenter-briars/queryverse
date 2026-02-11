@@ -5,4 +5,5 @@ export type EntityAttribute = {
     IsCustomAttribute?: boolean;
     IsValidODataAttribute?: boolean;
     IsValidForRead?: boolean;
+    IsValidForUpdate?: boolean;
 };

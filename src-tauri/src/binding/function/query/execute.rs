@@ -13,6 +13,8 @@ use crate::{
 };
 use powerplatform_dataverse_client::dataverse::{entity::Value, serviceclient::ServiceClient};
 
+use super::metadata::{get_entity_attributes_cached, get_entity_definitions_cached};
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FetchXmlPreview {
@@ -81,6 +83,15 @@ pub async fn execute_sql(
     }
 
     let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
+    let _ = get_entity_definitions_cached(&service_client, &database, connection_id).await;
+    let _ = get_entity_attributes_cached(
+        &service_client,
+        &database,
+        connection_id,
+        &parsed.entity_logical,
+        context.log_level,
+    )
+    .await;
 
     let (rows, message, success): (Vec<ResultRow>, String, bool) =
         if let Some(plan) = aggregate::aggregate_fallback_plan(&stmt) {
