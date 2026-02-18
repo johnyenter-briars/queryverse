@@ -107,7 +107,7 @@ impl<'a> Lexer<'a> {
                     kind: TokenKind::Eof,
                     line,
                     column,
-                })
+                });
             }
         };
 
@@ -198,7 +198,7 @@ impl<'a> Lexer<'a> {
                     format!("Unexpected character '{}'.", current),
                     line,
                     column,
-                ))
+                ));
             }
         };
 
@@ -305,7 +305,7 @@ impl<'a> Lexer<'a> {
                         "Unterminated string literal",
                         self.line,
                         self.column,
-                    ))
+                    ));
                 }
             }
         }
@@ -329,7 +329,7 @@ impl<'a> Lexer<'a> {
                         "Unterminated bracket identifier",
                         self.line,
                         self.column,
-                    ))
+                    ));
                 }
             }
         }

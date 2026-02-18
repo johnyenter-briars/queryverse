@@ -1,7 +1,9 @@
+use log::{debug, error};
 use serde::Serialize;
 use std::collections::HashMap;
 
 use crate::{
+    Database,
     auth::{connection::load_connections, token::get_access_token},
     binding::model::{
         executesqlrequest::ExecuteSqlRequest,
@@ -9,7 +11,6 @@ use crate::{
         resultrow::ResultRow,
     },
     sql::{self, aggregate},
-    Database, LogLevel,
 };
 use powerplatform_dataverse_client::dataverse::{entity::Value, serviceclient::ServiceClient};
 
@@ -42,8 +43,8 @@ pub async fn execute_sql(
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
 ) -> Result<ExecuteSqlResponse, String> {
-    if matches!(context.log_level, LogLevel::Debug) {
-        println!("SQL: {}", request.sql);
+    if context.log_level.includes_debug() {
+        debug!("SQL: {}", request.sql);
     }
 
     let stmt = sql::parse(&request.sql).map_err(|e| e.to_string())?;
@@ -82,61 +83,63 @@ pub async fn execute_sql(
 
     let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
 
-    let (rows, message, success): (Vec<ResultRow>, String, bool) =
-        if let Some(plan) = aggregate::aggregate_fallback_plan(&stmt) {
-            if plan.is_count_only() {
-                let count_fetchxml = aggregate::demote_count_fetchxml(&parsed.fetchxml)?;
-                let total = service_client
-                    .retrieve_multiple_fetchxml_count(&parsed.entity_set, &count_fetchxml)
-                    .await
-                    .map_err(|error| {
-                        println!("Error: {error}");
-                        error
-                    })?;
-
-                let mut attributes = HashMap::new();
-                let output = plan.count_output().ok_or_else(|| {
-                    "Count aggregate output was unavailable.".to_string()
-                })?;
-                attributes.insert(output.to_string(), Value::Int(total as i64));
-                attributes.insert(aggregate::ROW_NUMBER_ATTRIBUTE.to_string(), Value::Int(1));
-                aggregate::ensure_columns(&mut attributes, &columns_order);
-
-                (vec![ResultRow { attributes }], "Count retrieved.".to_string(), true)
-            } else {
-                let demoted_fetchxml = aggregate::demote_aggregate_fetchxml(
-                    &parsed.fetchxml,
-                    &plan,
-                )?;
-                let entities = service_client
-                    .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
-                    .await
-                    .map_err(|error| {
-                        println!("Error: {error}");
-                        error
-                    })?;
-
-                let rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
-                (rows, "Multiple results found".to_string(), true)
-            }
-        } else {
-            let entities = service_client
-                .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
+    let (rows, message, success): (Vec<ResultRow>, String, bool) = if let Some(plan) =
+        aggregate::aggregate_fallback_plan(&stmt)
+    {
+        if plan.is_count_only() {
+            let count_fetchxml = aggregate::demote_count_fetchxml(&parsed.fetchxml)?;
+            let total = service_client
+                .retrieve_multiple_fetchxml_count(&parsed.entity_set, &count_fetchxml)
                 .await
                 .map_err(|error| {
-                    println!("Error: {error}");
+                    error!("execute_sql retrieve_multiple_fetchxml_count failed: {error}");
                     error
                 })?;
 
+            let mut attributes = HashMap::new();
+            let output = plan
+                .count_output()
+                .ok_or_else(|| "Count aggregate output was unavailable.".to_string())?;
+            attributes.insert(output.to_string(), Value::Int(total as i64));
+            attributes.insert(aggregate::ROW_NUMBER_ATTRIBUTE.to_string(), Value::Int(1));
+            aggregate::ensure_columns(&mut attributes, &columns_order);
+
             (
-                entities
-                    .into_iter()
-                    .map(|entity| aggregate::entity_to_result_row(entity, &columns_order))
-                    .collect(),
-                "Multiple results found".to_string(),
+                vec![ResultRow { attributes }],
+                "Count retrieved.".to_string(),
                 true,
             )
-        };
+        } else {
+            let demoted_fetchxml = aggregate::demote_aggregate_fetchxml(&parsed.fetchxml, &plan)?;
+            let entities = service_client
+                .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
+                .await
+                .map_err(|error| {
+                    error!("execute_sql retrieve_multiple_fetchxml (aggregate) failed: {error}");
+                    error
+                })?;
+
+            let rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
+            (rows, "Multiple results found".to_string(), true)
+        }
+    } else {
+        let entities = service_client
+            .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
+            .await
+            .map_err(|error| {
+                error!("execute_sql retrieve_multiple_fetchxml failed: {error}");
+                error
+            })?;
+
+        (
+            entities
+                .into_iter()
+                .map(|entity| aggregate::entity_to_result_row(entity, &columns_order))
+                .collect(),
+            "Multiple results found".to_string(),
+            true,
+        )
+    };
 
     Ok(ExecuteSqlResponse {
         message,

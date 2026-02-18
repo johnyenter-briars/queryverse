@@ -23,9 +23,9 @@ impl Parser {
             TokenKind::Keyword(Keyword::Select) => self.parse_select(),
             TokenKind::Keyword(Keyword::Update)
             | TokenKind::Keyword(Keyword::Insert)
-            | TokenKind::Keyword(Keyword::Delete) => Err(self.error_at_current(
-                "Only SELECT queries can be converted to FetchXML in v1",
-            )),
+            | TokenKind::Keyword(Keyword::Delete) => {
+                Err(self.error_at_current("Only SELECT queries can be converted to FetchXML in v1"))
+            }
             _ => Err(self.error_at_current("Only SELECT statements are supported")),
         }
     }
@@ -268,9 +268,7 @@ impl Parser {
             };
 
             if !self.consume_keyword(Keyword::Join) {
-                return Err(self.error_at_current(
-                    "Expected JOIN after INNER or LEFT/LEFT OUTER",
-                ));
+                return Err(self.error_at_current("Expected JOIN after INNER or LEFT/LEFT OUTER"));
             }
 
             let entity = self.parse_identifier()?;
@@ -338,8 +336,7 @@ impl Parser {
                         && matches!(aggregate.target, AggregateTarget::Star)
                     {
                         if stmt.group_by.len() == 1 {
-                            aggregate.target =
-                                AggregateTarget::Column(stmt.group_by[0].clone());
+                            aggregate.target = AggregateTarget::Column(stmt.group_by[0].clone());
                         } else {
                             return Err(self.error_at_current(
                                 "COUNT(*) with GROUP BY requires a single group column; use COUNT(column)",
@@ -423,9 +420,7 @@ impl Parser {
                 });
             }
 
-            return Err(self.error_at_current(
-                "Expected IN, LIKE, or BETWEEN after NOT",
-            ));
+            return Err(self.error_at_current("Expected IN, LIKE, or BETWEEN after NOT"));
         }
 
         if self.consume_keyword(Keyword::In) {
@@ -481,11 +476,7 @@ impl Parser {
                 self.advance();
                 CompareOp::Gte
             }
-            _ => {
-                return Err(self.error_at_current(
-                    "Expected a comparison operator in predicate",
-                ))
-            }
+            _ => return Err(self.error_at_current("Expected a comparison operator in predicate")),
         };
 
         if self.is_identifier() {
@@ -604,9 +595,9 @@ impl Parser {
                 CompareOp::Gte
             }
             _ => {
-                return Err(self.error_at_current(
-                    "Expected a comparison operator in join condition",
-                ))
+                return Err(
+                    self.error_at_current("Expected a comparison operator in join condition")
+                );
             }
         };
         let right = self.parse_identifier()?;
@@ -639,10 +630,7 @@ impl Parser {
         if self.consume_keyword(keyword.clone()) {
             Ok(())
         } else {
-            Err(self.error_at_current(&format!(
-                "Expected keyword {:?}",
-                keyword
-            )))
+            Err(self.error_at_current(&format!("Expected keyword {:?}", keyword)))
         }
     }
 
