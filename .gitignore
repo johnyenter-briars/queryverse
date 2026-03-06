@@ -31,4 +31,4 @@ config/
 scratchpad
 notes*
 
-localwatch.ps1
+watch_local.ps1
