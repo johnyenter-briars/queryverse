@@ -52,6 +52,7 @@ import { EntityDefinition } from "./binding/model/EntityDefinition";
 import { EntityAttribute } from "./binding/model/EntityAttribute";
 import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 import { DEFAULT_SETTINGS, Settings } from "./binding/model/Settings";
+import { logError } from "./utility/logging";
 
 const DEFAULT_QUERY = "select top 20 *\nfrom account";
 const isUpdateQuery = (sql: string) => /^\s*update\b/i.test(sql);
@@ -189,7 +190,7 @@ export default function App() {
                     setSettings(response.value);
                 }
             } catch (error) {
-                console.error("Failed to load settings", error);
+                logError("Failed to load settings", error, "queryverse::frontend::app");
             }
         };
 
@@ -209,7 +210,7 @@ export default function App() {
                 setSettings(response.value);
             }
         } catch (error) {
-            console.error("Failed to save settings", error);
+            logError("Failed to save settings", error, "queryverse::frontend::app");
         } finally {
             setSettingsSaving(false);
         }
@@ -387,7 +388,11 @@ export default function App() {
                     setActiveTabId(newId);
                 }
             } catch (error) {
-                console.error("Failed to initialize from CLI args", error);
+                logError(
+                    "Failed to initialize from CLI args",
+                    error,
+                    "queryverse::frontend::app"
+                );
             }
         };
 
@@ -628,7 +633,7 @@ export default function App() {
             setTabs((prev) => [...prev, newTab]);
             setActiveTabId(newId);
         } catch (error) {
-            console.error("Failed to open SQL file", error);
+            logError("Failed to open SQL file", error, "queryverse::frontend::app");
         }
     };
 
@@ -650,7 +655,7 @@ export default function App() {
                 isEditorDirty: false,
             }));
         } catch (error) {
-            console.error("Failed to save SQL file", error);
+            logError("Failed to save SQL file", error, "queryverse::frontend::app");
         }
     };
 
@@ -676,7 +681,7 @@ export default function App() {
                 isEditorDirty: false,
             }));
         } catch (error) {
-            console.error("Failed to save SQL file as", error);
+            logError("Failed to save SQL file as", error, "queryverse::frontend::app");
         }
     };
 
@@ -716,7 +721,11 @@ export default function App() {
                     setEntityAttributesError({});
                 }
             } catch (error) {
-                console.error("Failed to load entity definitions", error);
+                logError(
+                    "Failed to load entity definitions",
+                    error,
+                    "queryverse::frontend::app"
+                );
             }
         }
     };

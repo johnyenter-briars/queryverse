@@ -27,6 +27,7 @@ jsonwebtoken = "9.0"
 dirs = "6.0"
 chrono = { version = "0.4", features = ["clock", "serde"] }
 powerplatform-dataverse-client = { path = "../../powerplatform-dataverse-client" }
+log = "0.4"
 
 
 [dependencies.uuid]

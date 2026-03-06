@@ -1,13 +1,15 @@
+use log::{debug, error};
 use powerplatform_dataverse_client::dataverse::serviceclient::ServiceClient;
 use uuid::Uuid;
 
 use crate::{
+    Database,
     auth::{connection::load_connections, token::get_access_token},
     binding::model::{
         updatesqlexecuteresponse::UpdateSqlExecuteResponse,
         updatesqlpreviewresponse::UpdateSqlPreviewResponse,
     },
-    sql, Database, LogLevel,
+    sql,
 };
 
 use super::helpers::{
@@ -21,8 +23,8 @@ pub async fn prepare_update_sql(
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
 ) -> Result<UpdateSqlPreviewResponse, String> {
-    if matches!(context.log_level, LogLevel::Debug) {
-        println!("SQL: {}", sql);
+    if context.log_level.includes_debug() {
+        debug!("SQL: {}", sql);
     }
 
     let stmt = sql::parse_update(&sql).map_err(|e| e.to_string())?;
@@ -62,22 +64,19 @@ pub async fn prepare_update_sql(
     let primary_id_attribute =
         resolve_primary_id_attribute(&service_client, &entity_logical, &entity_set).await?;
 
-    if stmt
-        .assignments
-        .iter()
-        .any(|assignment| normalize_ident(&assignment.column) == normalize_ident(&primary_id_attribute))
-    {
+    if stmt.assignments.iter().any(|assignment| {
+        normalize_ident(&assignment.column) == normalize_ident(&primary_id_attribute)
+    }) {
         return Err("UPDATE cannot modify the primary ID attribute.".to_string());
     }
 
-    let fetch = sql::update_to_fetchxml(&stmt, &primary_id_attribute)
-        .map_err(|e| e.to_string())?;
+    let fetch = sql::update_to_fetchxml(&stmt, &primary_id_attribute).map_err(|e| e.to_string())?;
 
     let entities = service_client
         .retrieve_multiple_fetchxml(&fetch.entity_set, &fetch.fetchxml)
         .await
         .map_err(|error| {
-            println!("Error: {error}");
+            error!("prepare_update_sql retrieve_multiple_fetchxml failed: {error}");
             error
         })?;
 
@@ -87,8 +86,8 @@ pub async fn prepare_update_sql(
             .attributes
             .get(&primary_id_attribute)
             .ok_or_else(|| "Primary ID attribute missing from results".to_string())?;
-        let id = value_to_string(value)
-            .ok_or_else(|| "Primary ID attribute was null".to_string())?;
+        let id =
+            value_to_string(value).ok_or_else(|| "Primary ID attribute was null".to_string())?;
         ids.push(id);
     }
 

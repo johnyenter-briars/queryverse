@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use super::connection::queryverse_data_dir;
 use crate::binding::model::settings::Settings;
 
 pub fn load_settings() -> Result<Settings, String> {
@@ -26,9 +27,6 @@ pub fn save_settings(settings: &Settings) -> Result<(), String> {
 }
 
 fn settings_path() -> Result<PathBuf, String> {
-    let base = dirs::data_local_dir().ok_or("Unable to resolve local app data directory")?;
-    let dir = base.join("QueryVerse");
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let dir = queryverse_data_dir()?;
     Ok(dir.join("settings.json"))
 }
-

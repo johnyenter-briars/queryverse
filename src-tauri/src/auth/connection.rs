@@ -1,10 +1,8 @@
+use chrono::Utc;
 use std::fs;
 use std::path::PathBuf;
-use chrono::Utc;
 
-use crate::binding::model::{
-    connection::Connection,
-};
+use crate::binding::model::connection::Connection;
 
 pub fn load_connections() -> Result<Vec<Connection>, String> {
     let path = connections_path()?;
@@ -36,10 +34,15 @@ pub fn save_connections(connections: &[Connection]) -> Result<(), String> {
 }
 
 pub fn connections_path() -> Result<PathBuf, String> {
+    let dir = queryverse_data_dir()?;
+    Ok(dir.join("connections.json"))
+}
+
+pub fn queryverse_data_dir() -> Result<PathBuf, String> {
     let base = dirs::data_local_dir().ok_or("Unable to resolve local app data directory")?;
     let dir = base.join("QueryVerse");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir.join("connections.json"))
+    Ok(dir)
 }
 
 pub fn utc_timestamp() -> String {

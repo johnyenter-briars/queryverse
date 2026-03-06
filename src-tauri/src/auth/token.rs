@@ -1,10 +1,11 @@
+use log::debug;
 use powerplatform_dataverse_client::auth::token::{
-    fetch_token, is_expiring_soon, AuthConfig, CachedToken,
+    AuthConfig, CachedToken, fetch_token, is_expiring_soon,
 };
 
+use crate::Database;
 use crate::auth::config::auth_config_from_connection;
 use crate::binding::model::connection::Connection;
-use crate::Database;
 
 fn cache_token(database: &Database, id: uuid::Uuid, token: CachedToken) -> Result<(), String> {
     let mut cache = database
@@ -60,7 +61,7 @@ pub async fn get_access_token(
 
     if let Some(cached) = get_cached_token(database, id)? {
         if !cached.access_token.trim().is_empty() && !is_expiring_soon(cached.expires_at) {
-            println!("Valid token found. Connection: {:?}", connection.id());
+            debug!("Valid token found. Connection: {:?}", connection.id());
             return Ok(cached.access_token);
         }
     }

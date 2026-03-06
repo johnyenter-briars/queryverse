@@ -1,11 +1,12 @@
 use crate::{
-    auth::{connection::load_connections, token::get_access_token},
-    binding::model::{
-        response::MultipleResponse,
-    },
     Database,
+    auth::{connection::load_connections, token::get_access_token},
+    binding::model::response::MultipleResponse,
 };
-use powerplatform_dataverse_client::dataverse::{entityattribute::EntityAttribute, entitydefinition::EntityDefinition, serviceclient::ServiceClient};
+use powerplatform_dataverse_client::dataverse::{
+    entityattribute::EntityAttribute, entitydefinition::EntityDefinition,
+    serviceclient::ServiceClient,
+};
 
 #[tauri::command]
 pub async fn list_entity_definitions(
@@ -75,9 +76,7 @@ pub async fn list_entity_attributes(
     }
 
     let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
-    let value = service_client
-        .list_entity_attributes(&logical_name)
-        .await?;
+    let value = service_client.list_entity_attributes(&logical_name).await?;
 
     Ok(MultipleResponse {
         message: "Attributes retrieved.".to_string(),

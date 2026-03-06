@@ -1,10 +1,8 @@
 use std::path::Path;
 
 use crate::binding::model::{
-    opensqlfileresponse::OpenSqlFileResponse,
-    savesqlfileasrequest::SaveSqlFileAsRequest,
-    savesqlfileasresponse::SaveSqlFileAsResponse,
-    savesqlfilerequest::SaveSqlFileRequest,
+    opensqlfileresponse::OpenSqlFileResponse, savesqlfileasrequest::SaveSqlFileAsRequest,
+    savesqlfileasresponse::SaveSqlFileAsResponse, savesqlfilerequest::SaveSqlFileRequest,
 };
 
 #[tauri::command]
