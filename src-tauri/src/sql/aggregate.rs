@@ -12,6 +12,17 @@ use crate::sql::{
 pub fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultRow {
     let mut attributes = std::collections::HashMap::new();
     for (key, value) in entity.attributes {
+        if let Some(base) = lookup_base_attribute(&key) {
+            let should_insert = match attributes.get(&base) {
+                None => true,
+                Some(Value::Null) => true,
+                _ => false,
+            };
+            if should_insert {
+                attributes.insert(base, value);
+            }
+            continue;
+        }
         let normalized_key = if let Some(base) = key.strip_prefix("col_") {
             if attributes.contains_key(base) {
                 key
@@ -614,6 +625,19 @@ fn push_candidate(candidates: &mut Vec<String>, value: &str) {
     }
 }
 
+fn lookup_base_attribute(key: &str) -> Option<String> {
+    if !key.starts_with('_') || !key.ends_with("_value") {
+        return None;
+    }
+
+    let trimmed = &key[1..key.len() - "_value".len()];
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    Some(trimmed.to_string())
+}
+
 fn numeric_value(value: &Value) -> Option<(f64, bool)> {
     match value {
         Value::Int(i) => Some((*i as f64, true)),
@@ -718,6 +742,26 @@ mod tests {
             ca_row.attributes.get("count"),
             Some(&Value::Int(2))
         );
+    }
+
+    #[test]
+    fn maps_lookup_value_keys_to_base_attribute() {
+        let mut entity = Entity::new();
+        entity.attributes.insert(
+            "_createdby_value".to_string(),
+            Value::String("abc".to_string()),
+        );
+
+        let row = super::entity_to_result_row(
+            entity,
+            &vec!["accountid".to_string(), "createdby".to_string()],
+        );
+
+        assert_eq!(
+            row.attributes.get("createdby"),
+            Some(&Value::String("abc".to_string()))
+        );
+        assert!(!row.attributes.contains_key("_createdby_value"));
     }
 
     #[test]
