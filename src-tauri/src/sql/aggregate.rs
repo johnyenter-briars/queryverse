@@ -12,6 +12,17 @@ use crate::sql::{
 pub fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultRow {
     let mut attributes = std::collections::HashMap::new();
     for (key, value) in entity.attributes {
+        if let Some(formatted_key) = lookup_formatted_key(&key) {
+            let should_insert = match attributes.get(&formatted_key) {
+                None => true,
+                Some(Value::Null) => true,
+                _ => false,
+            };
+            if should_insert {
+                attributes.insert(formatted_key, value);
+            }
+            continue;
+        }
         if let Some(base) = lookup_base_attribute(&key) {
             let should_insert = match attributes.get(&base) {
                 None => true,
@@ -638,6 +649,25 @@ fn lookup_base_attribute(key: &str) -> Option<String> {
     Some(trimmed.to_string())
 }
 
+fn lookup_formatted_key(key: &str) -> Option<String> {
+    const FORMATTED_SUFFIX: &str = "@OData.Community.Display.V1.FormattedValue";
+    if !key.ends_with(FORMATTED_SUFFIX) {
+        return None;
+    }
+
+    let raw = &key[..key.len() - FORMATTED_SUFFIX.len()];
+    if raw.is_empty() {
+        return None;
+    }
+
+    let base = lookup_base_attribute(raw).unwrap_or_else(|| raw.to_string());
+    if base.is_empty() {
+        return None;
+    }
+
+    Some(format!("{}name", base))
+}
+
 fn numeric_value(value: &Value) -> Option<(f64, bool)> {
     match value {
         Value::Int(i) => Some((*i as f64, true)),
@@ -762,6 +792,25 @@ mod tests {
             Some(&Value::String("abc".to_string()))
         );
         assert!(!row.attributes.contains_key("_createdby_value"));
+    }
+
+    #[test]
+    fn maps_formatted_lookup_to_name_column() {
+        let mut entity = Entity::new();
+        entity.attributes.insert(
+            "_createdby_value@OData.Community.Display.V1.FormattedValue".to_string(),
+            Value::String("A User".to_string()),
+        );
+
+        let row = super::entity_to_result_row(
+            entity,
+            &vec!["accountid".to_string(), "createdby".to_string()],
+        );
+
+        assert_eq!(
+            row.attributes.get("createdbyname"),
+            Some(&Value::String("A User".to_string()))
+        );
     }
 
     #[test]
