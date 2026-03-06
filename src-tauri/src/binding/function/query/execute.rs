@@ -136,7 +136,9 @@ pub async fn execute_sql_with_client(
                                 error
                             })?;
 
-                        let rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
+                        let mut rows =
+                            aggregate::aggregate_rows(entities, &plan, &columns_order);
+                        aggregate::sort_rows_by_order(&mut rows, &stmt.order_by);
                         (rows, "Multiple results found".to_string(), true)
                     } else {
                         error!("Error: {error}");
@@ -179,7 +181,8 @@ pub async fn execute_sql_with_client(
                     error
                 })?;
 
-            let rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
+            let mut rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
+            aggregate::sort_rows_by_order(&mut rows, &stmt.order_by);
             (rows, "Multiple results found".to_string(), true)
         }
     } else {

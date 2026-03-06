@@ -1,10 +1,12 @@
 use std::collections::HashMap;
+use std::cmp::Ordering;
 
 use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
 
 use crate::binding::model::resultrow::ResultRow;
 use crate::sql::{
-    AggregateFunction, AggregateTarget, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
+    AggregateFunction, AggregateTarget, OrderBy, SelectColumns, SelectItem, SelectItemKind,
+    SelectStmt,
 };
 
 pub const ROW_NUMBER_ATTRIBUTE: &str = "__rownum";
@@ -151,14 +153,15 @@ fn aggregate_output_name(item: &SelectItem) -> String {
 pub fn demote_count_fetchxml(fetchxml: &str) -> Result<String, String> {
     let mut updated = fetchxml.replace(" aggregate=\"true\"", "");
     updated = updated.replace(" aggregate=\"count\"", "");
-    Ok(updated)
+    strip_order_clauses(&updated)
 }
 
 pub fn demote_aggregate_fetchxml(fetchxml: &str, plan: &AggregatePlan) -> Result<String, String> {
     let mut updated = fetchxml.replace(" aggregate=\"true\"", "");
     updated = updated.replace(" groupby=\"true\"", "");
     updated = strip_aggregate_attributes(&updated)?;
-    ensure_attributes(&updated, &plan.required_columns())
+    let updated = ensure_attributes(&updated, &plan.required_columns())?;
+    strip_order_clauses(&updated)
 }
 
 fn strip_aggregate_attributes(fetchxml: &str) -> Result<String, String> {
@@ -186,6 +189,31 @@ fn strip_aggregate_attributes(fetchxml: &str) -> Result<String, String> {
         }
 
         remaining = &remaining[attr_end..];
+    }
+
+    Ok(output)
+}
+
+fn strip_order_clauses(fetchxml: &str) -> Result<String, String> {
+    let mut output = String::new();
+    let mut remaining = fetchxml;
+
+    loop {
+        let start = match remaining.find("<order") {
+            Some(pos) => pos,
+            None => {
+                output.push_str(remaining);
+                break;
+            }
+        };
+
+        output.push_str(&remaining[..start]);
+        let order_end = remaining[start..]
+            .find("/>")
+            .ok_or_else(|| "Invalid FetchXML order tag".to_string())?
+            + start
+            + 2;
+        remaining = &remaining[order_end..];
     }
 
     Ok(output)
@@ -367,6 +395,34 @@ pub fn aggregate_rows(
     }
 
     rows
+}
+
+pub fn sort_rows_by_order(rows: &mut [ResultRow], order_by: &[OrderBy]) {
+    if order_by.is_empty() || rows.len() <= 1 {
+        return;
+    }
+
+    rows.sort_by(|left, right| {
+        for order in order_by {
+            let left_value = left
+                .attributes
+                .get(&order.column)
+                .unwrap_or(&Value::Null);
+            let right_value = right
+                .attributes
+                .get(&order.column)
+                .unwrap_or(&Value::Null);
+            let mut cmp = compare_values(left_value, right_value);
+            if order.descending {
+                cmp = cmp.reverse();
+            }
+            if cmp != Ordering::Equal {
+                return cmp;
+            }
+        }
+
+        Ordering::Equal
+    });
 }
 
 struct GroupColumn {
@@ -599,7 +655,10 @@ fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
 
 #[cfg(test)]
 mod tests {
-    use super::{aggregate_fallback_plan, aggregate_rows, AggregateTarget, SelectColumns};
+    use super::{
+        aggregate_fallback_plan, aggregate_rows, sort_rows_by_order, AggregateTarget, OrderBy,
+        SelectColumns,
+    };
     use crate::sql::{AggregateExpr, AggregateFunction, SelectItem, SelectItemKind, SelectStmt};
     use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
 
@@ -664,5 +723,58 @@ mod tests {
             ca_row.attributes.get("count"),
             Some(&Value::Int(2))
         );
+    }
+
+    #[test]
+    fn sorts_aggregate_rows_by_count_desc() {
+        let stmt = SelectStmt {
+            columns: SelectColumns::Columns(vec![
+                SelectItem {
+                    kind: SelectItemKind::Aggregate(AggregateExpr {
+                        function: AggregateFunction::Count,
+                        target: AggregateTarget::Star,
+                    }),
+                    alias: None,
+                },
+                SelectItem {
+                    kind: SelectItemKind::Attribute("address1_stateorprovince".to_string()),
+                    alias: None,
+                },
+            ]),
+            entity: "account".to_string(),
+            entity_alias: None,
+            joins: Vec::new(),
+            top: None,
+            distinct: false,
+            filter: None,
+            group_by: vec!["address1_stateorprovince".to_string()],
+            order_by: Vec::new(),
+        };
+
+        let plan = aggregate_fallback_plan(&stmt).expect("aggregate plan");
+        let entities = vec![
+            make_entity(Some("CA")),
+            make_entity(Some("CA")),
+            make_entity(Some("WA")),
+        ];
+        let mut rows = aggregate_rows(
+            entities,
+            &plan,
+            &vec![
+                "count".to_string(),
+                "address1_stateorprovince".to_string(),
+            ],
+        );
+
+        sort_rows_by_order(
+            &mut rows,
+            &[OrderBy {
+                column: "count".to_string(),
+                descending: true,
+            }],
+        );
+
+        let first = rows.first().expect("row");
+        assert_eq!(first.attributes.get("count"), Some(&Value::Int(2)));
     }
 }

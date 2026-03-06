@@ -7,7 +7,7 @@ mod parser;
 
 pub use ast::{
     AggregateExpr, AggregateFunction, AggregateTarget, DeleteStmt, Expr, Literal, SelectColumns,
-    SelectItem, SelectItemKind, SelectStmt, UpdateAssignment, UpdateStmt,
+    OrderBy, SelectItem, SelectItemKind, SelectStmt, UpdateAssignment, UpdateStmt,
 };
 pub use errors::{ParseError, SqlError, TranslationError};
 
@@ -307,6 +307,21 @@ mod tests {
             result
                 .fetchxml
                 .contains("<order alias=\"col_address1_city\"")
+        );
+    }
+
+    #[test]
+    fn orders_by_aggregate_expression() {
+        let sql = "select count(*), address1_stateorprovince from account group by address1_stateorprovince order by count(*) desc";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+        assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
+        assert!(result
+            .fetchxml
+            .contains("attribute name=\"accountid\" alias=\"count\" aggregate=\"count\""));
+        assert!(
+            result
+                .fetchxml
+                .contains("<order alias=\"count\" descending=\"true\"")
         );
     }
 
