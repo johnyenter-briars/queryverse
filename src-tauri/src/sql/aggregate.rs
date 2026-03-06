@@ -9,8 +9,6 @@ use crate::sql::{
     SelectStmt,
 };
 
-pub const ROW_NUMBER_ATTRIBUTE: &str = "__rownum";
-
 pub fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultRow {
     let mut attributes = std::collections::HashMap::new();
     for (key, value) in entity.attributes {
@@ -385,13 +383,10 @@ pub fn aggregate_rows(
     }
 
     let mut rows: Vec<ResultRow> = Vec::with_capacity(groups.len());
-    let mut row_number = 1i64;
     for (_, group) in groups {
         let mut attributes = group.finalize();
-        attributes.insert(ROW_NUMBER_ATTRIBUTE.to_string(), Value::Int(row_number));
         ensure_columns(&mut attributes, columns_order);
         rows.push(ResultRow { attributes });
-        row_number += 1;
     }
 
     rows
