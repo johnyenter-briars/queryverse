@@ -13,6 +13,7 @@ use crate::{
 };
 
 use super::helpers::{resolve_primary_id_attribute, value_to_string};
+use super::metadata::get_entity_definitions_cached;
 
 #[tauri::command]
 pub async fn prepare_delete_sql(
@@ -55,8 +56,10 @@ pub async fn prepare_delete_sql(
     let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
 
     let (entity_set, entity_logical) = sql::resolve_entity_names(&stmt.entity);
+    let definitions =
+        get_entity_definitions_cached(&service_client, &database, connection_id).await?;
     let primary_id_attribute =
-        resolve_primary_id_attribute(&service_client, &entity_logical, &entity_set).await?;
+        resolve_primary_id_attribute(&definitions, &entity_logical, &entity_set)?;
 
     let fetch = sql::delete_to_fetchxml(&stmt, &primary_id_attribute).map_err(|e| e.to_string())?;
 

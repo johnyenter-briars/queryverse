@@ -1,1 +1,1 @@
-npm run tauri dev -- -- -- --sql-file C:\Users\Owner\dev\queryverse-test\query.sql --connection jyb --log-level debug 
+npm run tauri dev -- -- -- -- --sql-file C:\Users\jyenterbriars\dev\queryverse-test\query.sql --connection jyb --log-level debug 

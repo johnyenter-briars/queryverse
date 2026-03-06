@@ -27,6 +27,8 @@ use powerplatform_dataverse_client::auth::token::CachedToken;
 pub struct Database {
     pub selected_connection_id: Mutex<Option<Uuid>>,
     pub token_cache: Mutex<HashMap<Uuid, CachedToken>>,
+    pub entity_definitions_cache: Mutex<HashMap<Uuid, Vec<EntityDefinition>>>,
+    pub entity_attributes_cache: Mutex<HashMap<(Uuid, String), Vec<EntityAttribute>>>,
     pub update_batches: Mutex<HashMap<String, UpdateBatch>>,
     pub delete_batches: Mutex<HashMap<String, DeleteBatch>>,
 }
@@ -63,6 +65,8 @@ impl Default for Database {
         Self {
             selected_connection_id: Mutex::new(None),
             token_cache: Mutex::new(HashMap::new()),
+            entity_definitions_cache: Mutex::new(HashMap::new()),
+            entity_attributes_cache: Mutex::new(HashMap::new()),
             update_batches: Mutex::new(HashMap::new()),
             delete_batches: Mutex::new(HashMap::new()),
         }

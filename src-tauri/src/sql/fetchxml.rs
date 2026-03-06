@@ -81,6 +81,8 @@ pub fn to_fetchxml(
             join,
             entity_name,
             &join_map,
+            aggregate_mode,
+            &group_by,
             join_attributes.remove(&join_key(join)),
             &mut out,
         )?;
@@ -449,6 +451,8 @@ fn write_join(
     join: &JoinClause,
     base_entity: &str,
     join_map: &JoinMap,
+    aggregate_mode: bool,
+    group_by: &std::collections::HashSet<String>,
     attributes: Option<Vec<SelectItem>>,
     out: &mut String,
 ) -> Result<(), TranslationError> {
@@ -493,8 +497,8 @@ fn write_join(
                 &item,
                 base_entity,
                 None,
-                false,
-                &std::collections::HashSet::new(),
+                aggregate_mode,
+                group_by,
                 out,
             )?;
         }

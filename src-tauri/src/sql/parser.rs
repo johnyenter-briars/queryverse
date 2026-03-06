@@ -330,18 +330,22 @@ impl Parser {
         }
 
         if let SelectColumns::Columns(items) = &mut stmt.columns {
-            for item in items {
-                if let SelectItemKind::Aggregate(aggregate) = &mut item.kind {
-                    if matches!(aggregate.function, AggregateFunction::Count)
-                        && matches!(aggregate.target, AggregateTarget::Star)
-                    {
-                        if stmt.group_by.len() == 1 {
-                            aggregate.target = AggregateTarget::Column(stmt.group_by[0].clone());
-                        } else {
-                            return Err(self.error_at_current(
-                                "COUNT(*) with GROUP BY requires a single group column; use COUNT(column)",
-                            ));
-                        }
+                for item in items {
+                    if let SelectItemKind::Aggregate(aggregate) = &mut item.kind {
+                        if matches!(aggregate.function, AggregateFunction::Count)
+                            && matches!(aggregate.target, AggregateTarget::Star)
+                        {
+                            if stmt.group_by.len() == 1 {
+                                let group = stmt.group_by[0].clone();
+                                if group.contains('.') {
+                                    continue;
+                                }
+                                aggregate.target = AggregateTarget::Column(group);
+                            } else {
+                                return Err(self.error_at_current(
+                                    "COUNT(*) with GROUP BY requires a single group column; use COUNT(column)",
+                                ));
+                            }
                     }
                 }
             }

@@ -198,6 +198,13 @@ fn ensure_attributes(fetchxml: &str, columns: &[String]) -> Result<String, Strin
 
     let mut missing: Vec<String> = Vec::new();
     for column in columns {
+        if let Some((table, attr)) = split_qualified_column(column) {
+            if has_link_entity_attribute(fetchxml, &table, &attr) {
+                continue;
+            }
+            missing.push(column.clone());
+            continue;
+        }
         let needle_double = format!("name=\"{}\"", column);
         let needle_single = format!("name='{}'", column);
         if !fetchxml.contains(&needle_double) && !fetchxml.contains(&needle_single) {
@@ -209,23 +216,111 @@ fn ensure_attributes(fetchxml: &str, columns: &[String]) -> Result<String, Strin
         return Ok(fetchxml.to_string());
     }
 
-    let entity_start = fetchxml
-        .find("<entity")
-        .ok_or_else(|| "FetchXML must contain an <entity> element".to_string())?;
-    let entity_end = fetchxml[entity_start..]
-        .find('>')
-        .ok_or_else(|| "FetchXML <entity> element is not closed".to_string())?
-        + entity_start;
-
-    let mut inserted = String::new();
-    inserted.push_str(&fetchxml[..=entity_end]);
+    let mut updated = fetchxml.to_string();
     for column in missing {
+        if let Some((table, attr)) = split_qualified_column(&column) {
+            updated = insert_link_entity_attribute(&updated, &table, &attr)?;
+            continue;
+        }
+
+        let entity_start = updated
+            .find("<entity")
+            .ok_or_else(|| "FetchXML must contain an <entity> element".to_string())?;
+        let entity_end = updated[entity_start..]
+            .find('>')
+            .ok_or_else(|| "FetchXML <entity> element is not closed".to_string())?
+            + entity_start;
+
+        let mut inserted = String::new();
+        inserted.push_str(&updated[..=entity_end]);
         inserted.push_str("<attribute name=\"");
         inserted.push_str(&xml_escape(&column));
         inserted.push_str("\" />");
+        inserted.push_str(&updated[entity_end + 1..]);
+        updated = inserted;
     }
-    inserted.push_str(&fetchxml[entity_end + 1..]);
-    Ok(inserted)
+
+    Ok(updated)
+}
+
+fn split_qualified_column(value: &str) -> Option<(String, String)> {
+    let mut parts = value.splitn(2, '.');
+    let table = parts.next()?;
+    let column = parts.next()?;
+    Some((table.to_string(), column.to_string()))
+}
+
+fn has_link_entity_attribute(fetchxml: &str, table: &str, column: &str) -> bool {
+    let lower = fetchxml.to_ascii_lowercase();
+    let table_lower = table.to_ascii_lowercase();
+    let column_lower = column.to_ascii_lowercase();
+
+    let mut search_from = 0usize;
+    while let Some(pos) = lower[search_from..].find("<link-entity") {
+        let start = search_from + pos;
+        let tag_end = match lower[start..].find('>') {
+            Some(end) => start + end,
+            None => return false,
+        };
+
+        let tag = &lower[start..=tag_end];
+        let alias_match = format!("alias=\"{}\"", table_lower);
+        let name_match = format!("name=\"{}\"", table_lower);
+        if tag.contains(&alias_match) || tag.contains(&name_match) {
+            let close = match lower[tag_end..].find("</link-entity>") {
+                Some(end) => tag_end + end,
+                None => return false,
+            };
+            let body = &lower[tag_end + 1..close];
+            let needle_double = format!("name=\"{}\"", column_lower);
+            let needle_single = format!("name='{}'", column_lower);
+            if body.contains(&needle_double) || body.contains(&needle_single) {
+                return true;
+            }
+        }
+
+        search_from = tag_end + 1;
+    }
+
+    false
+}
+
+fn insert_link_entity_attribute(
+    fetchxml: &str,
+    table: &str,
+    column: &str,
+) -> Result<String, String> {
+    let lower = fetchxml.to_ascii_lowercase();
+    let table_lower = table.to_ascii_lowercase();
+
+    let mut search_from = 0usize;
+    while let Some(pos) = lower[search_from..].find("<link-entity") {
+        let start = search_from + pos;
+        let tag_end = lower[start..]
+            .find('>')
+            .ok_or_else(|| "FetchXML <link-entity> element is not closed".to_string())?
+            + start;
+
+        let tag = &lower[start..=tag_end];
+        let alias_match = format!("alias=\"{}\"", table_lower);
+        let name_match = format!("name=\"{}\"", table_lower);
+        if tag.contains(&alias_match) || tag.contains(&name_match) {
+            let mut inserted = String::new();
+            inserted.push_str(&fetchxml[..=tag_end]);
+            inserted.push_str("<attribute name=\"");
+            inserted.push_str(&xml_escape(column));
+            inserted.push_str("\" />");
+            inserted.push_str(&fetchxml[tag_end + 1..]);
+            return Ok(inserted);
+        }
+
+        search_from = tag_end + 1;
+    }
+
+    Err(format!(
+        "FetchXML link-entity for '{}' not found while adding attribute '{}'",
+        table, column
+    ))
 }
 
 fn xml_escape(value: &str) -> String {
