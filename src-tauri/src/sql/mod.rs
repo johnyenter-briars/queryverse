@@ -276,16 +276,20 @@ mod tests {
     }
 
     #[test]
-    fn rewrites_count_star_with_single_group_by() {
+    fn keeps_count_star_with_group_by() {
         let sql = "select count(*), address1_country from account group by address1_country";
         let result = sql_to_fetchxml(sql).expect("fetchxml");
         assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
         assert!(result
             .fetchxml
-            .contains("attribute name=\"address1_country\" alias=\"count_address1_country\" aggregate=\"count\""));
+            .contains("attribute name=\"accountid\" alias=\"count\" aggregate=\"count\""));
         assert!(result.fetchxml.contains(
             "attribute name=\"address1_country\" alias=\"col_address1_country\" groupby=\"true\""
         ));
+        assert_eq!(
+            result.column_outputs,
+            vec!["count".to_string(), "address1_country".to_string()]
+        );
     }
 
     #[test]
@@ -293,9 +297,9 @@ mod tests {
         let sql = "select count(*), address1_city from account group by address1_city order by address1_city asc";
         let result = sql_to_fetchxml(sql).expect("fetchxml");
         assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
-        assert!(result.fetchxml.contains(
-            "attribute name=\"address1_city\" alias=\"count_address1_city\" aggregate=\"count\""
-        ));
+        assert!(result
+            .fetchxml
+            .contains("attribute name=\"accountid\" alias=\"count\" aggregate=\"count\""));
         assert!(result.fetchxml.contains(
             "attribute name=\"address1_city\" alias=\"col_address1_city\" groupby=\"true\""
         ));

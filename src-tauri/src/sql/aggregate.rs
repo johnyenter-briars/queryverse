@@ -344,7 +344,7 @@ pub fn aggregate_rows(
         let mut group_values: HashMap<String, Value> = HashMap::new();
 
         for column in &plan.group_columns {
-            let value = get_entity_value(&entity, &column.source);
+            let value = get_entity_value(&entity, &column.source, &column.output);
             key_parts.push(value_key(&value));
             group_values.entry(column.output.clone()).or_insert(value);
         }
@@ -411,7 +411,7 @@ impl AggregateAccumulator {
         match self.function {
             AggregateFunction::Count => {
                 if let Some(target) = &self.target {
-                    let value = get_entity_value(entity, target);
+                    let value = get_entity_value(entity, target, target);
                     if !matches!(value, Value::Null) {
                         self.count += 1;
                     }
@@ -423,7 +423,7 @@ impl AggregateAccumulator {
                 let Some(target) = &self.target else {
                     return;
                 };
-                let value = get_entity_value(entity, target);
+                let value = get_entity_value(entity, target, target);
                 if let Some((num, is_int)) = numeric_value(&value) {
                     self.sum += num;
                     if !is_int {
@@ -436,7 +436,7 @@ impl AggregateAccumulator {
                 let Some(target) = &self.target else {
                     return;
                 };
-                let value = get_entity_value(entity, target);
+                let value = get_entity_value(entity, target, target);
                 if matches!(value, Value::Null) {
                     return;
                 }
@@ -452,7 +452,7 @@ impl AggregateAccumulator {
                 let Some(target) = &self.target else {
                     return;
                 };
-                let value = get_entity_value(entity, target);
+                let value = get_entity_value(entity, target, target);
                 if matches!(value, Value::Null) {
                     return;
                 }
@@ -519,8 +519,48 @@ impl AggregateGroup {
     }
 }
 
-fn get_entity_value(entity: &Entity, key: &str) -> Value {
-    entity.attributes.get(key).cloned().unwrap_or(Value::Null)
+fn get_entity_value(entity: &Entity, key: &str, alias: &str) -> Value {
+    for candidate in value_candidates(key, alias) {
+        if let Some(value) = entity.attributes.get(&candidate) {
+            return value.clone();
+        }
+    }
+    Value::Null
+}
+
+fn value_candidates(key: &str, alias: &str) -> Vec<String> {
+    let mut candidates: Vec<String> = Vec::new();
+
+    push_candidate(&mut candidates, key);
+    if alias != key {
+        push_candidate(&mut candidates, alias);
+    }
+
+    let mut expanded: Vec<String> = Vec::new();
+    for candidate in &candidates {
+        if !candidate.starts_with("col_") {
+            expanded.push(format!("col_{}", candidate));
+        }
+    }
+    candidates.extend(expanded);
+
+    candidates
+}
+
+fn push_candidate(candidates: &mut Vec<String>, value: &str) {
+    if value.is_empty() {
+        return;
+    }
+
+    if !candidates.contains(&value.to_string()) {
+        candidates.push(value.to_string());
+    }
+
+    if let Some((_, column)) = value.rsplit_once('.') {
+        if !candidates.contains(&column.to_string()) {
+            candidates.push(column.to_string());
+        }
+    }
 }
 
 fn numeric_value(value: &Value) -> Option<(f64, bool)> {
@@ -554,5 +594,75 @@ fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
         (Value::String(a), Value::String(b)) => a.cmp(b),
         (Value::Boolean(a), Value::Boolean(b)) => a.cmp(b),
         _ => value_key(left).cmp(&value_key(right)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{aggregate_fallback_plan, aggregate_rows, AggregateTarget, SelectColumns};
+    use crate::sql::{AggregateExpr, AggregateFunction, SelectItem, SelectItemKind, SelectStmt};
+    use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
+
+    fn make_entity(group_value: Option<&str>) -> Entity {
+        let mut entity = Entity::new();
+        if let Some(value) = group_value {
+            entity.attributes.insert(
+                "col_address1_stateorprovince".to_string(),
+                Value::String(value.to_string()),
+            );
+        }
+        entity
+    }
+
+    #[test]
+    fn aggregate_group_by_reads_col_prefixed_value() {
+        let stmt = SelectStmt {
+            columns: SelectColumns::Columns(vec![
+                SelectItem {
+                    kind: SelectItemKind::Aggregate(AggregateExpr {
+                        function: AggregateFunction::Count,
+                        target: AggregateTarget::Star,
+                    }),
+                    alias: None,
+                },
+                SelectItem {
+                    kind: SelectItemKind::Attribute("address1_stateorprovince".to_string()),
+                    alias: None,
+                },
+            ]),
+            entity: "account".to_string(),
+            entity_alias: None,
+            joins: Vec::new(),
+            top: None,
+            distinct: false,
+            filter: None,
+            group_by: vec!["address1_stateorprovince".to_string()],
+            order_by: Vec::new(),
+        };
+
+        let plan = aggregate_fallback_plan(&stmt).expect("aggregate plan");
+        let entities = vec![make_entity(Some("CA")), make_entity(Some("CA")), make_entity(None)];
+        let rows = aggregate_rows(
+            entities,
+            &plan,
+            &vec![
+                "count".to_string(),
+                "address1_stateorprovince".to_string(),
+            ],
+        );
+
+        let ca_row = rows
+            .iter()
+            .find(|row| {
+                row.attributes
+                    .get("address1_stateorprovince")
+                    == Some(&Value::String("CA".to_string()))
+            })
+            .expect("CA group");
+
+        assert_eq!(
+            ca_row.attributes.get("count"),
+            Some(&Value::Int(2))
+        );
     }
 }
