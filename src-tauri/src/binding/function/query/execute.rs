@@ -12,7 +12,10 @@ use crate::{
     },
     sql::{self, aggregate},
 };
-use powerplatform_dataverse_client::dataverse::{entity::Value, serviceclient::ServiceClient};
+use powerplatform_dataverse_client::{
+    LogLevel,
+    dataverse::{entity::Value, serviceclient::ServiceClient},
+};
 
 use super::metadata::{get_entity_attributes_cached, get_entity_definitions_cached};
 
@@ -89,7 +92,7 @@ pub async fn execute_sql_with_client(
     log_level: LogLevel,
 ) -> Result<ExecuteSqlResponse, String> {
     if matches!(log_level, LogLevel::Debug) {
-        println!("SQL: {}", sql_text);
+        debug!("SQL: {}", sql_text);
     }
 
     let stmt = sql::parse(sql_text).map_err(|e| e.to_string())?;
@@ -103,64 +106,62 @@ pub async fn execute_sql_with_client(
 
     let columns_selected = !columns_order.is_empty();
 
-    let (rows, message, success): (Vec<ResultRow>, String, bool) =
-        if let Some(plan) = aggregate::aggregate_fallback_plan(&stmt) {
-            let is_joined = !stmt.joins.is_empty();
-            if is_joined {
-                let server = service_client
-                    .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
-                    .await;
+    let (rows, message, success): (Vec<ResultRow>, String, bool) = if let Some(plan) =
+        aggregate::aggregate_fallback_plan(&stmt)
+    {
+        let is_joined = !stmt.joins.is_empty();
+        if is_joined {
+            let server = service_client
+                .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
+                .await;
 
-                match server {
-                    Ok(entities) => (
-                        entities
-                            .into_iter()
-                            .map(|entity| aggregate::entity_to_result_row(entity, &columns_order))
-                            .collect(),
-                        "Multiple results found".to_string(),
-                        true,
-                    ),
-                    Err(error) => {
-                        if error.contains("0x8004e023") {
-                            let demoted_fetchxml =
-                                aggregate::demote_aggregate_fetchxml(&parsed.fetchxml, &plan)?;
-                            let entities = service_client
-                                .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
-                                .await
-                                .map_err(|error| {
-                                    println!("Error: {error}");
-                                    error
-                                })?;
+            match server {
+                Ok(entities) => (
+                    entities
+                        .into_iter()
+                        .map(|entity| aggregate::entity_to_result_row(entity, &columns_order))
+                        .collect(),
+                    "Multiple results found".to_string(),
+                    true,
+                ),
+                Err(error) => {
+                    if error.contains("0x8004e023") {
+                        let demoted_fetchxml =
+                            aggregate::demote_aggregate_fetchxml(&parsed.fetchxml, &plan)?;
+                        let entities = service_client
+                            .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
+                            .await
+                            .map_err(|error| {
+                                error!("Error: {error}");
+                                error
+                            })?;
 
-                            let rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
-                            (rows, "Multiple results found".to_string(), true)
-                        } else {
-                            println!("Error: {error}");
-                            return Err(error);
-                        }
+                        let rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
+                        (rows, "Multiple results found".to_string(), true)
+                    } else {
+                        error!("Error: {error}");
+                        return Err(error);
                     }
                 }
-            } else if plan.is_count_only() {
-                let count_fetchxml = aggregate::demote_count_fetchxml(&parsed.fetchxml)?;
-                let total = service_client
-                    .retrieve_multiple_fetchxml_count(&parsed.entity_set, &count_fetchxml)
-                    .await
-                    .map_err(|error| {
-                        println!("Error: {error}");
-                        error
-                    })?;
-
-                let mut attributes = HashMap::new();
-                let output = plan.count_output().ok_or_else(|| {
-                    "Count aggregate output was unavailable.".to_string()
+            }
+        } else if plan.is_count_only() {
+            let count_fetchxml = aggregate::demote_count_fetchxml(&parsed.fetchxml)?;
+            let total = service_client
+                .retrieve_multiple_fetchxml_count(&parsed.entity_set, &count_fetchxml)
+                .await
+                .map_err(|error| {
+                    error!("Error: {error}");
+                    error
                 })?;
 
             let mut attributes = HashMap::new();
             let output = plan
                 .count_output()
                 .ok_or_else(|| "Count aggregate output was unavailable.".to_string())?;
+
             attributes.insert(output.to_string(), Value::Int(total as i64));
             attributes.insert(aggregate::ROW_NUMBER_ATTRIBUTE.to_string(), Value::Int(1));
+
             aggregate::ensure_columns(&mut attributes, &columns_order);
 
             (

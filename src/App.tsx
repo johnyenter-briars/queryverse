@@ -53,6 +53,7 @@ import { EntityAttribute } from "./binding/model/EntityAttribute";
 import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 import { DEFAULT_SETTINGS, Settings } from "./binding/model/Settings";
 import { logError } from "./utility/logging";
+import { AppToaster, useAppToast } from "./utility/toast";
 
 const DEFAULT_QUERY = "select top 20 *\nfrom account";
 const isUpdateQuery = (sql: string) => /^\s*update\b/i.test(sql);
@@ -166,6 +167,7 @@ export default function App() {
     const [entityAttributesError, setEntityAttributesError] = useState<
         Record<string, string | null>
     >({});
+    const { notifyError } = useAppToast();
 
     const styles = useAppStyles();
 
@@ -370,28 +372,45 @@ export default function App() {
                 }
 
                 if (context.sqlFilePath) {
-                    const file = await openSqlFilePath(context.sqlFilePath);
-                    const connectionName = connectionToUse?.name ?? "No connection";
-                    const newId = nextTabId.current++;
-                    const newTab = {
-                        ...createQueryTab(newId),
-                        title: `${file.fileName} - ${connectionName}`,
-                        query: file.contents,
-                        filePath: file.path,
-                        fileName: file.fileName,
-                        lastSavedQuery: file.contents,
-                        isEditorDirty: false,
-                        connectionId: connectionToUse?.id ?? null,
-                    };
+                    try {
+                        const file = await openSqlFilePath(context.sqlFilePath);
+                        const connectionName =
+                            connectionToUse?.name ?? "No connection";
+                        const newId = nextTabId.current++;
+                        const newTab = {
+                            ...createQueryTab(newId),
+                            title: `${file.fileName} - ${connectionName}`,
+                            query: file.contents,
+                            filePath: file.path,
+                            fileName: file.fileName,
+                            lastSavedQuery: file.contents,
+                            isEditorDirty: false,
+                            connectionId: connectionToUse?.id ?? null,
+                        };
 
-                    setTabs((prev) => [...prev, newTab]);
-                    setActiveTabId(newId);
+                        setTabs((prev) => [...prev, newTab]);
+                        setActiveTabId(newId);
+                    } catch (error) {
+                        logError(
+                            "Failed to open SQL file from CLI args",
+                            error,
+                            "queryverse::frontend::app"
+                        );
+                        notifyError(
+                            "Couldn't open SQL file",
+                            `File not found: ${context.sqlFilePath}`
+                        );
+                    }
                 }
             } catch (error) {
                 logError(
                     "Failed to initialize from CLI args",
                     error,
                     "queryverse::frontend::app"
+                );
+                notifyError(
+                    "Couldn't initialize from CLI args",
+                    "Check the provided launch arguments and try again."
                 );
             }
         };
@@ -836,6 +855,7 @@ export default function App() {
     return (
         <FluentProvider theme={webDarkTheme}>
             <div className={styles.root}>
+                <AppToaster />
                 <MenuBar
                     connectionsEnabled={connectionsEnabled}
                     schemaEnabled={schemaEnabled}

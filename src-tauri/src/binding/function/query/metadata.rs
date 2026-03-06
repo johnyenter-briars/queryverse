@@ -3,10 +3,12 @@ use crate::{
     auth::{connection::load_connections, token::get_access_token},
     binding::model::response::MultipleResponse,
 };
-use powerplatform_dataverse_client::dataverse::{
+use log::debug;
+use powerplatform_dataverse_client::{LogLevel, dataverse::{
     entityattribute::EntityAttribute, entitydefinition::EntityDefinition,
     serviceclient::ServiceClient,
-};
+}};
+use uuid::Uuid;
 
 use super::helpers::normalize_ident;
 
@@ -54,7 +56,7 @@ pub(crate) async fn get_entity_attributes_cached(
             .map_err(|_| "Failed to lock metadata cache".to_string())?;
         if let Some(value) = cache.get(&key) {
             if matches!(log_level, LogLevel::Debug) {
-                println!(
+                debug!(
                     "Set entity attributes for {} (cache hit).",
                     logical_name
                 );
@@ -73,7 +75,7 @@ pub(crate) async fn get_entity_attributes_cached(
     }
 
     if matches!(log_level, LogLevel::Debug) {
-        println!(
+        debug!(
             "Set entity attributes for {} (cache miss).",
             logical_name
         );

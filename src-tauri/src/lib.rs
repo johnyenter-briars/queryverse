@@ -22,7 +22,10 @@ use crate::binding::function::{
     settings::{get_settings, save_settings},
 };
 pub use powerplatform_dataverse_client::LogLevel;
-use powerplatform_dataverse_client::auth::token::CachedToken;
+use powerplatform_dataverse_client::{
+    auth::token::CachedToken,
+    dataverse::{entityattribute::EntityAttribute, entitydefinition::EntityDefinition},
+};
 
 pub struct Database {
     pub selected_connection_id: Mutex<Option<Uuid>>,

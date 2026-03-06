@@ -2,11 +2,12 @@ use powerplatform_dataverse_client::auth::credentials::fetch_client_credentials_
 use powerplatform_dataverse_client::dataverse::serviceclient::ServiceClient;
 use powerplatform_dataverse_client::LogLevel;
 
-use queryverse_lib::binding::function::query::execute_sql_with_client;
 use queryverse_lib::binding::model::executesqlresponse::ExecuteSqlResponse;
 use queryverse_lib::binding::model::resultrow::ResultRow;
 
 use queryverse_integration_tests::config::load_secrets;
+
+use queryverse_lib::binding::function::query::execute_sql_with_client;
 
 const SQL_TIMEOUT_SECS: u64 = 180;
 

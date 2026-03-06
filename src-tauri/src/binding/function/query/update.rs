@@ -77,7 +77,7 @@ pub async fn prepare_update_sql(
     )
     .await
     .map_err(|error| {
-        println!("Error: {error}");
+        error!("Error: {error}");
         error
     })?;
 
