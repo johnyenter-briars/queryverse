@@ -1,13 +1,12 @@
 use crate::{
+    Database,
     auth::{connection::load_connections, token::get_access_token},
     binding::model::response::MultipleResponse,
-    Database, LogLevel,
 };
 use powerplatform_dataverse_client::dataverse::{
     entityattribute::EntityAttribute, entitydefinition::EntityDefinition,
     serviceclient::ServiceClient,
 };
-use uuid::Uuid;
 
 use super::helpers::normalize_ident;
 

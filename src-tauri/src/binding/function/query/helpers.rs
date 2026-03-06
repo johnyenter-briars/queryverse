@@ -2,9 +2,7 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 
 use crate::sql;
-use powerplatform_dataverse_client::dataverse::{
-    entity::Value, entityattribute::EntityAttribute, entitydefinition::EntityDefinition,
-};
+use powerplatform_dataverse_client::dataverse::{entity::Value, serviceclient::ServiceClient};
 
 pub(crate) fn resolve_primary_id_attribute(
     definitions: &[EntityDefinition],

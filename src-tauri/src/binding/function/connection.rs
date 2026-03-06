@@ -1,5 +1,7 @@
+use log::error;
 use uuid::Uuid;
 
+use crate::Database;
 use crate::auth::connection::{load_connections, save_connection, save_connections, utc_timestamp};
 use crate::auth::token::prime_token_cache;
 use crate::binding::model::{
@@ -10,7 +12,6 @@ use crate::binding::model::{
     updateconnectionrequest::UpdateConnectionRequest,
     updateconnectionresponse::UpdateConnectionResponse,
 };
-use crate::Database;
 use powerplatform_dataverse_client::auth::credentials::{
     exchange_authorization_code, validate_client_credentials,
 };
@@ -32,7 +33,7 @@ pub async fn create_connection(
             validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope)
                 .await
                 .map_err(|error| {
-                    println!("create_connection validate_client_credentials failed: {error}");
+                    error!("create_connection validate_client_credentials failed: {error}");
                     error
                 })?;
 
@@ -72,7 +73,7 @@ pub async fn create_connection(
             )
             .await
             .map_err(|error| {
-                println!("create_connection exchange_authorization_code failed: {error}");
+                error!("create_connection exchange_authorization_code failed: {error}");
                 error
             })?;
 
@@ -93,7 +94,7 @@ pub async fn create_connection(
     };
 
     save_connection(&connection).map_err(|error| {
-        println!("create_connection save_connection failed: {error}");
+        error!("create_connection save_connection failed: {error}");
         error
     })?;
 
@@ -174,7 +175,7 @@ pub async fn update_connection(
             validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope)
                 .await
                 .map_err(|error| {
-                    println!("update_connection validate_client_credentials failed: {error}");
+                    error!("update_connection validate_client_credentials failed: {error}");
                     error
                 })?;
 
@@ -214,7 +215,7 @@ pub async fn update_connection(
             )
             .await
             .map_err(|error| {
-                println!("update_connection exchange_authorization_code failed: {error}");
+                error!("update_connection exchange_authorization_code failed: {error}");
                 error
             })?;
 
@@ -236,7 +237,7 @@ pub async fn update_connection(
 
     connections[target_index] = updated_connection.clone();
     save_connections(&connections).map_err(|error| {
-        println!("update_connection save_connections failed: {error}");
+        error!("update_connection save_connections failed: {error}");
         error
     })?;
 

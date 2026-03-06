@@ -17,8 +17,7 @@ pub fn to_fetchxml(
 ) -> Result<FetchXmlTranslation, TranslationError> {
     let mut out = String::new();
     let aggregate_mode = select_aggregate_mode(stmt);
-    let column_outputs =
-        projection_output_names(stmt, entity_name, stmt.entity_alias.as_deref())?;
+    let column_outputs = projection_output_names(stmt, entity_name, stmt.entity_alias.as_deref())?;
     let group_by = validate_group_by(stmt)?;
     let alias_map = build_alias_map(stmt, entity_name, aggregate_mode, &group_by)?;
 
@@ -174,7 +173,10 @@ fn write_order(
             out.push_str(&escape_xml(alias));
         } else if group_by.contains(&order.column) {
             out.push_str("<order alias=\"");
-            out.push_str(&escape_xml(&groupby_fetch_alias(&order.column, &order.column)));
+            out.push_str(&escape_xml(&groupby_fetch_alias(
+                &order.column,
+                &order.column,
+            )));
         } else {
             out.push_str("<order attribute=\"");
             out.push_str(&escape_xml(&order.column));
@@ -225,7 +227,10 @@ fn write_filter_item(expr: &Expr, out: &mut String) -> Result<(), TranslationErr
 fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), TranslationError> {
     match predicate {
         Predicate::Compare { column, op, value } => {
-            if split_qualified(column).and_then(|(table, _)| table).is_some() {
+            if split_qualified(column)
+                .and_then(|(table, _)| table)
+                .is_some()
+            {
                 return Err(TranslationError::new(
                     "Qualified column names in WHERE are not supported in v1 joins",
                 ));
@@ -248,15 +253,16 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             values,
             negated,
         } => {
-            if split_qualified(column).and_then(|(table, _)| table).is_some() {
+            if split_qualified(column)
+                .and_then(|(table, _)| table)
+                .is_some()
+            {
                 return Err(TranslationError::new(
                     "Qualified column names in WHERE are not supported in v1 joins",
                 ));
             }
             if values.iter().any(|value| matches!(value, Literal::Null)) {
-                return Err(TranslationError::new(
-                    "IN list cannot contain NULL",
-                ));
+                return Err(TranslationError::new("IN list cannot contain NULL"));
             }
 
             out.push_str("<condition attribute=\"");
@@ -279,25 +285,22 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             high,
             negated,
         } => {
-            if split_qualified(column).and_then(|(table, _)| table).is_some() {
+            if split_qualified(column)
+                .and_then(|(table, _)| table)
+                .is_some()
+            {
                 return Err(TranslationError::new(
                     "Qualified column names in WHERE are not supported in v1 joins",
                 ));
             }
             if matches!(low, Literal::Null) || matches!(high, Literal::Null) {
-                return Err(TranslationError::new(
-                    "BETWEEN bounds cannot be NULL",
-                ));
+                return Err(TranslationError::new("BETWEEN bounds cannot be NULL"));
             }
 
             out.push_str("<condition attribute=\"");
             out.push_str(&escape_xml(column));
             out.push_str("\" operator=\"");
-            out.push_str(if *negated {
-                "not-between"
-            } else {
-                "between"
-            });
+            out.push_str(if *negated { "not-between" } else { "between" });
             out.push_str("\">");
 
             out.push_str("<value>");
@@ -309,7 +312,10 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             out.push_str("</condition>");
         }
         Predicate::IsNull { column, negated } => {
-            if split_qualified(column).and_then(|(table, _)| table).is_some() {
+            if split_qualified(column)
+                .and_then(|(table, _)| table)
+                .is_some()
+            {
                 return Err(TranslationError::new(
                     "Qualified column names in WHERE are not supported in v1 joins",
                 ));
@@ -325,7 +331,10 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             pattern,
             negated,
         } => {
-            if split_qualified(column).and_then(|(table, _)| table).is_some() {
+            if split_qualified(column)
+                .and_then(|(table, _)| table)
+                .is_some()
+            {
                 return Err(TranslationError::new(
                     "Qualified column names in WHERE are not supported in v1 joins",
                 ));
@@ -341,7 +350,7 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
         Predicate::ColumnCompare { .. } => {
             return Err(TranslationError::new(
                 "Column-to-column predicates are only supported in JOIN conditions",
-            ))
+            ));
         }
     }
 
@@ -571,10 +580,7 @@ fn groupby_fetch_alias(column: &str, display_alias: &str) -> String {
     }
 }
 
-fn group_by_matches_item(
-    item: &SelectItem,
-    group_by: &std::collections::HashSet<String>,
-) -> bool {
+fn group_by_matches_item(item: &SelectItem, group_by: &std::collections::HashSet<String>) -> bool {
     match &item.kind {
         SelectItemKind::Attribute(name) => {
             if group_by.contains(name) {
@@ -596,14 +602,13 @@ fn validate_group_by(
         return Ok(std::collections::HashSet::new());
     }
 
-    let mut remaining: std::collections::HashSet<String> =
-        stmt.group_by.iter().cloned().collect();
+    let mut remaining: std::collections::HashSet<String> = stmt.group_by.iter().cloned().collect();
 
     match &stmt.columns {
         SelectColumns::All => {
             return Err(TranslationError::new(
                 "GROUP BY requires explicit column list in SELECT",
-            ))
+            ));
         }
         SelectColumns::Columns(items) => {
             for item in items {
@@ -659,9 +664,7 @@ fn output_name(
     }
 
     match &item.kind {
-        SelectItemKind::Attribute(name) => {
-            Ok(strip_base_prefix(name, entity_name, entity_alias))
-        }
+        SelectItemKind::Attribute(name) => Ok(strip_base_prefix(name, entity_name, entity_alias)),
         SelectItemKind::Aggregate(aggregate) => Ok(default_aggregate_alias(aggregate)),
     }
 }

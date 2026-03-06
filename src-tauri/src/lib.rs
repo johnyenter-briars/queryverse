@@ -1,29 +1,28 @@
-pub mod binding;
 pub mod auth;
+pub mod binding;
+mod logging;
 pub mod sql;
 
+use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::Manager;
 use uuid::Uuid;
-use serde_json::Value as JsonValue;
 
 use crate::binding::function::{
     connection::{create_connection, list_connections, set_connection, update_connection},
     file::{open_sql_file, open_sql_file_path, save_sql_file, save_sql_file_as},
     launch::get_launch_context,
+    logging::log_frontend,
     query::{
         discard_delete_sql, discard_update_sql, execute_delete_sql, execute_sql,
-        execute_update_sql, list_entity_attributes, list_entity_definitions,
-        parse_sql_to_fetchxml, prepare_delete_sql, prepare_update_sql,
+        execute_update_sql, list_entity_attributes, list_entity_definitions, parse_sql_to_fetchxml,
+        prepare_delete_sql, prepare_update_sql,
     },
     settings::{get_settings, save_settings},
 };
-use powerplatform_dataverse_client::{
-    auth::token::CachedToken,
-    dataverse::{entityattribute::EntityAttribute, entitydefinition::EntityDefinition},
-};
 pub use powerplatform_dataverse_client::LogLevel;
+use powerplatform_dataverse_client::auth::token::CachedToken;
 
 pub struct Database {
     pub selected_connection_id: Mutex<Option<Uuid>>,
@@ -77,7 +76,7 @@ impl Default for Database {
 fn parse_cli_args() -> LaunchContext {
     let mut sql_file_path = None;
     let mut connection_name = None;
-    let mut log_level = LogLevel::Information;
+    let mut log_level = LogLevel::Error;
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -130,17 +129,24 @@ fn parse_cli_args() -> LaunchContext {
 
 fn parse_log_level(value: &str) -> Option<LogLevel> {
     match value.trim().to_ascii_lowercase().as_str() {
+        "error" => Some(LogLevel::Error),
+        "warn" | "warning" => Some(LogLevel::Warn),
+        "info" | "information" => Some(LogLevel::Information),
         "debug" => Some(LogLevel::Debug),
-        "information" => Some(LogLevel::Information),
+        "trace" => Some(LogLevel::Trace),
         _ => None,
     }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let launch_context = parse_cli_args();
+    logging::init_logger(launch_context.log_level.as_filter())
+        .expect("failed to initialize file logger");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(parse_cli_args())
+        .manage(launch_context)
         .manage(Database::default())
         .invoke_handler(tauri::generate_handler![
             create_connection,
@@ -163,7 +169,8 @@ pub fn run() {
             save_sql_file,
             save_sql_file_as,
             get_settings,
-            save_settings
+            save_settings,
+            log_frontend
         ])
         .setup(|app| {
             let windows = app.webview_windows();

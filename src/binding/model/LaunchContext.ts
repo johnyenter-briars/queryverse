@@ -1,5 +1,5 @@
 export interface LaunchContext {
     sqlFilePath?: string | null;
     connectionName?: string | null;
-    logLevel?: "debug" | "information";
+    logLevel?: "error" | "warn" | "information" | "debug" | "trace";
 }

@@ -22,6 +22,34 @@ import { UpdateSqlPreviewResponse } from "./model/UpdateSqlPreviewResponse";
 import { UpdateSqlExecuteResponse } from "./model/UpdateSqlExecuteResponse";
 import { DeleteSqlPreviewResponse } from "./model/DeleteSqlPreviewResponse";
 import { DeleteSqlExecuteResponse } from "./model/DeleteSqlExecuteResponse";
+import { logDebug } from "../utility/logging";
+
+const summarizeResponse = (response: unknown): unknown => {
+    if (!response || typeof response !== "object") {
+        return response;
+    }
+
+    const raw = response as Record<string, unknown>;
+    const summary: Record<string, unknown> = {};
+
+    if ("success" in raw) summary.success = raw.success;
+    if ("message" in raw) summary.message = raw.message;
+    if ("count" in raw) summary.count = raw.count;
+    if ("updated" in raw) summary.updated = raw.updated;
+    if ("deleted" in raw) summary.deleted = raw.deleted;
+    if ("failed" in raw) summary.failed = raw.failed;
+    if ("token" in raw) summary.token = "[redacted]";
+
+    return Object.keys(summary).length === 0 ? "[object]" : summary;
+};
+
+const logBindingResponse = (command: string, response: unknown): void => {
+    logDebug(
+        `${command} response`,
+        summarizeResponse(response),
+        "queryverse::frontend::binding"
+    );
+};
 
 export const executeSql = async (
     sql: string
@@ -32,7 +60,7 @@ export const executeSql = async (
         } satisfies ExecuteSqlRequest,
     });
 
-    console.log(response);
+    logBindingResponse("execute_sql", response);
 
     return response;
 };
@@ -42,7 +70,7 @@ export const previewFetchXml = async (sql: string): Promise<FetchXmlPreview> => 
         sql,
     });
 
-    console.log(response);
+    logBindingResponse("parse_sql_to_fetchxml", response);
 
     return response;
 };
@@ -54,7 +82,7 @@ export const createConnection = async (
         connectionRequest: connectionRequest,
     });
 
-    console.log(response);
+    logBindingResponse("create_connection", response);
 
     return response;
 };
@@ -62,7 +90,7 @@ export const createConnection = async (
 export const listConnections = async (): Promise<ListConnectionsResponse> => {
     const response: ListConnectionsResponse = await invoke("list_connections");
 
-    console.log(response);
+    logBindingResponse("list_connections", response);
 
     return response;
 };
@@ -74,7 +102,7 @@ export const updateConnection = async (
         connectionRequest: connectionRequest,
     });
 
-    console.log(response);
+    logBindingResponse("update_connection", response);
 
     return response;
 };
@@ -94,7 +122,7 @@ export const listEntityDefinitions = async (): Promise<
         "list_entity_definitions"
     );
 
-    console.log(response);
+    logBindingResponse("list_entity_definitions", response);
 
     return response;
 };
@@ -107,7 +135,7 @@ export const listEntityAttributes = async (
         { logicalName }
     );
 
-    console.log(response);
+    logBindingResponse("list_entity_attributes", response);
 
     return response;
 };
@@ -115,7 +143,7 @@ export const listEntityAttributes = async (
 export const openSqlFile = async (): Promise<OpenSqlFileResponse | null> => {
     const response: OpenSqlFileResponse | null = await invoke("open_sql_file");
 
-    console.log(response);
+    logBindingResponse("open_sql_file", response);
 
     return response;
 };
@@ -125,7 +153,7 @@ export const openSqlFilePath = async (path: string): Promise<OpenSqlFileResponse
         path,
     });
 
-    console.log(response);
+    logBindingResponse("open_sql_file_path", response);
 
     return response;
 };
@@ -143,7 +171,7 @@ export const saveSqlFileAs = async (
         request,
     });
 
-    console.log(response);
+    logBindingResponse("save_sql_file_as", response);
 
     return response;
 };
@@ -151,7 +179,7 @@ export const saveSqlFileAs = async (
 export const getLaunchContext = async (): Promise<LaunchContext> => {
     const response: LaunchContext = await invoke("get_launch_context");
 
-    console.log(response);
+    logBindingResponse("get_launch_context", response);
 
     return response;
 };
@@ -159,7 +187,7 @@ export const getLaunchContext = async (): Promise<LaunchContext> => {
 export const getSettings = async (): Promise<SettingsResponse> => {
     const response: SettingsResponse = await invoke("get_settings");
 
-    console.log(response);
+    logBindingResponse("get_settings", response);
 
     return response;
 };
@@ -167,7 +195,7 @@ export const getSettings = async (): Promise<SettingsResponse> => {
 export const saveSettings = async (settings: Settings): Promise<SettingsResponse> => {
     const response: SettingsResponse = await invoke("save_settings", { settings });
 
-    console.log(response);
+    logBindingResponse("save_settings", response);
 
     return response;
 };
@@ -179,7 +207,7 @@ export const prepareUpdateSql = async (
         sql,
     });
 
-    console.log(response);
+    logBindingResponse("prepare_update_sql", response);
 
     return response;
 };
@@ -191,7 +219,7 @@ export const executeUpdateSql = async (
         token,
     });
 
-    console.log(response);
+    logBindingResponse("execute_update_sql", response);
 
     return response;
 };
@@ -199,7 +227,7 @@ export const executeUpdateSql = async (
 export const discardUpdateSql = async (token: string): Promise<boolean> => {
     const response: boolean = await invoke("discard_update_sql", { token });
 
-    console.log(response);
+    logBindingResponse("discard_update_sql", response);
 
     return response;
 };
@@ -211,7 +239,7 @@ export const prepareDeleteSql = async (
         sql,
     });
 
-    console.log(response);
+    logBindingResponse("prepare_delete_sql", response);
 
     return response;
 };
@@ -223,7 +251,7 @@ export const executeDeleteSql = async (
         token,
     });
 
-    console.log(response);
+    logBindingResponse("execute_delete_sql", response);
 
     return response;
 };
@@ -231,7 +259,7 @@ export const executeDeleteSql = async (
 export const discardDeleteSql = async (token: string): Promise<boolean> => {
     const response: boolean = await invoke("discard_delete_sql", { token });
 
-    console.log(response);
+    logBindingResponse("discard_delete_sql", response);
 
     return response;
 };

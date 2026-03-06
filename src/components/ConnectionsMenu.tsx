@@ -24,6 +24,7 @@ import { RequestType } from "../binding/model/QVRequest";
 import { useEffect, useState } from "react";
 import { useConnectionsMenuStyles } from "../styles/ConnectionsMenuStyles";
 import { ModalDialog } from "./ModalDialog";
+import { logError } from "../utility/logging";
 
 export interface IConnectionsMenuProps {
     isOpen: boolean;
@@ -93,7 +94,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                 setConnections(response.value);
             }
         } catch (error) {
-            console.error("Failed to load connections", error);
+            logError("Failed to load connections", error, "queryverse::frontend::connections");
         }
     };
 

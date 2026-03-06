@@ -342,7 +342,6 @@ pub fn aggregate_rows(
     for entity in entities {
         let mut key_parts: Vec<String> = Vec::new();
         let mut group_values: HashMap<String, Value> = HashMap::new();
-        
 
         for column in &plan.group_columns {
             let value = get_entity_value(&entity, &column.source);
@@ -421,7 +420,9 @@ impl AggregateAccumulator {
                 }
             }
             AggregateFunction::Sum | AggregateFunction::Avg => {
-                let Some(target) = &self.target else { return; };
+                let Some(target) = &self.target else {
+                    return;
+                };
                 let value = get_entity_value(entity, target);
                 if let Some((num, is_int)) = numeric_value(&value) {
                     self.sum += num;
@@ -432,7 +433,9 @@ impl AggregateAccumulator {
                 }
             }
             AggregateFunction::Min => {
-                let Some(target) = &self.target else { return; };
+                let Some(target) = &self.target else {
+                    return;
+                };
                 let value = get_entity_value(entity, target);
                 if matches!(value, Value::Null) {
                     return;
@@ -446,7 +449,9 @@ impl AggregateAccumulator {
                 }
             }
             AggregateFunction::Max => {
-                let Some(target) = &self.target else { return; };
+                let Some(target) = &self.target else {
+                    return;
+                };
                 let value = get_entity_value(entity, target);
                 if matches!(value, Value::Null) {
                     return;
@@ -515,11 +520,7 @@ impl AggregateGroup {
 }
 
 fn get_entity_value(entity: &Entity, key: &str) -> Value {
-    entity
-        .attributes
-        .get(key)
-        .cloned()
-        .unwrap_or(Value::Null)
+    entity.attributes.get(key).cloned().unwrap_or(Value::Null)
 }
 
 fn numeric_value(value: &Value) -> Option<(f64, bool)> {
@@ -543,15 +544,13 @@ fn value_key(value: &Value) -> String {
 fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
     match (left, right) {
         (Value::Int(a), Value::Int(b)) => a.cmp(b),
-        (Value::Int(a), Value::Float(b)) => {
-            (*a as f64).partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-        }
-        (Value::Float(a), Value::Int(b)) => {
-            a.partial_cmp(&(*b as f64)).unwrap_or(std::cmp::Ordering::Equal)
-        }
-        (Value::Float(a), Value::Float(b)) => {
-            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-        }
+        (Value::Int(a), Value::Float(b)) => (*a as f64)
+            .partial_cmp(b)
+            .unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Float(a), Value::Int(b)) => a
+            .partial_cmp(&(*b as f64))
+            .unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Float(a), Value::Float(b)) => a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
         (Value::String(a), Value::String(b)) => a.cmp(b),
         (Value::Boolean(a), Value::Boolean(b)) => a.cmp(b),
         _ => value_key(left).cmp(&value_key(right)),

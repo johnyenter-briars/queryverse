@@ -1,9 +1,9 @@
+pub mod aggregate;
 mod ast;
 mod errors;
 mod fetchxml;
 mod lexer;
 mod parser;
-pub mod aggregate;
 
 pub use ast::{
     AggregateExpr, AggregateFunction, AggregateTarget, DeleteStmt, Expr, Literal, SelectColumns,
@@ -153,7 +153,10 @@ fn singularize(name: &str) -> String {
 fn pluralize(name: &str) -> String {
     if name.ends_with('y')
         && name.len() > 1
-        && !matches!(name.chars().nth(name.len() - 2), Some('a' | 'e' | 'i' | 'o' | 'u'))
+        && !matches!(
+            name.chars().nth(name.len() - 2),
+            Some('a' | 'e' | 'i' | 'o' | 'u')
+        )
     {
         return format!("{}ies", &name[..name.len() - 1]);
     }
@@ -199,7 +202,11 @@ mod tests {
         assert!(result.fetchxml.contains("<fetch"));
         assert!(result.fetchxml.contains("<entity name=\"account\">"));
         assert!(result.fetchxml.contains("<attribute name=\"name\""));
-        assert!(result.fetchxml.contains("<condition attribute=\"statecode\" operator=\"eq\" value=\"0\""));
+        assert!(
+            result
+                .fetchxml
+                .contains("<condition attribute=\"statecode\" operator=\"eq\" value=\"0\"")
+        );
     }
 
     #[test]
@@ -238,9 +245,10 @@ mod tests {
         let sql = "select count(*), name from contact";
         let stmt = parse(sql).expect("parse");
         let err = to_fetchxml(&stmt).expect_err("expected translation error");
-        assert!(err
-            .to_string()
-            .contains("Non-aggregate columns must appear in GROUP BY"));
+        assert!(
+            err.to_string()
+                .contains("Non-aggregate columns must appear in GROUP BY")
+        );
     }
 
     #[test]
@@ -248,15 +256,21 @@ mod tests {
         let sql = "select sum(numberofemployees) as Total, count(address1_city) as Count, address1_city as City from account group by address1_city order by City";
         let result = sql_to_fetchxml(sql).expect("fetchxml");
         assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
-        assert!(result
-            .fetchxml
-            .contains("attribute name=\"numberofemployees\" alias=\"Total\" aggregate=\"sum\""));
-        assert!(result
-            .fetchxml
-            .contains("attribute name=\"address1_city\" alias=\"Count\" aggregate=\"count\""));
-        assert!(result
-            .fetchxml
-            .contains("attribute name=\"address1_city\" alias=\"City\" groupby=\"true\""));
+        assert!(
+            result
+                .fetchxml
+                .contains("attribute name=\"numberofemployees\" alias=\"Total\" aggregate=\"sum\"")
+        );
+        assert!(
+            result
+                .fetchxml
+                .contains("attribute name=\"address1_city\" alias=\"Count\" aggregate=\"count\"")
+        );
+        assert!(
+            result
+                .fetchxml
+                .contains("attribute name=\"address1_city\" alias=\"City\" groupby=\"true\"")
+        );
         assert!(result.fetchxml.contains("<order alias=\"City\""));
         assert!(result.aggregate);
     }
@@ -269,9 +283,9 @@ mod tests {
         assert!(result
             .fetchxml
             .contains("attribute name=\"address1_country\" alias=\"count_address1_country\" aggregate=\"count\""));
-        assert!(result
-            .fetchxml
-            .contains("attribute name=\"address1_country\" alias=\"col_address1_country\" groupby=\"true\""));
+        assert!(result.fetchxml.contains(
+            "attribute name=\"address1_country\" alias=\"col_address1_country\" groupby=\"true\""
+        ));
     }
 
     #[test]
@@ -279,13 +293,17 @@ mod tests {
         let sql = "select count(*), address1_city from account group by address1_city order by address1_city asc";
         let result = sql_to_fetchxml(sql).expect("fetchxml");
         assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
-        assert!(result
-            .fetchxml
-            .contains("attribute name=\"address1_city\" alias=\"count_address1_city\" aggregate=\"count\""));
-        assert!(result
-            .fetchxml
-            .contains("attribute name=\"address1_city\" alias=\"col_address1_city\" groupby=\"true\""));
-        assert!(result.fetchxml.contains("<order alias=\"col_address1_city\""));
+        assert!(result.fetchxml.contains(
+            "attribute name=\"address1_city\" alias=\"count_address1_city\" aggregate=\"count\""
+        ));
+        assert!(result.fetchxml.contains(
+            "attribute name=\"address1_city\" alias=\"col_address1_city\" groupby=\"true\""
+        ));
+        assert!(
+            result
+                .fetchxml
+                .contains("<order alias=\"col_address1_city\"")
+        );
     }
 
     #[test]
