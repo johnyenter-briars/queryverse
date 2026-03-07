@@ -378,4 +378,16 @@ mod tests {
         assert!(result.fetchxml.contains("<attribute name=\"modifiedby\""));
         assert_eq!(result.column_outputs, vec!["modifiedbyname".to_string()]);
     }
+
+    #[test]
+    fn does_not_duplicate_lookup_attribute_when_name_selected() {
+        let sql = "select contactid, parentcustomerid, parentcustomeridname from contact";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+
+        let count = result
+            .fetchxml
+            .matches("attribute name=\"parentcustomerid\"")
+            .count();
+        assert_eq!(count, 1);
+    }
 }
