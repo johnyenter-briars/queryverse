@@ -29,6 +29,37 @@ QueryVerse is a [Dataverse](https://www.microsoft.com/en-us/power-platform/datav
   - Copy to JSON
   - Open JSON in a new window
 
+## Dev CLI Params
+When running the Tauri dev app, the following CLI params are supported:
+- `--sql-file <path>`: Open a SQL file on startup.
+- `--connection <name>`: Select a connection profile on startup.
+- `--log-level <error|warn|information|debug|trace>`: Set backend logging level.
+- `--open-webview-console`: Open the webview devtools without stealing focus.
+
+Example:
+```powershell
+npm run tauri dev -- -- -- -- `
+  --sql-file C:\Users\Owner\dev\queryverse-test\query.sql `
+  --connection jyb `
+  --log-level debug `
+  --open-webview-console
+```
+
+## Multiple Dev Instances
+Use `scripts/dev_instance.ps1` to run multiple app instances while sharing the same Vite dev server.
+The script will:
+- Start Vite on port 1420 if it is not already running.
+- Launch the Tauri backend without starting a second dev server.
+
+Example:
+```powershell
+.\scripts\dev_instance.ps1 `
+  -SqlFile C:\Users\Owner\dev\queryverse-test\query.sql `
+  -Connection jyb `
+  -LogLevel debug `
+  -OpenWebviewConsole
+```
+
 ## AI Disclosure
 Portions of this project were developed with the assistance of AI tools; all changes are reviewed and tested by maintainers.
 
