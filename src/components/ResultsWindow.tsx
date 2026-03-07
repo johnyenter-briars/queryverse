@@ -26,6 +26,7 @@ import {
     buildResultColumnDescriptors,
     getPrimaryIdAttributeForQuery,
 } from "../utility/resultsColumns";
+import { useResultsWindowStyles } from "../styles/ResultsWindowStyles";
 
 const DEFAULT_COL_WIDTH = 300;
 const MIN_COL_WIDTH = 120;
@@ -92,6 +93,7 @@ export const ResultsWindow = React.memo(
     }: IResultsWindowProps) => {
         const { targetDocument } = useFluent();
         const scrollbarWidth = useScrollbarWidth({ targetDocument }) ?? 0;
+        const styles = useResultsWindowStyles();
 
         const containerRef = useRef<HTMLDivElement>(null);
         const [containerHeight, setContainerHeight] = useState<number>(800);
@@ -221,6 +223,7 @@ export const ResultsWindow = React.memo(
         return (
             <div
                 ref={containerRef}
+                className={styles.root}
                 style={{
                     height: "100%",
                     width: "100%",

@@ -112,7 +112,7 @@ export const useAppStyles = makeStyles({
     bottom: {
         flex: 1,
         overflowY: "auto",
-        padding: tokens.spacingHorizontalM,
+        paddingTop: tokens.spacingVerticalS,
     },
     connectionPicker: {
         display: "grid",
