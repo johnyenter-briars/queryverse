@@ -95,6 +95,7 @@ export const ResultsWindow = React.memo(
 
         const containerRef = useRef<HTMLDivElement>(null);
         const [containerHeight, setContainerHeight] = useState<number>(800);
+        const [containerWidth, setContainerWidth] = useState<number>(0);
 
         useEffect(() => {
             const el = containerRef.current;
@@ -102,6 +103,7 @@ export const ResultsWindow = React.memo(
 
             const updateHeight = () => {
                 setContainerHeight(el.clientHeight);
+                setContainerWidth(el.clientWidth);
             };
 
             updateHeight();
@@ -155,6 +157,25 @@ export const ResultsWindow = React.memo(
 
         const totalWidth = columns.length * DEFAULT_COL_WIDTH;
         const bodyHeight = Math.max(200, containerHeight - HEADER_HEIGHT);
+        const bodyWidth = containerWidth > 0 ? containerWidth : "100%";
+
+        const innerElementType = useMemo(() => {
+            return React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+                (props, ref) => {
+                    const { style, ...rest } = props;
+                    return (
+                        <div
+                            ref={ref}
+                            {...rest}
+                            style={{
+                                ...style,
+                                width: totalWidth,
+                            }}
+                        />
+                    );
+                }
+            );
+        }, [totalWidth]);
 
         if (isLoading) {
             return (
@@ -204,46 +225,49 @@ export const ResultsWindow = React.memo(
                     height: "100%",
                     width: "100%",
                     maxWidth: "100%",
-                    overflow: "auto",
+                    overflow: "hidden",
                 }}
             >
-                <div style={{ minWidth: totalWidth, width: "fit-content" }}>
-                    <DataGrid
-                        items={data}
-                        columns={columns}
-                        focusMode="cell"
-                        sortable
-                        resizableColumns
-                        resizableColumnsOptions={{ autoFitColumns: AUTO_FIT_COLUMNS }}
-                        columnSizingOptions={columnSizingOptions}
-                        style={{ minWidth: "auto" }}
-                        getRowId={(row: ResultRow) =>
-                            getRowId(row, primaryIdAttribute)
-                        }
+                <DataGrid
+                    items={data}
+                    columns={columns}
+                    focusMode="cell"
+                    sortable
+                    resizableColumns
+                    resizableColumnsOptions={{ autoFitColumns: AUTO_FIT_COLUMNS }}
+                    columnSizingOptions={columnSizingOptions}
+                    style={{ minWidth: "auto", width: "100%" }}
+                    getRowId={(row: ResultRow) =>
+                        getRowId(row, primaryIdAttribute)
+                    }
+                >
+                    <DataGridHeader
+                        style={{
+                            position: "sticky",
+                            top: 0,
+                            background: webDarkTheme.colorNeutralBackground1,
+                            paddingRight: scrollbarWidth,
+                            zIndex: 10,
+                        }}
                     >
-                        <DataGridHeader
-                            style={{
-                                position: "sticky",
-                                top: 0,
-                                background: webDarkTheme.colorNeutralBackground1,
-                                paddingRight: scrollbarWidth,
-                                zIndex: 10,
-                            }}
-                        >
-                            <DataGridRow>
-                                {({ renderHeaderCell }) => (
-                                    <DataGridHeaderCell>
-                                        {renderHeaderCell()}
-                                    </DataGridHeaderCell>
-                                )}
-                            </DataGridRow>
-                        </DataGridHeader>
+                        <DataGridRow>
+                            {({ renderHeaderCell }) => (
+                                <DataGridHeaderCell>
+                                    {renderHeaderCell()}
+                                </DataGridHeaderCell>
+                            )}
+                        </DataGridRow>
+                    </DataGridHeader>
 
-                        <DataGridBody<ResultRow> itemSize={ROW_HEIGHT} height={bodyHeight}>
-                            {renderRow}
-                        </DataGridBody>
-                    </DataGrid>
-                </div>
+                    <DataGridBody<ResultRow>
+                        itemSize={ROW_HEIGHT}
+                        height={bodyHeight}
+                        width={bodyWidth}
+                        listProps={{ innerElementType }}
+                    >
+                        {renderRow}
+                    </DataGridBody>
+                </DataGrid>
             </div>
         );
     }
