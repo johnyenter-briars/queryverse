@@ -31,3 +31,4 @@ config/
 scratch
 notes*
 watch_local.ps1
+dev_instance_local*

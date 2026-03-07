@@ -55,12 +55,13 @@ pub struct DeleteBatch {
     pub ids: Vec<String>,
 }
 
-#[derive(Default, serde::Serialize)]
+#[derive(Default, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchContext {
     pub sql_file_path: Option<String>,
     pub connection_name: Option<String>,
     pub log_level: LogLevel,
+    pub open_webview_console: bool,
 }
 
 impl Default for Database {
@@ -80,6 +81,7 @@ fn parse_cli_args() -> LaunchContext {
     let mut sql_file_path = None;
     let mut connection_name = None;
     let mut log_level = LogLevel::Error;
+    let mut open_webview_console = false;
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -121,12 +123,17 @@ fn parse_cli_args() -> LaunchContext {
             }
             continue;
         }
+        if arg == "--open-webview-console" || arg == "--open-webview-devtools" {
+            open_webview_console = true;
+            continue;
+        }
     }
 
     LaunchContext {
         sql_file_path,
         connection_name,
         log_level,
+        open_webview_console,
     }
 }
 
@@ -149,7 +156,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(launch_context)
+        .manage(launch_context.clone())
         .manage(Database::default())
         .invoke_handler(tauri::generate_handler![
             create_connection,
@@ -175,11 +182,13 @@ pub fn run() {
             save_settings,
             log_frontend
         ])
-        .setup(|app| {
+        .setup(move |app| {
             let windows = app.webview_windows();
             let window = windows.get("QueryVerse").unwrap();
-            window.open_devtools();
-            window.close_devtools(); // Dev tools starts open but not steal focus
+            if launch_context.open_webview_console {
+                window.open_devtools();
+                window.close_devtools(); // Dev tools starts open but not steal focus
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
