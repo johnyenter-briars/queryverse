@@ -167,7 +167,7 @@ export default function App() {
     const [entityAttributesError, setEntityAttributesError] = useState<
         Record<string, string | null>
     >({});
-    const { notifyError } = useAppToast();
+    const { notifyError, notifySuccess, notifyWarning } = useAppToast();
 
     const styles = useAppStyles();
 
@@ -611,6 +611,15 @@ export default function App() {
                 response.fetchXml,
                 settings.fetchXmlSingleQuotes
             );
+            try {
+                await navigator.clipboard.writeText(formattedFetchXml);
+                notifySuccess("FetchXML copied", "Preview copied to clipboard.");
+            } catch (copyError) {
+                notifyWarning(
+                    "FetchXML preview ready",
+                    "Could not copy to clipboard."
+                );
+            }
             const previewId = nextTabId.current++;
             const previewTitle = `FetchXML - ${targetTab.title}`;
             const previewTab = createFetchXmlTab(
