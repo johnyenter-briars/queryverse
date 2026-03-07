@@ -292,7 +292,7 @@ export default function App() {
         });
     };
 
-    const formatFetchXml = (value: string): string => {
+    const formatFetchXml = (value: string, useSingleQuotes: boolean): string => {
         const trimmed = value.trim();
         if (!trimmed) return "";
         try {
@@ -302,7 +302,10 @@ export default function App() {
                 return trimmed;
             }
             const serialized = new XMLSerializer().serializeToString(doc);
-            return prettyPrintXml(serialized);
+            const pretty = prettyPrintXml(serialized);
+            return useSingleQuotes
+                ? pretty.replace(/="([^"]*)"/g, "='$1'")
+                : pretty;
         } catch {
             return trimmed;
         }
@@ -604,7 +607,10 @@ export default function App() {
 
         try {
             const response = await previewFetchXml(targetTab.query);
-            const formattedFetchXml = formatFetchXml(response.fetchXml);
+            const formattedFetchXml = formatFetchXml(
+                response.fetchXml,
+                settings.fetchXmlSingleQuotes
+            );
             const previewId = nextTabId.current++;
             const previewTitle = `FetchXML - ${targetTab.title}`;
             const previewTab = createFetchXmlTab(
@@ -627,15 +633,6 @@ export default function App() {
                 previewError: getErrorMessage(error),
             }));
         }
-    };
-
-    const handleClearPreview = () => {
-        if (!activeTab) return;
-        updateTab(activeTab.id, (tab) => ({
-            ...tab,
-            fetchPreview: null,
-            previewError: null,
-        }));
     };
 
     const handleOpenSqlFile = async () => {
