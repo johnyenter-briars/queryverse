@@ -4,10 +4,11 @@ mod errors;
 mod fetchxml;
 mod lexer;
 mod parser;
+pub mod util;
 
 pub use ast::{
     AggregateExpr, AggregateFunction, AggregateTarget, DeleteStmt, Expr, Literal, SelectColumns,
-    SelectItem, SelectItemKind, SelectStmt, UpdateAssignment, UpdateStmt,
+    OrderBy, SelectItem, SelectItemKind, SelectStmt, UpdateAssignment, UpdateStmt,
 };
 pub use errors::{ParseError, SqlError, TranslationError};
 
@@ -276,16 +277,20 @@ mod tests {
     }
 
     #[test]
-    fn rewrites_count_star_with_single_group_by() {
+    fn keeps_count_star_with_group_by() {
         let sql = "select count(*), address1_country from account group by address1_country";
         let result = sql_to_fetchxml(sql).expect("fetchxml");
         assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
         assert!(result
             .fetchxml
-            .contains("attribute name=\"address1_country\" alias=\"count_address1_country\" aggregate=\"count\""));
+            .contains("attribute name=\"accountid\" alias=\"count\" aggregate=\"count\""));
         assert!(result.fetchxml.contains(
             "attribute name=\"address1_country\" alias=\"col_address1_country\" groupby=\"true\""
         ));
+        assert_eq!(
+            result.column_outputs,
+            vec!["count".to_string(), "address1_country".to_string()]
+        );
     }
 
     #[test]
@@ -293,9 +298,9 @@ mod tests {
         let sql = "select count(*), address1_city from account group by address1_city order by address1_city asc";
         let result = sql_to_fetchxml(sql).expect("fetchxml");
         assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
-        assert!(result.fetchxml.contains(
-            "attribute name=\"address1_city\" alias=\"count_address1_city\" aggregate=\"count\""
-        ));
+        assert!(result
+            .fetchxml
+            .contains("attribute name=\"accountid\" alias=\"count\" aggregate=\"count\""));
         assert!(result.fetchxml.contains(
             "attribute name=\"address1_city\" alias=\"col_address1_city\" groupby=\"true\""
         ));
@@ -303,6 +308,21 @@ mod tests {
             result
                 .fetchxml
                 .contains("<order alias=\"col_address1_city\"")
+        );
+    }
+
+    #[test]
+    fn orders_by_aggregate_expression() {
+        let sql = "select count(*), address1_stateorprovince from account group by address1_stateorprovince order by count(*) desc";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+        assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
+        assert!(result
+            .fetchxml
+            .contains("attribute name=\"accountid\" alias=\"count\" aggregate=\"count\""));
+        assert!(
+            result
+                .fetchxml
+                .contains("<order alias=\"count\" descending=\"true\"")
         );
     }
 
@@ -341,5 +361,33 @@ mod tests {
         let sql = "select account.accountid from account left outer join contact on contact.parentcustomerid = account.accountid";
         let result = sql_to_fetchxml(sql).expect("fetchxml");
         assert!(result.fetchxml.contains("link-type=\"outer\""));
+    }
+
+    #[test]
+    fn selects_lookup_name_via_base_attribute() {
+        let sql = "select owneridname from account";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+        assert!(result.fetchxml.contains("<attribute name=\"ownerid\""));
+        assert_eq!(result.column_outputs, vec!["owneridname".to_string()]);
+    }
+
+    #[test]
+    fn selects_modifiedby_name_via_base_attribute() {
+        let sql = "select modifiedbyname from account";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+        assert!(result.fetchxml.contains("<attribute name=\"modifiedby\""));
+        assert_eq!(result.column_outputs, vec!["modifiedbyname".to_string()]);
+    }
+
+    #[test]
+    fn does_not_duplicate_lookup_attribute_when_name_selected() {
+        let sql = "select contactid, parentcustomerid, parentcustomeridname from contact";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+
+        let count = result
+            .fetchxml
+            .matches("attribute name=\"parentcustomerid\"")
+            .count();
+        assert_eq!(count, 1);
     }
 }

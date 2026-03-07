@@ -289,7 +289,23 @@ impl Parser {
     fn parse_order_by(&mut self) -> Result<Vec<OrderBy>, ParseError> {
         let mut order_by = Vec::new();
         loop {
-            let column = self.parse_identifier()?;
+            let column = if self.is_identifier() {
+                let ident = self.parse_identifier()?;
+                if self.consume_kind(TokenKind::LParen) {
+                    let function = self.parse_aggregate_function(&ident)?;
+                    let target = if self.consume_kind(TokenKind::Star) {
+                        AggregateTarget::Star
+                    } else {
+                        AggregateTarget::Column(self.parse_identifier()?)
+                    };
+                    self.expect_kind(TokenKind::RParen)?;
+                    aggregate_default_alias(function, &target)
+                } else {
+                    ident
+                }
+            } else {
+                return Err(self.error_at_current("Expected identifier in ORDER BY"));
+            };
             let descending = if self.consume_keyword(Keyword::Desc) {
                 true
             } else {
@@ -328,29 +344,6 @@ impl Parser {
         if stmt.group_by.is_empty() {
             return Ok(());
         }
-
-        if let SelectColumns::Columns(items) = &mut stmt.columns {
-                for item in items {
-                    if let SelectItemKind::Aggregate(aggregate) = &mut item.kind {
-                        if matches!(aggregate.function, AggregateFunction::Count)
-                            && matches!(aggregate.target, AggregateTarget::Star)
-                        {
-                            if stmt.group_by.len() == 1 {
-                                let group = stmt.group_by[0].clone();
-                                if group.contains('.') {
-                                    continue;
-                                }
-                                aggregate.target = AggregateTarget::Column(group);
-                            } else {
-                                return Err(self.error_at_current(
-                                    "COUNT(*) with GROUP BY requires a single group column; use COUNT(column)",
-                                ));
-                            }
-                    }
-                }
-            }
-        }
-
         Ok(())
     }
 
@@ -686,7 +679,22 @@ impl Parser {
         }
     }
 
-    fn error_at_current(&self, message: &str) -> ParseError {
+fn error_at_current(&self, message: &str) -> ParseError {
         ParseError::new(message, self.current().line, self.current().column)
+    }
+}
+
+fn aggregate_default_alias(function: AggregateFunction, target: &AggregateTarget) -> String {
+    let function_name = match function {
+        AggregateFunction::Min => "min",
+        AggregateFunction::Max => "max",
+        AggregateFunction::Count => "count",
+        AggregateFunction::Sum => "sum",
+        AggregateFunction::Avg => "avg",
+    };
+
+    match target {
+        AggregateTarget::Star => function_name.to_string(),
+        AggregateTarget::Column(column) => format!("{}_{}", function_name, column),
     }
 }

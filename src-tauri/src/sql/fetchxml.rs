@@ -20,6 +20,7 @@ pub fn to_fetchxml(
     let column_outputs = projection_output_names(stmt, entity_name, stmt.entity_alias.as_deref())?;
     let group_by = validate_group_by(stmt)?;
     let alias_map = build_alias_map(stmt, entity_name, aggregate_mode, &group_by)?;
+    let mut written_attributes: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     out.push_str("<fetch");
     if let Some(top) = stmt.top {
@@ -59,6 +60,16 @@ pub fn to_fetchxml(
                                 .entry(join_key)
                                 .or_default()
                                 .push(column.clone());
+                            continue;
+                        }
+                    }
+
+                    if column.alias.is_none() {
+                        let (_, raw_attribute_name) =
+                            split_qualified(name).unwrap_or((None, name.as_str()));
+                        let attribute_name =
+                            lookup_name_attribute(raw_attribute_name).unwrap_or(raw_attribute_name);
+                        if !written_attributes.insert(attribute_name.to_string()) {
                             continue;
                         }
                     }
@@ -116,7 +127,10 @@ fn write_attribute(
 ) -> Result<(), TranslationError> {
     match &item.kind {
         SelectItemKind::Attribute(name) => {
-            let (_, attribute_name) = split_qualified(name).unwrap_or((None, name.as_str()));
+            let (_, raw_attribute_name) =
+                split_qualified(name).unwrap_or((None, name.as_str()));
+            let attribute_name =
+                lookup_name_attribute(raw_attribute_name).unwrap_or(raw_attribute_name);
             if aggregate_mode {
                 if group_by.is_empty() || !group_by_matches_item(item, group_by) {
                     return Err(TranslationError::new(
@@ -669,6 +683,7 @@ fn output_name(
     }
 }
 
+
 fn aggregate_alias(
     item: &SelectItem,
     entity_name: &str,
@@ -727,4 +742,23 @@ fn escape_xml(value: &str) -> String {
         }
     }
     escaped
+}
+
+fn lookup_name_attribute(attribute: &str) -> Option<&str> {
+    let lowered = attribute.to_ascii_lowercase();
+    if lowered == "name" || !lowered.ends_with("name") {
+        return None;
+    }
+
+    let base = &attribute[..attribute.len().saturating_sub(4)];
+    if base.is_empty() {
+        return None;
+    }
+
+    let base_lower = base.to_ascii_lowercase();
+    if !base_lower.ends_with("id") && !base_lower.ends_with("by") {
+        return None;
+    }
+
+    Some(base)
 }

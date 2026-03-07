@@ -1,17 +1,39 @@
 use std::collections::HashMap;
+use std::cmp::Ordering;
 
 use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
 
 use crate::binding::model::resultrow::ResultRow;
 use crate::sql::{
-    AggregateFunction, AggregateTarget, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
+    AggregateFunction, AggregateTarget, OrderBy, SelectColumns, SelectItem, SelectItemKind,
+    SelectStmt,
 };
-
-pub const ROW_NUMBER_ATTRIBUTE: &str = "__rownum";
 
 pub fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultRow {
     let mut attributes = std::collections::HashMap::new();
     for (key, value) in entity.attributes {
+        if let Some(formatted_key) = lookup_formatted_key(&key) {
+            let should_insert = match attributes.get(&formatted_key) {
+                None => true,
+                Some(Value::Null) => true,
+                _ => false,
+            };
+            if should_insert {
+                attributes.insert(formatted_key, value);
+            }
+            continue;
+        }
+        if let Some(base) = lookup_base_attribute(&key) {
+            let should_insert = match attributes.get(&base) {
+                None => true,
+                Some(Value::Null) => true,
+                _ => false,
+            };
+            if should_insert {
+                attributes.insert(base, value);
+            }
+            continue;
+        }
         let normalized_key = if let Some(base) = key.strip_prefix("col_") {
             if attributes.contains_key(base) {
                 key
@@ -151,14 +173,15 @@ fn aggregate_output_name(item: &SelectItem) -> String {
 pub fn demote_count_fetchxml(fetchxml: &str) -> Result<String, String> {
     let mut updated = fetchxml.replace(" aggregate=\"true\"", "");
     updated = updated.replace(" aggregate=\"count\"", "");
-    Ok(updated)
+    strip_order_clauses(&updated)
 }
 
 pub fn demote_aggregate_fetchxml(fetchxml: &str, plan: &AggregatePlan) -> Result<String, String> {
     let mut updated = fetchxml.replace(" aggregate=\"true\"", "");
     updated = updated.replace(" groupby=\"true\"", "");
     updated = strip_aggregate_attributes(&updated)?;
-    ensure_attributes(&updated, &plan.required_columns())
+    let updated = ensure_attributes(&updated, &plan.required_columns())?;
+    strip_order_clauses(&updated)
 }
 
 fn strip_aggregate_attributes(fetchxml: &str) -> Result<String, String> {
@@ -186,6 +209,31 @@ fn strip_aggregate_attributes(fetchxml: &str) -> Result<String, String> {
         }
 
         remaining = &remaining[attr_end..];
+    }
+
+    Ok(output)
+}
+
+fn strip_order_clauses(fetchxml: &str) -> Result<String, String> {
+    let mut output = String::new();
+    let mut remaining = fetchxml;
+
+    loop {
+        let start = match remaining.find("<order") {
+            Some(pos) => pos,
+            None => {
+                output.push_str(remaining);
+                break;
+            }
+        };
+
+        output.push_str(&remaining[..start]);
+        let order_end = remaining[start..]
+            .find("/>")
+            .ok_or_else(|| "Invalid FetchXML order tag".to_string())?
+            + start
+            + 2;
+        remaining = &remaining[order_end..];
     }
 
     Ok(output)
@@ -344,7 +392,7 @@ pub fn aggregate_rows(
         let mut group_values: HashMap<String, Value> = HashMap::new();
 
         for column in &plan.group_columns {
-            let value = get_entity_value(&entity, &column.source);
+            let value = get_entity_value(&entity, &column.source, &column.output);
             key_parts.push(value_key(&value));
             group_values.entry(column.output.clone()).or_insert(value);
         }
@@ -357,16 +405,41 @@ pub fn aggregate_rows(
     }
 
     let mut rows: Vec<ResultRow> = Vec::with_capacity(groups.len());
-    let mut row_number = 1i64;
     for (_, group) in groups {
         let mut attributes = group.finalize();
-        attributes.insert(ROW_NUMBER_ATTRIBUTE.to_string(), Value::Int(row_number));
         ensure_columns(&mut attributes, columns_order);
         rows.push(ResultRow { attributes });
-        row_number += 1;
     }
 
     rows
+}
+
+pub fn sort_rows_by_order(rows: &mut [ResultRow], order_by: &[OrderBy]) {
+    if order_by.is_empty() || rows.len() <= 1 {
+        return;
+    }
+
+    rows.sort_by(|left, right| {
+        for order in order_by {
+            let left_value = left
+                .attributes
+                .get(&order.column)
+                .unwrap_or(&Value::Null);
+            let right_value = right
+                .attributes
+                .get(&order.column)
+                .unwrap_or(&Value::Null);
+            let mut cmp = compare_values(left_value, right_value);
+            if order.descending {
+                cmp = cmp.reverse();
+            }
+            if cmp != Ordering::Equal {
+                return cmp;
+            }
+        }
+
+        Ordering::Equal
+    });
 }
 
 struct GroupColumn {
@@ -411,7 +484,7 @@ impl AggregateAccumulator {
         match self.function {
             AggregateFunction::Count => {
                 if let Some(target) = &self.target {
-                    let value = get_entity_value(entity, target);
+                    let value = get_entity_value(entity, target, target);
                     if !matches!(value, Value::Null) {
                         self.count += 1;
                     }
@@ -423,7 +496,7 @@ impl AggregateAccumulator {
                 let Some(target) = &self.target else {
                     return;
                 };
-                let value = get_entity_value(entity, target);
+                let value = get_entity_value(entity, target, target);
                 if let Some((num, is_int)) = numeric_value(&value) {
                     self.sum += num;
                     if !is_int {
@@ -436,7 +509,7 @@ impl AggregateAccumulator {
                 let Some(target) = &self.target else {
                     return;
                 };
-                let value = get_entity_value(entity, target);
+                let value = get_entity_value(entity, target, target);
                 if matches!(value, Value::Null) {
                     return;
                 }
@@ -452,7 +525,7 @@ impl AggregateAccumulator {
                 let Some(target) = &self.target else {
                     return;
                 };
-                let value = get_entity_value(entity, target);
+                let value = get_entity_value(entity, target, target);
                 if matches!(value, Value::Null) {
                     return;
                 }
@@ -519,8 +592,80 @@ impl AggregateGroup {
     }
 }
 
-fn get_entity_value(entity: &Entity, key: &str) -> Value {
-    entity.attributes.get(key).cloned().unwrap_or(Value::Null)
+fn get_entity_value(entity: &Entity, key: &str, alias: &str) -> Value {
+    for candidate in value_candidates(key, alias) {
+        if let Some(value) = entity.attributes.get(&candidate) {
+            return value.clone();
+        }
+    }
+    Value::Null
+}
+
+fn value_candidates(key: &str, alias: &str) -> Vec<String> {
+    let mut candidates: Vec<String> = Vec::new();
+
+    push_candidate(&mut candidates, key);
+    if alias != key {
+        push_candidate(&mut candidates, alias);
+    }
+
+    let mut expanded: Vec<String> = Vec::new();
+    for candidate in &candidates {
+        if !candidate.starts_with("col_") {
+            expanded.push(format!("col_{}", candidate));
+        }
+    }
+    candidates.extend(expanded);
+
+    candidates
+}
+
+fn push_candidate(candidates: &mut Vec<String>, value: &str) {
+    if value.is_empty() {
+        return;
+    }
+
+    if !candidates.contains(&value.to_string()) {
+        candidates.push(value.to_string());
+    }
+
+    if let Some((_, column)) = value.rsplit_once('.') {
+        if !candidates.contains(&column.to_string()) {
+            candidates.push(column.to_string());
+        }
+    }
+}
+
+fn lookup_base_attribute(key: &str) -> Option<String> {
+    if !key.starts_with('_') || !key.ends_with("_value") {
+        return None;
+    }
+
+    let trimmed = &key[1..key.len() - "_value".len()];
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    Some(trimmed.to_string())
+}
+
+fn lookup_formatted_key(key: &str) -> Option<String> {
+    const FORMATTED_SUFFIX: &str = "@OData.Community.Display.V1.FormattedValue";
+    if !key.ends_with(FORMATTED_SUFFIX) {
+        return None;
+    }
+
+    let raw = &key[..key.len() - FORMATTED_SUFFIX.len()];
+    if raw.is_empty() {
+        return None;
+    }
+
+    let base = lookup_base_attribute(raw).unwrap_or_else(|| raw.to_string());
+    if base.is_empty() {
+        return None;
+    }
+
+    Some(format!("{}name", base))
 }
 
 fn numeric_value(value: &Value) -> Option<(f64, bool)> {
@@ -537,6 +682,7 @@ fn value_key(value: &Value) -> String {
         Value::Float(f) => f.to_string(),
         Value::String(s) => s.clone(),
         Value::Boolean(b) => b.to_string(),
+        Value::EntityReference(reference) => reference.id.to_string(),
         Value::Null => "null".to_string(),
     }
 }
@@ -554,5 +700,170 @@ fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
         (Value::String(a), Value::String(b)) => a.cmp(b),
         (Value::Boolean(a), Value::Boolean(b)) => a.cmp(b),
         _ => value_key(left).cmp(&value_key(right)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        aggregate_fallback_plan, aggregate_rows, sort_rows_by_order, AggregateTarget, OrderBy,
+        SelectColumns,
+    };
+    use crate::sql::{AggregateExpr, AggregateFunction, SelectItem, SelectItemKind, SelectStmt};
+    use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
+
+    fn make_entity(group_value: Option<&str>) -> Entity {
+        let mut entity = Entity::new();
+        if let Some(value) = group_value {
+            entity.attributes.insert(
+                "col_address1_stateorprovince".to_string(),
+                Value::String(value.to_string()),
+            );
+        }
+        entity
+    }
+
+    #[test]
+    fn aggregate_group_by_reads_col_prefixed_value() {
+        let stmt = SelectStmt {
+            columns: SelectColumns::Columns(vec![
+                SelectItem {
+                    kind: SelectItemKind::Aggregate(AggregateExpr {
+                        function: AggregateFunction::Count,
+                        target: AggregateTarget::Star,
+                    }),
+                    alias: None,
+                },
+                SelectItem {
+                    kind: SelectItemKind::Attribute("address1_stateorprovince".to_string()),
+                    alias: None,
+                },
+            ]),
+            entity: "account".to_string(),
+            entity_alias: None,
+            joins: Vec::new(),
+            top: None,
+            distinct: false,
+            filter: None,
+            group_by: vec!["address1_stateorprovince".to_string()],
+            order_by: Vec::new(),
+        };
+
+        let plan = aggregate_fallback_plan(&stmt).expect("aggregate plan");
+        let entities = vec![make_entity(Some("CA")), make_entity(Some("CA")), make_entity(None)];
+        let rows = aggregate_rows(
+            entities,
+            &plan,
+            &vec![
+                "count".to_string(),
+                "address1_stateorprovince".to_string(),
+            ],
+        );
+
+        let ca_row = rows
+            .iter()
+            .find(|row| {
+                row.attributes
+                    .get("address1_stateorprovince")
+                    == Some(&Value::String("CA".to_string()))
+            })
+            .expect("CA group");
+
+        assert_eq!(
+            ca_row.attributes.get("count"),
+            Some(&Value::Int(2))
+        );
+    }
+
+    #[test]
+    fn maps_lookup_value_keys_to_base_attribute() {
+        let mut entity = Entity::new();
+        entity.attributes.insert(
+            "_createdby_value".to_string(),
+            Value::String("abc".to_string()),
+        );
+
+        let row = super::entity_to_result_row(
+            entity,
+            &vec!["accountid".to_string(), "createdby".to_string()],
+        );
+
+        assert_eq!(
+            row.attributes.get("createdby"),
+            Some(&Value::String("abc".to_string()))
+        );
+        assert!(!row.attributes.contains_key("_createdby_value"));
+    }
+
+    #[test]
+    fn maps_formatted_lookup_to_name_column() {
+        let mut entity = Entity::new();
+        entity.attributes.insert(
+            "_createdby_value@OData.Community.Display.V1.FormattedValue".to_string(),
+            Value::String("A User".to_string()),
+        );
+
+        let row = super::entity_to_result_row(
+            entity,
+            &vec!["accountid".to_string(), "createdby".to_string()],
+        );
+
+        assert_eq!(
+            row.attributes.get("createdbyname"),
+            Some(&Value::String("A User".to_string()))
+        );
+    }
+
+    #[test]
+    fn sorts_aggregate_rows_by_count_desc() {
+        let stmt = SelectStmt {
+            columns: SelectColumns::Columns(vec![
+                SelectItem {
+                    kind: SelectItemKind::Aggregate(AggregateExpr {
+                        function: AggregateFunction::Count,
+                        target: AggregateTarget::Star,
+                    }),
+                    alias: None,
+                },
+                SelectItem {
+                    kind: SelectItemKind::Attribute("address1_stateorprovince".to_string()),
+                    alias: None,
+                },
+            ]),
+            entity: "account".to_string(),
+            entity_alias: None,
+            joins: Vec::new(),
+            top: None,
+            distinct: false,
+            filter: None,
+            group_by: vec!["address1_stateorprovince".to_string()],
+            order_by: Vec::new(),
+        };
+
+        let plan = aggregate_fallback_plan(&stmt).expect("aggregate plan");
+        let entities = vec![
+            make_entity(Some("CA")),
+            make_entity(Some("CA")),
+            make_entity(Some("WA")),
+        ];
+        let mut rows = aggregate_rows(
+            entities,
+            &plan,
+            &vec![
+                "count".to_string(),
+                "address1_stateorprovince".to_string(),
+            ],
+        );
+
+        sort_rows_by_order(
+            &mut rows,
+            &[OrderBy {
+                column: "count".to_string(),
+                descending: true,
+            }],
+        );
+
+        let first = rows.first().expect("row");
+        assert_eq!(first.attributes.get("count"), Some(&Value::Int(2)));
     }
 }

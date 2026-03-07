@@ -19,7 +19,7 @@ import {
     useScrollbarWidth,
     TableCellLayout,
 } from "@fluentui/react-components";
-import { ResultRow, Value } from "../binding/model/ResultRow";
+import { ResultRow, Value, type EntityReference } from "../binding/model/ResultRow";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { SqlQueryMetadata } from "../binding/model/SqlQueryMetadata";
 import {
@@ -36,8 +36,20 @@ const HEADER_HEIGHT = 40;
 const AUTO_FIT_COLUMNS = false;
 const ROW_NUMBER_LABEL = "Row #";
 
+function isEntityReference(value: Value): value is EntityReference {
+    return (
+        value !== null &&
+        typeof value === "object" &&
+        "id" in value &&
+        "logical_name" in value
+    );
+}
+
 function renderValue(value: Value): React.ReactNode {
     if (value === null || value === undefined) return "NULL";
+    if (isEntityReference(value)) {
+        return value.id;
+    }
     return String(value);
 }
 
@@ -60,9 +72,13 @@ function getRowId(row: ResultRow, primaryIdAttribute?: string): string {
         keys.find((key) => key.endsWith("id")) ??
         keys[0];
     const value = row.attributes[primaryKey];
-    return value !== null && value !== undefined
-        ? String(value)
-        : JSON.stringify(row.attributes);
+    if (value === null || value === undefined) {
+        return JSON.stringify(row.attributes);
+    }
+    if (isEntityReference(value)) {
+        return value.id;
+    }
+    return String(value);
 }
 
 export const ResultsWindow = React.memo(

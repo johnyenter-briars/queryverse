@@ -25,10 +25,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# Project specific
 pwd
 config/
-
-scratchpad
+scratch
 notes*
-
 watch_local.ps1

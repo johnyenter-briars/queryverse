@@ -10,7 +10,10 @@ use crate::{
         executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
         resultrow::ResultRow,
     },
-    sql::{self, aggregate},
+    sql::{
+        self, aggregate,
+        util::{assign_row_numbers, fill_entity_reference_names},
+    },
 };
 use powerplatform_dataverse_client::{
     LogLevel,
@@ -136,7 +139,11 @@ pub async fn execute_sql_with_client(
                                 error
                             })?;
 
-                        let rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
+                        let mut rows =
+                            aggregate::aggregate_rows(entities, &plan, &columns_order);
+                        fill_entity_reference_names(&mut rows, &columns_order);
+                        aggregate::sort_rows_by_order(&mut rows, &stmt.order_by);
+                        assign_row_numbers(&mut rows);
                         (rows, "Multiple results found".to_string(), true)
                     } else {
                         error!("Error: {error}");
@@ -160,15 +167,13 @@ pub async fn execute_sql_with_client(
                 .ok_or_else(|| "Count aggregate output was unavailable.".to_string())?;
 
             attributes.insert(output.to_string(), Value::Int(total as i64));
-            attributes.insert(aggregate::ROW_NUMBER_ATTRIBUTE.to_string(), Value::Int(1));
 
             aggregate::ensure_columns(&mut attributes, &columns_order);
 
-            (
-                vec![ResultRow { attributes }],
-                "Count retrieved.".to_string(),
-                true,
-            )
+            let mut rows = vec![ResultRow { attributes }];
+            fill_entity_reference_names(&mut rows, &columns_order);
+            assign_row_numbers(&mut rows);
+            (rows, "Count retrieved.".to_string(), true)
         } else {
             let demoted_fetchxml = aggregate::demote_aggregate_fetchxml(&parsed.fetchxml, &plan)?;
             let entities = service_client
@@ -179,7 +184,10 @@ pub async fn execute_sql_with_client(
                     error
                 })?;
 
-            let rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
+            let mut rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
+            fill_entity_reference_names(&mut rows, &columns_order);
+            aggregate::sort_rows_by_order(&mut rows, &stmt.order_by);
+            assign_row_numbers(&mut rows);
             (rows, "Multiple results found".to_string(), true)
         }
     } else {
@@ -191,14 +199,13 @@ pub async fn execute_sql_with_client(
                 error
             })?;
 
-        (
-            entities
-                .into_iter()
-                .map(|entity| aggregate::entity_to_result_row(entity, &columns_order))
-                .collect(),
-            "Multiple results found".to_string(),
-            true,
-        )
+        let mut rows: Vec<ResultRow> = entities
+            .into_iter()
+            .map(|entity| aggregate::entity_to_result_row(entity, &columns_order))
+            .collect();
+        fill_entity_reference_names(&mut rows, &columns_order);
+        assign_row_numbers(&mut rows);
+        (rows, "Multiple results found".to_string(), true)
     };
 
     Ok(ExecuteSqlResponse {

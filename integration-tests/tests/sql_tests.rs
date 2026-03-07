@@ -2,12 +2,11 @@ use powerplatform_dataverse_client::auth::credentials::fetch_client_credentials_
 use powerplatform_dataverse_client::dataverse::serviceclient::ServiceClient;
 use powerplatform_dataverse_client::LogLevel;
 
+use queryverse_lib::binding::function::query::execute_sql_with_client;
 use queryverse_lib::binding::model::executesqlresponse::ExecuteSqlResponse;
 use queryverse_lib::binding::model::resultrow::ResultRow;
 
 use queryverse_integration_tests::config::load_secrets;
-
-use queryverse_lib::binding::function::query::execute_sql_with_client;
 
 const SQL_TIMEOUT_SECS: u64 = 180;
 
@@ -108,10 +107,7 @@ async fn sql_group_by_base_column() -> Result<(), String> {
 
     let result = execute_sql(&client, sql).await?;
 
-    assert_eq!(
-        result.metadata.columns_order,
-        vec!["count_address1_city", "address1_city"]
-    );
+    assert_eq!(result.metadata.columns_order, vec!["count", "address1_city"]);
     assert_columns_present(&result.value, &result.metadata.columns_order);
 
     Ok(())

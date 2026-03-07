@@ -115,6 +115,7 @@ pub(crate) fn value_to_string(value: &Value) -> Option<String> {
         Value::Int(value) => Some(value.to_string()),
         Value::Float(value) => Some(value.to_string()),
         Value::Boolean(value) => Some(value.to_string()),
+        Value::EntityReference(reference) => Some(reference.id.to_string()),
         Value::Null => None,
     }
 }
