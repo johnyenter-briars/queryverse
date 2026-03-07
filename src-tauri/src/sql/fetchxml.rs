@@ -116,7 +116,10 @@ fn write_attribute(
 ) -> Result<(), TranslationError> {
     match &item.kind {
         SelectItemKind::Attribute(name) => {
-            let (_, attribute_name) = split_qualified(name).unwrap_or((None, name.as_str()));
+            let (_, raw_attribute_name) =
+                split_qualified(name).unwrap_or((None, name.as_str()));
+            let attribute_name =
+                lookup_name_attribute(raw_attribute_name).unwrap_or(raw_attribute_name);
             if aggregate_mode {
                 if group_by.is_empty() || !group_by_matches_item(item, group_by) {
                     return Err(TranslationError::new(
@@ -727,4 +730,23 @@ fn escape_xml(value: &str) -> String {
         }
     }
     escaped
+}
+
+fn lookup_name_attribute(attribute: &str) -> Option<&str> {
+    let lowered = attribute.to_ascii_lowercase();
+    if lowered == "name" || !lowered.ends_with("name") {
+        return None;
+    }
+
+    let base = &attribute[..attribute.len().saturating_sub(4)];
+    if base.is_empty() {
+        return None;
+    }
+
+    let base_lower = base.to_ascii_lowercase();
+    if !base_lower.ends_with("id") && !base_lower.ends_with("by") {
+        return None;
+    }
+
+    Some(base)
 }

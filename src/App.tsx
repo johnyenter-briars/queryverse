@@ -130,6 +130,7 @@ export default function App() {
     const tabContextMenuRef = useRef<HTMLDivElement | null>(null);
     const editorRef = useRef<CustomEditorHandle | null>(null);
     const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
+    const [debugEnabled, setDebugEnabled] = useState(false);
     const [tabContextMenu, setTabContextMenu] = useState<{
         open: boolean;
         x: number;
@@ -344,6 +345,9 @@ export default function App() {
         const initializeFromCli = async () => {
             try {
                 const context = await getLaunchContext();
+                const debugMode =
+                    context.logLevel === "debug" || context.logLevel === "trace";
+                setDebugEnabled(debugMode);
                 let connectionToUse: Connection | null = null;
 
                 if (context.connectionName) {
@@ -570,6 +574,10 @@ export default function App() {
                     isExecuting: false,
                 }));
                 return;
+            }
+
+            if (debugEnabled) {
+                console.log("Query results response:", response);
             }
 
             updateTab(targetTab.id, (tab) => ({

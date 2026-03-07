@@ -682,6 +682,7 @@ fn value_key(value: &Value) -> String {
         Value::Float(f) => f.to_string(),
         Value::String(s) => s.clone(),
         Value::Boolean(b) => b.to_string(),
+        Value::EntityReference(reference) => reference.id.to_string(),
         Value::Null => "null".to_string(),
     }
 }

@@ -10,7 +10,10 @@ use crate::{
         executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
         resultrow::ResultRow,
     },
-    sql::{self, aggregate, util::assign_row_numbers},
+    sql::{
+        self, aggregate,
+        util::{assign_row_numbers, fill_entity_reference_names},
+    },
 };
 use powerplatform_dataverse_client::{
     LogLevel,
@@ -138,6 +141,7 @@ pub async fn execute_sql_with_client(
 
                         let mut rows =
                             aggregate::aggregate_rows(entities, &plan, &columns_order);
+                        fill_entity_reference_names(&mut rows, &columns_order);
                         aggregate::sort_rows_by_order(&mut rows, &stmt.order_by);
                         assign_row_numbers(&mut rows);
                         (rows, "Multiple results found".to_string(), true)
@@ -167,6 +171,7 @@ pub async fn execute_sql_with_client(
             aggregate::ensure_columns(&mut attributes, &columns_order);
 
             let mut rows = vec![ResultRow { attributes }];
+            fill_entity_reference_names(&mut rows, &columns_order);
             assign_row_numbers(&mut rows);
             (rows, "Count retrieved.".to_string(), true)
         } else {
@@ -180,6 +185,7 @@ pub async fn execute_sql_with_client(
                 })?;
 
             let mut rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
+            fill_entity_reference_names(&mut rows, &columns_order);
             aggregate::sort_rows_by_order(&mut rows, &stmt.order_by);
             assign_row_numbers(&mut rows);
             (rows, "Multiple results found".to_string(), true)
@@ -197,6 +203,7 @@ pub async fn execute_sql_with_client(
             .into_iter()
             .map(|entity| aggregate::entity_to_result_row(entity, &columns_order))
             .collect();
+        fill_entity_reference_names(&mut rows, &columns_order);
         assign_row_numbers(&mut rows);
         (rows, "Multiple results found".to_string(), true)
     };

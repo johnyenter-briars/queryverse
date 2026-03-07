@@ -362,4 +362,20 @@ mod tests {
         let result = sql_to_fetchxml(sql).expect("fetchxml");
         assert!(result.fetchxml.contains("link-type=\"outer\""));
     }
+
+    #[test]
+    fn selects_lookup_name_via_base_attribute() {
+        let sql = "select owneridname from account";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+        assert!(result.fetchxml.contains("<attribute name=\"ownerid\""));
+        assert_eq!(result.column_outputs, vec!["owneridname".to_string()]);
+    }
+
+    #[test]
+    fn selects_modifiedby_name_via_base_attribute() {
+        let sql = "select modifiedbyname from account";
+        let result = sql_to_fetchxml(sql).expect("fetchxml");
+        assert!(result.fetchxml.contains("<attribute name=\"modifiedby\""));
+        assert_eq!(result.column_outputs, vec!["modifiedbyname".to_string()]);
+    }
 }
