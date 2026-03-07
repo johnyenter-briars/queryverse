@@ -9,5 +9,6 @@ pub async fn get_launch_context(
         sql_file_path: context.sql_file_path.clone(),
         connection_name: context.connection_name.clone(),
         log_level: context.log_level,
+        open_webview_console: context.open_webview_console,
     })
 }
