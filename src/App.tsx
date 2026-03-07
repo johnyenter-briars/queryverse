@@ -24,7 +24,6 @@ import { combineClasses } from "./utility/class";
 import { ResultRow } from "./binding/model/ResultRow";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
 import { Connection } from "./binding/model/Connection";
-import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
 import {
     discardDeleteSql,
     discardUpdateSql,
@@ -168,7 +167,7 @@ export default function App() {
     const [entityAttributesError, setEntityAttributesError] = useState<
         Record<string, string | null>
     >({});
-    const { notifyError } = useAppToast();
+    const { notifyError, notifySuccess, notifyWarning } = useAppToast();
 
     const styles = useAppStyles();
 
@@ -190,7 +189,7 @@ export default function App() {
             try {
                 const response = await getSettings();
                 if (!cancelled && response.success) {
-                    setSettings(response.value);
+                    setSettings({ ...DEFAULT_SETTINGS, ...response.value });
                 }
             } catch (error) {
                 logError("Failed to load settings", error, "queryverse::frontend::app");
@@ -205,12 +204,12 @@ export default function App() {
     }, []);
 
     const persistSettings = async (nextSettings: Settings) => {
-        setSettings(nextSettings);
+        setSettings({ ...DEFAULT_SETTINGS, ...nextSettings });
         setSettingsSaving(true);
         try {
             const response = await saveSettings(nextSettings);
             if (response.success) {
-                setSettings(response.value);
+                setSettings({ ...DEFAULT_SETTINGS, ...response.value });
             }
         } catch (error) {
             logError("Failed to save settings", error, "queryverse::frontend::app");
@@ -293,7 +292,7 @@ export default function App() {
         });
     };
 
-    const formatFetchXml = (value: string): string => {
+    const formatFetchXml = (value: string, useSingleQuotes: boolean): string => {
         const trimmed = value.trim();
         if (!trimmed) return "";
         try {
@@ -303,7 +302,10 @@ export default function App() {
                 return trimmed;
             }
             const serialized = new XMLSerializer().serializeToString(doc);
-            return prettyPrintXml(serialized);
+            const pretty = prettyPrintXml(serialized);
+            return useSingleQuotes
+                ? pretty.replace(/="([^"]*)"/g, "='$1'")
+                : pretty;
         } catch {
             return trimmed;
         }
@@ -605,7 +607,19 @@ export default function App() {
 
         try {
             const response = await previewFetchXml(targetTab.query);
-            const formattedFetchXml = formatFetchXml(response.fetchXml);
+            const formattedFetchXml = formatFetchXml(
+                response.fetchXml,
+                settings.fetchXmlSingleQuotes
+            );
+            try {
+                await navigator.clipboard.writeText(formattedFetchXml);
+                notifySuccess("FetchXML copied", "Preview copied to clipboard.");
+            } catch (copyError) {
+                notifyWarning(
+                    "FetchXML preview ready",
+                    "Could not copy to clipboard."
+                );
+            }
             const previewId = nextTabId.current++;
             const previewTitle = `FetchXML - ${targetTab.title}`;
             const previewTab = createFetchXmlTab(
@@ -628,15 +642,6 @@ export default function App() {
                 previewError: getErrorMessage(error),
             }));
         }
-    };
-
-    const handleClearPreview = () => {
-        if (!activeTab) return;
-        updateTab(activeTab.id, (tab) => ({
-            ...tab,
-            fetchPreview: null,
-            previewError: null,
-        }));
     };
 
     const handleOpenSqlFile = async () => {
@@ -1101,11 +1106,6 @@ export default function App() {
                         <div className={styles.bottom}>
                             {activeTab && activeTab.kind === "query" ? (
                                 <>
-                                    <FetchXmlPreviewPanel
-                                        fetchPreview={activeTab.fetchPreview}
-                                        previewError={activeTab.previewError}
-                                        onClear={handleClearPreview}
-                                    />
                                     <ResultsWindow
                                         data={activeTab.results}
                                         entityDefinitions={entityDefinitions}

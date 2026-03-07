@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::{
     Database,
-    auth::{connection::load_connections, token::get_access_token},
+    auth::{connection::load_connections, settings::load_settings, token::get_access_token},
     binding::model::{
         executesqlrequest::ExecuteSqlRequest,
         executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
@@ -36,11 +36,17 @@ pub async fn parse_sql_to_fetchxml(
     sql: String,
 ) -> Result<FetchXmlPreview, String> {
     let parsed = sql::sql_to_fetchxml(&sql).map_err(|e| e.to_string())?;
+    let settings = load_settings().unwrap_or_default();
+    let fetch_xml = if settings.fetch_xml_single_quotes {
+        parsed.fetchxml.replace('"', "'")
+    } else {
+        parsed.fetchxml
+    };
 
     Ok(FetchXmlPreview {
         entity_set: parsed.entity_set,
         entity_logical: parsed.entity_logical,
-        fetch_xml: parsed.fetchxml,
+        fetch_xml,
     })
 }
 

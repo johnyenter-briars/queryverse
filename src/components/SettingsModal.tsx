@@ -37,7 +37,8 @@ export function SettingsModal({
         () =>
             draft.vimEnabled !== settings.vimEnabled ||
             draft.keyBindingsEnabled !== settings.keyBindingsEnabled ||
-            draft.fontSize !== settings.fontSize,
+            draft.fontSize !== settings.fontSize ||
+            draft.fetchXmlSingleQuotes !== settings.fetchXmlSingleQuotes,
         [draft, settings]
     );
 
@@ -119,6 +120,22 @@ export function SettingsModal({
                     />
                     <Text className={styles.description}>
                         Controls the editor font size. Ctrl + mouse wheel still zooms per-tab.
+                    </Text>
+                </div>
+
+                <div className={styles.section}>
+                    <Switch
+                        label="Use single quotes in FetchXML preview"
+                        checked={draft.fetchXmlSingleQuotes}
+                        onChange={(_, data) =>
+                            setDraft((prev) => ({
+                                ...prev,
+                                fetchXmlSingleQuotes: data.checked,
+                            }))
+                        }
+                    />
+                    <Text className={styles.description}>
+                        When enabled, the preview uses single-quoted attributes for easier copying.
                     </Text>
                 </div>
 
