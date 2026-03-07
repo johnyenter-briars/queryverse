@@ -7,10 +7,16 @@ pub struct Settings {
     pub key_bindings_enabled: bool,
     #[serde(default = "default_font_size")]
     pub font_size: u32,
+    #[serde(default = "default_fetchxml_single_quotes")]
+    pub fetch_xml_single_quotes: bool,
 }
 
 fn default_font_size() -> u32 {
     16
+}
+
+fn default_fetchxml_single_quotes() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -19,6 +25,7 @@ impl Default for Settings {
             vim_enabled: true,
             key_bindings_enabled: true,
             font_size: default_font_size(),
+            fetch_xml_single_quotes: default_fetchxml_single_quotes(),
         }
     }
 }

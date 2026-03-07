@@ -24,7 +24,6 @@ import { combineClasses } from "./utility/class";
 import { ResultRow } from "./binding/model/ResultRow";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
 import { Connection } from "./binding/model/Connection";
-import { FetchXmlPreview as FetchXmlPreviewPanel } from "./components/FetchXmlPreview";
 import {
     discardDeleteSql,
     discardUpdateSql,
@@ -190,7 +189,7 @@ export default function App() {
             try {
                 const response = await getSettings();
                 if (!cancelled && response.success) {
-                    setSettings(response.value);
+                    setSettings({ ...DEFAULT_SETTINGS, ...response.value });
                 }
             } catch (error) {
                 logError("Failed to load settings", error, "queryverse::frontend::app");
@@ -205,12 +204,12 @@ export default function App() {
     }, []);
 
     const persistSettings = async (nextSettings: Settings) => {
-        setSettings(nextSettings);
+        setSettings({ ...DEFAULT_SETTINGS, ...nextSettings });
         setSettingsSaving(true);
         try {
             const response = await saveSettings(nextSettings);
             if (response.success) {
-                setSettings(response.value);
+                setSettings({ ...DEFAULT_SETTINGS, ...response.value });
             }
         } catch (error) {
             logError("Failed to save settings", error, "queryverse::frontend::app");
@@ -1101,11 +1100,6 @@ export default function App() {
                         <div className={styles.bottom}>
                             {activeTab && activeTab.kind === "query" ? (
                                 <>
-                                    <FetchXmlPreviewPanel
-                                        fetchPreview={activeTab.fetchPreview}
-                                        previewError={activeTab.previewError}
-                                        onClear={handleClearPreview}
-                                    />
                                     <ResultsWindow
                                         data={activeTab.results}
                                         entityDefinitions={entityDefinitions}
