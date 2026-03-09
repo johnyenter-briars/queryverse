@@ -15,6 +15,7 @@ import {
     getSqlTableNames,
 } from "../utility/editorIntellisense";
 import { analyzeSql, SqlParseContext } from "../utility/sqlParser";
+import { matchesPrimaryModifier } from "../settings/shortcuts";
 
 const DEFAULT_FONT_SIZE = 16;
 const MIN_FONT_SIZE = 10;
@@ -113,7 +114,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         const domNode = editor.getDomNode();
         if (domNode) {
             const handleWheel = (event: WheelEvent) => {
-                if (!event.ctrlKey) return;
+                if (!matchesPrimaryModifier(event)) return;
                 event.preventDefault();
                 event.stopPropagation();
                 const direction = event.deltaY < 0 ? 1 : -1;

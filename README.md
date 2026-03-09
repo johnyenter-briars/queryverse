@@ -60,6 +60,15 @@ Example:
   -OpenWebviewConsole
 ```
 
+## Keyboard Shortcuts
+QueryVerse uses host-platform shortcut labels in-app. On macOS, standard app shortcuts use `Cmd` instead of `Ctrl`.
+
+- Execute current query: `F5` or `Ctrl+Enter` on Windows/Linux, `F5` or `Cmd+Enter` on macOS.
+- New query tab: `Ctrl+N` on Windows/Linux, `Cmd+N` on macOS.
+- Close current tab: `Ctrl+W` on Windows/Linux, `Cmd+W` on macOS.
+- Save SQL file: `Ctrl+S` on Windows/Linux, `Cmd+S` on macOS.
+- Switch tabs (most recent): `Ctrl+Tab` / `Ctrl+Shift+Tab` on Windows/Linux. On macOS, `Ctrl+Tab` / `Ctrl+Shift+Tab` still work and `Cmd+Option+Right` / `Cmd+Option+Left` are also supported.
+
 ## AI Disclosure
 Portions of this project were developed with the assistance of AI tools; all changes are reviewed and tested by maintainers.
 

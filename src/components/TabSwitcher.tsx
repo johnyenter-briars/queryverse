@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { combineClasses } from "../utility/class";
 import { useTabSwitcherStyles } from "../styles/TabSwitcherStyles";
+import {
+    getTabSwitchDirection,
+    isTabSwitchModifierRelease,
+} from "../settings/shortcuts";
 
 type TabInfo = {
     id: number;
@@ -15,6 +19,27 @@ type TabSwitchState = {
     list: number[];
 };
 
+const DEFAULT_TAB_SWITCH_STATE: TabSwitchState = {
+    isCycling: false,
+    pressCount: 0,
+    index: 0,
+    show: false,
+    list: [],
+};
+
+const getNextTabSwitchIndex = (
+    currentIndex: number,
+    listLength: number,
+    direction: -1 | 1,
+    isCycling: boolean
+): number => {
+    if (!isCycling) {
+        return direction > 0 ? 1 % listLength : listLength - 1;
+    }
+
+    return (currentIndex + direction + listLength) % listLength;
+};
+
 interface TabSwitcherProps {
     tabs: TabInfo[];
     activeTabId: number;
@@ -24,13 +49,7 @@ interface TabSwitcherProps {
 export function TabSwitcher({ tabs, activeTabId, onTabSelect }: TabSwitcherProps) {
     const styles = useTabSwitcherStyles();
     const [tabMru, setTabMru] = useState<number[]>([]);
-    const [tabSwitch, setTabSwitch] = useState<TabSwitchState>({
-        isCycling: false,
-        pressCount: 0,
-        index: 0,
-        show: false,
-        list: [],
-    });
+    const [tabSwitch, setTabSwitch] = useState<TabSwitchState>(DEFAULT_TAB_SWITCH_STATE);
 
     useEffect(() => {
         const existingIds = new Set(tabs.map((tab) => tab.id));
@@ -51,19 +70,14 @@ export function TabSwitcher({ tabs, activeTabId, onTabSelect }: TabSwitcherProps
 
     useEffect(() => {
         if (tabs.length < 2 && tabSwitch.isCycling) {
-            setTabSwitch({
-                isCycling: false,
-                pressCount: 0,
-                index: 0,
-                show: false,
-                list: [],
-            });
+            setTabSwitch(DEFAULT_TAB_SWITCH_STATE);
         }
     }, [tabs.length, tabSwitch.isCycling]);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (!event.ctrlKey || event.key !== "Tab") return;
+            const direction = getTabSwitchDirection(event);
+            if (direction === 0) return;
             if (tabMru.length < 2) return;
 
             event.preventDefault();
@@ -72,7 +86,12 @@ export function TabSwitcher({ tabs, activeTabId, onTabSelect }: TabSwitcherProps
 
             setTabSwitch((prev) => {
                 const list = prev.isCycling ? prev.list : tabMru;
-                const nextIndex = prev.isCycling ? (prev.index + 1) % list.length : 1;
+                const nextIndex = getNextTabSwitchIndex(
+                    prev.index,
+                    list.length,
+                    direction,
+                    prev.isCycling
+                );
                 const nextPressCount = prev.isCycling ? prev.pressCount + 1 : 1;
                 const nextShow = nextPressCount > 1;
                 const nextId = list[nextIndex];
@@ -90,14 +109,8 @@ export function TabSwitcher({ tabs, activeTabId, onTabSelect }: TabSwitcherProps
         };
 
         const handleKeyUp = (event: KeyboardEvent) => {
-            if (event.key !== "Control") return;
-            setTabSwitch({
-                isCycling: false,
-                pressCount: 0,
-                index: 0,
-                show: false,
-                list: [],
-            });
+            if (!isTabSwitchModifierRelease(event)) return;
+            setTabSwitch(DEFAULT_TAB_SWITCH_STATE);
         };
 
         window.addEventListener("keydown", handleKeyDown, true);
