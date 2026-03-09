@@ -7,7 +7,11 @@ import {
 } from "@fluentui/react-components";
 import { Settings } from "../binding/model/Settings";
 import { useSettingsModalStyles } from "../styles/SettingsModalStyles";
-import { SHORTCUTS } from "../settings/shortcuts";
+import {
+    getShortcutLabel,
+    PRIMARY_MODIFIER_LABEL,
+    SHORTCUTS,
+} from "../settings/shortcuts";
 import { ModalDialog } from "./ModalDialog";
 
 export interface SettingsModalProps {
@@ -27,6 +31,8 @@ export function SettingsModal({
 }: SettingsModalProps) {
     const styles = useSettingsModalStyles();
     const [draft, setDraft] = useState<Settings>(settings);
+    const executeShortcutLabel = getShortcutLabel("execute") || "F5";
+    const saveShortcutLabel = getShortcutLabel("save-file") || `${PRIMARY_MODIFIER_LABEL}+S`;
 
     useEffect(() => {
         if (!open) return;
@@ -96,13 +102,12 @@ export function SettingsModal({
                         }
                     />
                     <Text className={styles.description}>
-                        When disabled, app-level shortcuts like Execute (F5) and Save (Ctrl+S)
-                        will not run.
+                        {`When disabled, app-level shortcuts like Execute (${executeShortcutLabel}) and Save (${saveShortcutLabel}) will not run.`}
                     </Text>
                 </div>
 
                 <div className={styles.section}>
-                    <Text weight="semibold">Font sie</Text>
+                    <Text weight="semibold">Font size</Text>
                     <Input
                         type="number"
                         min={10}
@@ -119,7 +124,7 @@ export function SettingsModal({
                         }}
                     />
                     <Text className={styles.description}>
-                        Controls the editor font size. Ctrl + mouse wheel still zooms per-tab.
+                        {`Controls the editor font size. ${PRIMARY_MODIFIER_LABEL} + mouse wheel still zooms per-tab.`}
                     </Text>
                 </div>
 

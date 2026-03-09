@@ -29,7 +29,7 @@ export const useSettingsModalStyles = makeStyles({
     },
     shortcutRow: {
         display: "grid",
-        gridTemplateColumns: "140px 1fr",
+        gridTemplateColumns: "190px 1fr",
         alignItems: "center",
         gap: tokens.spacingHorizontalS,
     },
