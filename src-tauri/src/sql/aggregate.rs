@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
 use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
 
@@ -12,38 +12,43 @@ use crate::sql::{
 pub fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultRow {
     let mut attributes = std::collections::HashMap::new();
     for (key, value) in entity.attributes {
-        if let Some(formatted_key) = lookup_formatted_key(&key) {
-            let should_insert = match attributes.get(&formatted_key) {
-                None => true,
-                Some(Value::Null) => true,
-                _ => false,
-            };
-            if should_insert {
-                attributes.insert(formatted_key, value);
+        let normalized_key = normalize_result_key(&attributes, &key);
+        match value {
+            Value::OptionSet(option) => {
+                insert_result_value(
+                    &mut attributes,
+                    normalized_key.clone(),
+                    Value::Int(option.value),
+                );
+                if let Some(name) = option.name {
+                    insert_result_value(
+                        &mut attributes,
+                        format!("{}name", normalized_key),
+                        Value::String(name),
+                    );
+                }
             }
-            continue;
+            Value::MultiSelectOptionSet(option) => {
+                let raw = option
+                    .values
+                    .iter()
+                    .map(|value| value.to_string())
+                    .collect::<Vec<String>>()
+                    .join(",");
+                insert_result_value(&mut attributes, normalized_key, Value::String(raw));
+            }
+            Value::Money(money) => {
+                insert_result_value(&mut attributes, normalized_key, Value::Float(money.value));
+            }
+            Value::DateTime(datetime) => {
+                insert_result_value(
+                    &mut attributes,
+                    normalized_key,
+                    Value::String(datetime.value),
+                );
+            }
+            other => insert_result_value(&mut attributes, normalized_key, other),
         }
-        if let Some(base) = lookup_base_attribute(&key) {
-            let should_insert = match attributes.get(&base) {
-                None => true,
-                Some(Value::Null) => true,
-                _ => false,
-            };
-            if should_insert {
-                attributes.insert(base, value);
-            }
-            continue;
-        }
-        let normalized_key = if let Some(base) = key.strip_prefix("col_") {
-            if attributes.contains_key(base) {
-                key
-            } else {
-                base.to_string()
-            }
-        } else {
-            key
-        };
-        attributes.insert(normalized_key, value);
     }
 
     ensure_columns(&mut attributes, columns_order);
@@ -54,6 +59,33 @@ pub fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultR
 pub fn ensure_columns(attributes: &mut HashMap<String, Value>, columns_order: &[String]) {
     for column in columns_order {
         attributes.entry(column.clone()).or_insert(Value::Null);
+    }
+}
+
+fn normalize_result_key(attributes: &HashMap<String, Value>, key: &str) -> String {
+    if let Some(base) = lookup_base_attribute(key) {
+        return base;
+    }
+
+    if let Some(base) = key.strip_prefix("col_") {
+        if attributes.contains_key(base) {
+            return key.to_string();
+        }
+        return base.to_string();
+    }
+
+    key.to_string()
+}
+
+fn insert_result_value(attributes: &mut HashMap<String, Value>, key: String, value: Value) {
+    let should_insert = match attributes.get(&key) {
+        None => true,
+        Some(Value::Null) => true,
+        _ => false,
+    };
+
+    if should_insert {
+        attributes.insert(key, value);
     }
 }
 
@@ -421,14 +453,8 @@ pub fn sort_rows_by_order(rows: &mut [ResultRow], order_by: &[OrderBy]) {
 
     rows.sort_by(|left, right| {
         for order in order_by {
-            let left_value = left
-                .attributes
-                .get(&order.column)
-                .unwrap_or(&Value::Null);
-            let right_value = right
-                .attributes
-                .get(&order.column)
-                .unwrap_or(&Value::Null);
+            let left_value = left.attributes.get(&order.column).unwrap_or(&Value::Null);
+            let right_value = right.attributes.get(&order.column).unwrap_or(&Value::Null);
             let mut cmp = compare_values(left_value, right_value);
             if order.descending {
                 cmp = cmp.reverse();
@@ -637,41 +663,32 @@ fn push_candidate(candidates: &mut Vec<String>, value: &str) {
 }
 
 fn lookup_base_attribute(key: &str) -> Option<String> {
-    if !key.starts_with('_') || !key.ends_with("_value") {
+    let (prefix, tail) = match key.rsplit_once('.') {
+        Some((prefix, tail)) => (Some(prefix), tail),
+        None => (None, key),
+    };
+
+    if !tail.starts_with('_') || !tail.ends_with("_value") {
         return None;
     }
 
-    let trimmed = &key[1..key.len() - "_value".len()];
+    let trimmed = &tail[1..tail.len() - "_value".len()];
     if trimmed.is_empty() {
         return None;
     }
 
-    Some(trimmed.to_string())
-}
-
-fn lookup_formatted_key(key: &str) -> Option<String> {
-    const FORMATTED_SUFFIX: &str = "@OData.Community.Display.V1.FormattedValue";
-    if !key.ends_with(FORMATTED_SUFFIX) {
-        return None;
+    match prefix {
+        Some(prefix) => Some(format!("{}.{}", prefix, trimmed)),
+        None => Some(trimmed.to_string()),
     }
-
-    let raw = &key[..key.len() - FORMATTED_SUFFIX.len()];
-    if raw.is_empty() {
-        return None;
-    }
-
-    let base = lookup_base_attribute(raw).unwrap_or_else(|| raw.to_string());
-    if base.is_empty() {
-        return None;
-    }
-
-    Some(format!("{}name", base))
 }
 
 fn numeric_value(value: &Value) -> Option<(f64, bool)> {
     match value {
         Value::Int(i) => Some((*i as f64, true)),
         Value::Float(f) => Some((*f, false)),
+        Value::OptionSet(value) => Some((value.value as f64, true)),
+        Value::Money(value) => Some((value.value, false)),
         _ => None,
     }
 }
@@ -682,23 +699,32 @@ fn value_key(value: &Value) -> String {
         Value::Float(f) => f.to_string(),
         Value::String(s) => s.clone(),
         Value::Boolean(b) => b.to_string(),
+        Value::OptionSet(value) => value.value.to_string(),
+        Value::MultiSelectOptionSet(value) => value
+            .values
+            .iter()
+            .map(|item| item.to_string())
+            .collect::<Vec<String>>()
+            .join(","),
+        Value::Money(value) => value.value.to_string(),
+        Value::DateTime(value) => value.value.clone(),
         Value::EntityReference(reference) => reference.id.to_string(),
         Value::Null => "null".to_string(),
     }
 }
 
 fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
+    if let (Some((left_num, _)), Some((right_num, _))) = (numeric_value(left), numeric_value(right))
+    {
+        return left_num
+            .partial_cmp(&right_num)
+            .unwrap_or(std::cmp::Ordering::Equal);
+    }
+
     match (left, right) {
-        (Value::Int(a), Value::Int(b)) => a.cmp(b),
-        (Value::Int(a), Value::Float(b)) => (*a as f64)
-            .partial_cmp(b)
-            .unwrap_or(std::cmp::Ordering::Equal),
-        (Value::Float(a), Value::Int(b)) => a
-            .partial_cmp(&(*b as f64))
-            .unwrap_or(std::cmp::Ordering::Equal),
-        (Value::Float(a), Value::Float(b)) => a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
         (Value::String(a), Value::String(b)) => a.cmp(b),
         (Value::Boolean(a), Value::Boolean(b)) => a.cmp(b),
+        (Value::DateTime(a), Value::DateTime(b)) => a.value.cmp(&b.value),
         _ => value_key(left).cmp(&value_key(right)),
     }
 }
@@ -706,11 +732,14 @@ fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
 #[cfg(test)]
 mod tests {
     use super::{
-        aggregate_fallback_plan, aggregate_rows, sort_rows_by_order, AggregateTarget, OrderBy,
-        SelectColumns,
+        AggregateTarget, OrderBy, SelectColumns, aggregate_fallback_plan, aggregate_rows,
+        sort_rows_by_order,
     };
     use crate::sql::{AggregateExpr, AggregateFunction, SelectItem, SelectItemKind, SelectStmt};
-    use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
+    use powerplatform_dataverse_client::dataverse::entity::{
+        Entity, EntityReference, OptionSetValue, Value,
+    };
+    use uuid::Uuid;
 
     fn make_entity(group_value: Option<&str>) -> Entity {
         let mut entity = Entity::new();
@@ -750,29 +779,26 @@ mod tests {
         };
 
         let plan = aggregate_fallback_plan(&stmt).expect("aggregate plan");
-        let entities = vec![make_entity(Some("CA")), make_entity(Some("CA")), make_entity(None)];
+        let entities = vec![
+            make_entity(Some("CA")),
+            make_entity(Some("CA")),
+            make_entity(None),
+        ];
         let rows = aggregate_rows(
             entities,
             &plan,
-            &vec![
-                "count".to_string(),
-                "address1_stateorprovince".to_string(),
-            ],
+            &vec!["count".to_string(), "address1_stateorprovince".to_string()],
         );
 
         let ca_row = rows
             .iter()
             .find(|row| {
-                row.attributes
-                    .get("address1_stateorprovince")
+                row.attributes.get("address1_stateorprovince")
                     == Some(&Value::String("CA".to_string()))
             })
             .expect("CA group");
 
-        assert_eq!(
-            ca_row.attributes.get("count"),
-            Some(&Value::Int(2))
-        );
+        assert_eq!(ca_row.attributes.get("count"), Some(&Value::Int(2)));
     }
 
     #[test]
@@ -780,7 +806,11 @@ mod tests {
         let mut entity = Entity::new();
         entity.attributes.insert(
             "_createdby_value".to_string(),
-            Value::String("abc".to_string()),
+            Value::EntityReference(EntityReference {
+                id: Uuid::nil(),
+                logical_name: "systemuser".to_string(),
+                name: Some("A User".to_string()),
+            }),
         );
 
         let row = super::entity_to_result_row(
@@ -790,27 +820,32 @@ mod tests {
 
         assert_eq!(
             row.attributes.get("createdby"),
-            Some(&Value::String("abc".to_string()))
+            Some(&Value::EntityReference(EntityReference {
+                id: Uuid::nil(),
+                logical_name: "systemuser".to_string(),
+                name: Some("A User".to_string()),
+            }))
         );
         assert!(!row.attributes.contains_key("_createdby_value"));
     }
 
     #[test]
-    fn maps_formatted_lookup_to_name_column() {
+    fn flattens_option_set_to_value_and_name_columns() {
         let mut entity = Entity::new();
         entity.attributes.insert(
-            "_createdby_value@OData.Community.Display.V1.FormattedValue".to_string(),
-            Value::String("A User".to_string()),
+            "statuscode".to_string(),
+            Value::OptionSet(OptionSetValue {
+                value: 1,
+                name: Some("Active".to_string()),
+            }),
         );
 
-        let row = super::entity_to_result_row(
-            entity,
-            &vec!["accountid".to_string(), "createdby".to_string()],
-        );
+        let row = super::entity_to_result_row(entity, &vec!["statuscode".to_string()]);
 
+        assert_eq!(row.attributes.get("statuscode"), Some(&Value::Int(1)));
         assert_eq!(
-            row.attributes.get("createdbyname"),
-            Some(&Value::String("A User".to_string()))
+            row.attributes.get("statuscodename"),
+            Some(&Value::String("Active".to_string()))
         );
     }
 
@@ -849,10 +884,7 @@ mod tests {
         let mut rows = aggregate_rows(
             entities,
             &plan,
-            &vec![
-                "count".to_string(),
-                "address1_stateorprovince".to_string(),
-            ],
+            &vec!["count".to_string(), "address1_stateorprovince".to_string()],
         );
 
         sort_rows_by_order(

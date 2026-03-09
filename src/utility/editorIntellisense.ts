@@ -11,6 +11,15 @@ import { SqlParseContext } from "./sqlParser";
 const normalizeTableName = (input: string) =>
     input.replace(/^[\[\"]+|[\]\"]+$/g, "").toLowerCase();
 
+const isSelectableAttribute = (attribute: EntityAttribute) =>
+    attribute.IsValidForRead !== false;
+
+const isQueryableAttribute = (attribute: EntityAttribute) =>
+    attribute.IsValidODataAttribute === true;
+
+const isUpdatableAttribute = (attribute: EntityAttribute) =>
+    attribute.IsValidForUpdate !== false;
+
 /**
  * Resolve the primary entity from the last FROM clause in the SQL text.
  * @param text Full SQL text.
@@ -300,6 +309,12 @@ export const getSqlCompletionItems = ({
     const fullText = model.getValue();
     const cursorOffset = model.getOffsetAt(position);
     const textUpToCursor = fullText.slice(0, cursorOffset);
+    const inSelectList = isInSelectList(fullText, cursorOffset);
+    const inWhereList = isInWhereClause(fullText, cursorOffset);
+    const inJoinOn = isInJoinOnClause(fullText, cursorOffset);
+    const inUpdateSet = isInSetClause(fullText, cursorOffset);
+    const inUpdateWhere = isInUpdateWhereClause(fullText, cursorOffset);
+    const inDeleteWhere = isInDeleteWhereClause(fullText, cursorOffset);
 
     // Table name suggestions after FROM/JOIN/UPDATE/DELETE targets.
     const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
@@ -345,6 +360,12 @@ export const getSqlCompletionItems = ({
         const logicalName = target?.logicalName;
         const attributes = logicalName ? entityAttributes[logicalName] : undefined;
         if (attributes?.length) {
+            const filteredAttributes =
+                inSelectList
+                    ? attributes.filter(isSelectableAttribute)
+                    : inWhereList || inJoinOn
+                      ? attributes.filter(isQueryableAttribute)
+                      : attributes;
             const range = new monaco.Range(
                 position.lineNumber,
                 position.column - aliasContext.columnPrefix.length,
@@ -353,7 +374,7 @@ export const getSqlCompletionItems = ({
             );
             const current = aliasContext.columnPrefix.toLowerCase();
             suggestions.push(
-                ...attributes
+                ...filteredAttributes
                     .filter(
                         (attribute) =>
                             attribute.LogicalName.toLowerCase().startsWith(current) ||
@@ -372,12 +393,9 @@ export const getSqlCompletionItems = ({
     }
 
     // Alias/table suggestions inside select/where/join-on clauses.
-    const isInJoinOn = isInJoinOnClause(fullText, cursorOffset);
     if (
         parseContext?.tables?.length &&
-        (isInSelectList(fullText, cursorOffset) ||
-            isInWhereClause(fullText, cursorOffset) ||
-            isInJoinOn)
+        (inSelectList || inWhereList || inJoinOn)
     ) {
         const word = model.getWordUntilPosition(position);
         const range = new monaco.Range(
@@ -413,16 +431,9 @@ export const getSqlCompletionItems = ({
     }
 
     // Column suggestions for SELECT/WHERE/SET contexts without an alias prefix.
-    const inUpdateSet = isInSetClause(fullText, cursorOffset);
-    const inUpdateWhere = isInUpdateWhereClause(fullText, cursorOffset);
-    const inDeleteWhere = isInDeleteWhereClause(fullText, cursorOffset);
     if (
         entityAttributes &&
-        (isInSelectList(fullText, cursorOffset) ||
-            isInWhereClause(fullText, cursorOffset) ||
-            inUpdateSet ||
-            inUpdateWhere ||
-            inDeleteWhere)
+        (inSelectList || inWhereList || inUpdateSet || inUpdateWhere || inDeleteWhere)
     ) {
         if (inUpdateSet || inUpdateWhere || inDeleteWhere) {
             const updateTarget = inDeleteWhere
@@ -433,6 +444,11 @@ export const getSqlCompletionItems = ({
                 ? entityAttributes[updateTarget]
                 : undefined;
             if (attributes?.length) {
+                const filteredAttributes = attributes.filter((attribute) =>
+                    inUpdateSet
+                        ? isUpdatableAttribute(attribute)
+                        : isQueryableAttribute(attribute)
+                );
                 const word = model.getWordUntilPosition(position);
                 const range = new monaco.Range(
                     position.lineNumber,
@@ -443,7 +459,7 @@ export const getSqlCompletionItems = ({
                 const current = word.word.toLowerCase();
 
                 suggestions.push(
-                    ...attributes
+                    ...filteredAttributes
                         .filter(
                             (attribute) =>
                                 attribute.LogicalName.toLowerCase().startsWith(current) ||
@@ -476,6 +492,11 @@ export const getSqlCompletionItems = ({
 
         const attributes = selectedEntity ? entityAttributes[selectedEntity] : undefined;
         if (attributes?.length) {
+            const filteredAttributes = attributes.filter((attribute) =>
+                inSelectList
+                    ? isSelectableAttribute(attribute)
+                    : isQueryableAttribute(attribute)
+            );
             const word = model.getWordUntilPosition(position);
             const range = new monaco.Range(
                 position.lineNumber,
@@ -486,7 +507,7 @@ export const getSqlCompletionItems = ({
             const current = word.word.toLowerCase();
 
             suggestions.push(
-                ...attributes
+                ...filteredAttributes
                     .filter(
                         (attribute) =>
                             attribute.LogicalName.toLowerCase().startsWith(current) ||

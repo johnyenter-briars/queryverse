@@ -70,7 +70,12 @@ export function buildResultColumnDescriptors(
                 (column): column is { attribute: string; dataKey: string } =>
                     Boolean(column)
             );
-        return buildOrderedColumns(prependRowNumber(ordered, hasRowNumber));
+        return buildOrderedColumns(
+            prependRowNumber(
+                expandOptionSetNameColumns(ordered, dataAttributes),
+                hasRowNumber
+            )
+        );
     }
 
     const primaryIdAttribute = getPrimaryIdAttributeForQuery(
@@ -110,6 +115,32 @@ const prependRowNumber = (
         { attribute: ROW_NUMBER_LABEL, dataKey: ROW_NUMBER_ATTRIBUTE },
         ...orderedAttributes,
     ];
+};
+
+const expandOptionSetNameColumns = (
+    orderedAttributes: { attribute: string; dataKey: string }[],
+    availableAttributes: string[]
+) => {
+    const expanded: { attribute: string; dataKey: string }[] = [];
+    const seen = new Set<string>(orderedAttributes.map(({ attribute }) => attribute));
+
+    for (const column of orderedAttributes) {
+        expanded.push(column);
+
+        if (column.attribute.toLowerCase().endsWith("name")) {
+            continue;
+        }
+
+        const pairedAttribute = `${column.attribute}name`;
+        if (!availableAttributes.includes(pairedAttribute) || seen.has(pairedAttribute)) {
+            continue;
+        }
+
+        expanded.push({ attribute: pairedAttribute, dataKey: pairedAttribute });
+        seen.add(pairedAttribute);
+    }
+
+    return expanded;
 };
 
 const resolveAttributeKey = (attributes: string[], attribute: string): string | undefined => {

@@ -115,6 +115,17 @@ pub(crate) fn value_to_string(value: &Value) -> Option<String> {
         Value::Int(value) => Some(value.to_string()),
         Value::Float(value) => Some(value.to_string()),
         Value::Boolean(value) => Some(value.to_string()),
+        Value::OptionSet(value) => Some(value.value.to_string()),
+        Value::MultiSelectOptionSet(value) => Some(
+            value
+                .values
+                .iter()
+                .map(|item| item.to_string())
+                .collect::<Vec<String>>()
+                .join(","),
+        ),
+        Value::Money(value) => Some(value.value.to_string()),
+        Value::DateTime(value) => Some(value.value.clone()),
         Value::EntityReference(reference) => Some(reference.id.to_string()),
         Value::Null => None,
     }
