@@ -27,6 +27,7 @@ import {
     getPrimaryIdAttributeForQuery,
 } from "../utility/resultsColumns";
 import { useResultsWindowStyles } from "../styles/ResultsWindowStyles";
+import { useAppToast } from "../utility/toast";
 
 const DEFAULT_COL_WIDTH = 300;
 const MIN_COL_WIDTH = 120;
@@ -47,6 +48,14 @@ function isEntityReference(value: Value): value is EntityReference {
 }
 
 function renderValue(value: Value): React.ReactNode {
+    if (value === null || value === undefined) return "NULL";
+    if (isEntityReference(value)) {
+        return value.id;
+    }
+    return String(value);
+}
+
+function valueToClipboardText(value: Value): string {
     if (value === null || value === undefined) return "NULL";
     if (isEntityReference(value)) {
         return value.id;
@@ -94,10 +103,23 @@ export const ResultsWindow = React.memo(
         const { targetDocument } = useFluent();
         const scrollbarWidth = useScrollbarWidth({ targetDocument }) ?? 0;
         const styles = useResultsWindowStyles();
+        const { notifySuccess, notifyError } = useAppToast();
 
         const containerRef = useRef<HTMLDivElement>(null);
+        const contextMenuRef = useRef<HTMLDivElement>(null);
         const [containerHeight, setContainerHeight] = useState<number>(800);
         const [containerWidth, setContainerWidth] = useState<number>(0);
+        const [cellContextMenu, setCellContextMenu] = useState<{
+            open: boolean;
+            x: number;
+            y: number;
+            value: string;
+        }>({
+            open: false,
+            x: 0,
+            y: 0,
+            value: "",
+        });
 
         useEffect(() => {
             const el = containerRef.current;
@@ -120,6 +142,32 @@ export const ResultsWindow = React.memo(
             };
         }, []);
 
+        useEffect(() => {
+            if (!cellContextMenu.open) return;
+
+            const handleClick = (event: MouseEvent) => {
+                if (contextMenuRef.current?.contains(event.target as Node)) {
+                    return;
+                }
+                setCellContextMenu((prev) => ({ ...prev, open: false }));
+            };
+
+            const handleKeyDown = (event: KeyboardEvent) => {
+                if (event.key === "Escape") {
+                    setCellContextMenu((prev) => ({ ...prev, open: false }));
+                }
+            };
+
+            window.addEventListener("click", handleClick, true);
+            window.addEventListener("contextmenu", handleClick, true);
+            window.addEventListener("keydown", handleKeyDown, true);
+            return () => {
+                window.removeEventListener("click", handleClick, true);
+                window.removeEventListener("contextmenu", handleClick, true);
+                window.removeEventListener("keydown", handleKeyDown, true);
+            };
+        }, [cellContextMenu.open]);
+
         const orderedAttributes = useMemo(() => {
             if (data.length === 0) return [];
             return buildResultColumnDescriptors(data, entityDefinitions, query, queryMetadata);
@@ -130,14 +178,32 @@ export const ResultsWindow = React.memo(
                 createTableColumn<ResultRow>({
                     columnId: key,
                     renderHeaderCell: () => attribute,
-                    renderCell: (row) => (
-                        <TableCellLayout>
-                            {renderValue(row.attributes[dataKey])}
-                        </TableCellLayout>
-                    ),
+                    renderCell: (row) => {
+                        const rawValue = row.attributes[dataKey];
+                        const clipboardValue = valueToClipboardText(rawValue);
+
+                        return (
+                            <TableCellLayout
+                                onContextMenu={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setCellContextMenu({
+                                        open: true,
+                                        x: event.clientX,
+                                        y: event.clientY,
+                                        value: clipboardValue,
+                                    });
+                                }}
+                            >
+                                <span className={styles.cellContent}>
+                                    {renderValue(rawValue)}
+                                </span>
+                            </TableCellLayout>
+                        );
+                    },
                 })
             );
-        }, [orderedAttributes]);
+        }, [orderedAttributes, styles.cellContent]);
 
         const columnSizingOptions = useMemo<TableColumnSizingOptions>(() => {
             const options: TableColumnSizingOptions = {};
@@ -220,6 +286,17 @@ export const ResultsWindow = React.memo(
             </DataGridRow>
         );
 
+        const handleCopyValue = async () => {
+            try {
+                await navigator.clipboard.writeText(cellContextMenu.value);
+                notifySuccess("Coped to clipboard");
+            } catch {
+                notifyError("Could not copy to clipboard.");
+            } finally {
+                setCellContextMenu((prev) => ({ ...prev, open: false }));
+            }
+        };
+
         return (
             <div
                 ref={containerRef}
@@ -271,6 +348,30 @@ export const ResultsWindow = React.memo(
                         {renderRow}
                     </DataGridBody>
                 </DataGrid>
+                {cellContextMenu.open ? (
+                    <div
+                        ref={contextMenuRef}
+                        className={styles.contextMenu}
+                        style={{ top: cellContextMenu.y, left: cellContextMenu.x }}
+                    >
+                        <button
+                            type="button"
+                            className={styles.contextMenuButton}
+                            onClick={() => {
+                                void handleCopyValue();
+                            }}
+                        >
+                            Copy value
+                        </button>
+                        <button
+                            type="button"
+                            className={`${styles.contextMenuButton} ${styles.contextMenuButtonDisabled}`}
+                            disabled
+                        >
+                            Copy link
+                        </button>
+                    </div>
+                ) : null}
             </div>
         );
     }
