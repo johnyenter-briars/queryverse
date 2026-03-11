@@ -14,6 +14,7 @@ import { ModalDialog } from "./components/ModalDialog";
 import {
     DataChangeConfirmModal,
     type DataChangeAction,
+    type RequestParameterStatus,
 } from "./components/DataChangeConfirmModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { TabSwitcher } from "./components/TabSwitcher";
@@ -148,6 +149,7 @@ export default function App() {
         tabId: number | null;
         isLoading: boolean;
         action: DataChangeAction;
+        requestParameterStatuses: RequestParameterStatus[];
     }>({
         open: false,
         count: 0,
@@ -155,6 +157,7 @@ export default function App() {
         tabId: null,
         isLoading: false,
         action: "update",
+        requestParameterStatuses: [],
     });
 
     const [entityDefinitions, setEntityDefinitions] = useState<EntityDefinition[]>([]);
@@ -289,7 +292,56 @@ export default function App() {
             tabId: null,
             isLoading: false,
             action: "update",
+            requestParameterStatuses: [],
         });
+    };
+
+    const buildRequestParameterStatuses = (
+        currentSettings: Settings
+    ): RequestParameterStatus[] => {
+        const businessLogicValue =
+            currentSettings.bypassBusinessLogicExecutionCustomSync &&
+            currentSettings.bypassBusinessLogicExecutionCustomAsync
+                ? "✅ CustomSync + CustomAsync"
+                : currentSettings.bypassBusinessLogicExecutionCustomSync
+                  ? "✅ CustomSync"
+                  : currentSettings.bypassBusinessLogicExecutionCustomAsync
+                    ? "✅ CustomAsync"
+                    : "❌ Off";
+
+        return [
+            {
+                label: "BypassBusinessLogicExecution",
+                value: businessLogicValue,
+                tone:
+                    currentSettings.bypassBusinessLogicExecutionCustomSync &&
+                    currentSettings.bypassBusinessLogicExecutionCustomAsync
+                        ? "active"
+                        : currentSettings.bypassBusinessLogicExecutionCustomSync ||
+                            currentSettings.bypassBusinessLogicExecutionCustomAsync
+                          ? "active"
+                          : "inactive",
+            },
+            {
+                label: "BypassBusinessLogicExecutionStepIds",
+                value: "⏳ Not implemented yet",
+                tone: "todo",
+            },
+            {
+                label: "BypassCustomPluginExecution",
+                value: currentSettings.bypassCustomPluginExecution ? "✅ On" : "❌ Off",
+                tone: currentSettings.bypassCustomPluginExecution ? "active" : "inactive",
+            },
+            {
+                label: "SuppressCallbackRegistrationExpanderJob",
+                value: currentSettings.suppressCallbackRegistrationExpanderJob
+                    ? "✅ On"
+                    : "❌ Off",
+                tone: currentSettings.suppressCallbackRegistrationExpanderJob
+                    ? "active"
+                    : "inactive",
+            },
+        ];
     };
 
     const formatFetchXml = (value: string, useSingleQuotes: boolean): string => {
@@ -514,6 +566,7 @@ export default function App() {
                     tabId: targetTab.id,
                     isLoading: false,
                     action: "update",
+                    requestParameterStatuses: buildRequestParameterStatuses(settings),
                 });
 
                 updateTab(targetTab.id, (tab) => ({
@@ -549,6 +602,7 @@ export default function App() {
                     tabId: targetTab.id,
                     isLoading: false,
                     action: "delete",
+                    requestParameterStatuses: buildRequestParameterStatuses(settings),
                 });
 
                 updateTab(targetTab.id, (tab) => ({
@@ -972,6 +1026,7 @@ export default function App() {
                     count={dataChangeConfirm.count}
                     isLoading={dataChangeConfirm.isLoading}
                     action={dataChangeConfirm.action}
+                    requestParameterStatuses={dataChangeConfirm.requestParameterStatuses}
                     onConfirm={handleConfirmDataChange}
                     onCancel={handleCancelDataChange}
                 />
