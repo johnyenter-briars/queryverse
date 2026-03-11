@@ -36,7 +36,6 @@ const ROW_NUMBER_MIN_WIDTH = 40;
 const ROW_HEIGHT = 36;
 const HEADER_HEIGHT = 40;
 const AUTO_FIT_COLUMNS = false;
-const ROW_NUMBER_LABEL = "Row #";
 
 function isEntityReference(value: Value): value is EntityReference {
     return (
@@ -177,7 +176,9 @@ export const ResultsWindow = React.memo(
             return orderedAttributes.map(({ key, attribute, dataKey }) =>
                 createTableColumn<ResultRow>({
                     columnId: key,
-                    renderHeaderCell: () => attribute,
+                    renderHeaderCell: () => (
+                        <span className={styles.headerContent}>{attribute}</span>
+                    ),
                     renderCell: (row) => {
                         const rawValue = row.attributes[dataKey];
                         const clipboardValue = valueToClipboardText(rawValue);
@@ -203,12 +204,12 @@ export const ResultsWindow = React.memo(
                     },
                 })
             );
-        }, [orderedAttributes, styles.cellContent]);
+        }, [orderedAttributes, styles.cellContent, styles.headerContent]);
 
         const columnSizingOptions = useMemo<TableColumnSizingOptions>(() => {
             const options: TableColumnSizingOptions = {};
-            for (const { key, attribute } of orderedAttributes) {
-                const isRowNumber = attribute === ROW_NUMBER_LABEL;
+            for (const { key, dataKey } of orderedAttributes) {
+                const isRowNumber = dataKey === "__rownum";
                 options[key] = {
                     defaultWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : DEFAULT_COL_WIDTH,
                     minWidth: isRowNumber ? ROW_NUMBER_MIN_WIDTH : MIN_COL_WIDTH,

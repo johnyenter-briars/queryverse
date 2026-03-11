@@ -5,11 +5,17 @@ export const useResultsWindowStyles = makeStyles({
         position: "relative",
         width: "100%",
         height: "100%",
+        backgroundColor: webDarkTheme.colorNeutralBackground1,
         scrollbarColor: `${tokens.colorBrandBackground} ${tokens.colorNeutralBackground2}`,
         scrollbarWidth: "thin",
         "& *": {
             scrollbarColor: `${tokens.colorBrandBackground} ${tokens.colorNeutralBackground2}`,
             scrollbarWidth: "thin",
+        },
+        "& .fui-DataGrid": {
+            height: "100%",
+            backgroundColor: webDarkTheme.colorNeutralBackground1,
+            border: `1px solid ${tokens.colorNeutralStroke2}`,
         },
         "& .fui-DataGridHeader": {
             overflow: "hidden",
@@ -17,6 +23,50 @@ export const useResultsWindowStyles = makeStyles({
         },
         "& .fui-DataGridHeader::-webkit-scrollbar": {
             display: "none",
+        },
+        "& .fui-DataGridHeaderCell": {
+            borderRight: "none",
+            boxSizing: "border-box",
+            boxShadow: `inset -1px 0 0 ${tokens.colorNeutralStroke2}`,
+            ...shorthands.padding(0),
+        },
+        "& .fui-DataGridHeaderCell:last-child": {
+            boxShadow: "none",
+        },
+        "& .fui-DataGridBody": {
+            overflowX: "auto",
+            overflowY: "auto",
+        },
+        "& .fui-DataGridRow": {
+            borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+        },
+        "& .fui-DataGridBody .fui-DataGridRow:nth-child(odd)": {
+            backgroundColor: webDarkTheme.colorNeutralBackground1,
+        },
+        "& .fui-DataGridBody .fui-DataGridRow:nth-child(even)": {
+            backgroundColor: webDarkTheme.colorNeutralBackground2,
+        },
+        "& .fui-DataGridBody .fui-DataGridRow:hover": {
+            backgroundColor: tokens.colorNeutralBackground1Hover,
+        },
+        "& .fui-DataGridBody .fui-DataGridRow:focus-within": {
+            backgroundColor: tokens.colorNeutralBackground1Pressed,
+        },
+        "& .fui-DataGridCell": {
+            minHeight: "36px",
+            boxSizing: "border-box",
+            boxShadow: `inset -1px 0 0 ${tokens.colorNeutralStroke2}`,
+            ...shorthands.padding(0),
+        },
+        "& .fui-DataGridCell:last-child": {
+            boxShadow: "none",
+        },
+        "& .fui-TableCellLayout": {
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalM),
         },
         "& ::-webkit-scrollbar": {
             width: "12px",
@@ -38,11 +88,21 @@ export const useResultsWindowStyles = makeStyles({
         },
     },
     cellContent: {
+        display: "block",
         width: "100%",
         minWidth: 0,
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
+    },
+    headerContent: {
+        display: "flex",
+        alignItems: "center",
+        width: "100%",
+        height: "100%",
+        minWidth: 0,
+        fontWeight: tokens.fontWeightSemibold,
+        ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalM),
     },
     contextMenu: {
         position: "fixed",
