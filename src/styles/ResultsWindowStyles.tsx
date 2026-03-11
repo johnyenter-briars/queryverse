@@ -56,6 +56,7 @@ export const useResultsWindowStyles = makeStyles({
             minHeight: "36px",
             boxSizing: "border-box",
             boxShadow: `inset -1px 0 0 ${tokens.colorNeutralStroke2}`,
+            userSelect: "none",
             ...shorthands.padding(0),
         },
         "& .fui-DataGridCell:last-child": {
@@ -66,6 +67,7 @@ export const useResultsWindowStyles = makeStyles({
             height: "100%",
             display: "flex",
             alignItems: "center",
+            userSelect: "none",
             ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalM),
         },
         "& ::-webkit-scrollbar": {
@@ -94,6 +96,7 @@ export const useResultsWindowStyles = makeStyles({
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
+        userSelect: "none",
     },
     headerContent: {
         display: "flex",
@@ -103,39 +106,5 @@ export const useResultsWindowStyles = makeStyles({
         minWidth: 0,
         fontWeight: tokens.fontWeightSemibold,
         ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalM),
-    },
-    contextMenu: {
-        position: "fixed",
-        minWidth: "160px",
-        display: "flex",
-        flexDirection: "column",
-        backgroundColor: webDarkTheme.colorNeutralBackground2,
-        border: `1px solid ${tokens.colorNeutralStroke1}`,
-        boxShadow: tokens.shadow16,
-        ...shorthands.borderRadius(tokens.borderRadiusMedium),
-        ...shorthands.padding(tokens.spacingVerticalXS),
-        zIndex: 1000,
-    },
-    contextMenuButton: {
-        display: "flex",
-        alignItems: "center",
-        width: "100%",
-        backgroundColor: "transparent",
-        color: tokens.colorNeutralForeground1,
-        border: "none",
-        textAlign: "left",
-        cursor: "pointer",
-        ...shorthands.borderRadius(tokens.borderRadiusSmall),
-        ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
-        "&:hover": {
-            backgroundColor: tokens.colorNeutralBackground1Hover,
-        },
-    },
-    contextMenuButtonDisabled: {
-        color: tokens.colorNeutralForegroundDisabled,
-        cursor: "default",
-        "&:hover": {
-            backgroundColor: "transparent",
-        },
     },
 });

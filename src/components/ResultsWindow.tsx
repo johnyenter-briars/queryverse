@@ -105,20 +105,8 @@ export const ResultsWindow = React.memo(
         const { notifySuccess, notifyError } = useAppToast();
 
         const containerRef = useRef<HTMLDivElement>(null);
-        const contextMenuRef = useRef<HTMLDivElement>(null);
         const [containerHeight, setContainerHeight] = useState<number>(800);
         const [containerWidth, setContainerWidth] = useState<number>(0);
-        const [cellContextMenu, setCellContextMenu] = useState<{
-            open: boolean;
-            x: number;
-            y: number;
-            value: string;
-        }>({
-            open: false,
-            x: 0,
-            y: 0,
-            value: "",
-        });
 
         useEffect(() => {
             const el = containerRef.current;
@@ -141,32 +129,6 @@ export const ResultsWindow = React.memo(
             };
         }, []);
 
-        useEffect(() => {
-            if (!cellContextMenu.open) return;
-
-            const handleClick = (event: MouseEvent) => {
-                if (contextMenuRef.current?.contains(event.target as Node)) {
-                    return;
-                }
-                setCellContextMenu((prev) => ({ ...prev, open: false }));
-            };
-
-            const handleKeyDown = (event: KeyboardEvent) => {
-                if (event.key === "Escape") {
-                    setCellContextMenu((prev) => ({ ...prev, open: false }));
-                }
-            };
-
-            window.addEventListener("click", handleClick, true);
-            window.addEventListener("contextmenu", handleClick, true);
-            window.addEventListener("keydown", handleKeyDown, true);
-            return () => {
-                window.removeEventListener("click", handleClick, true);
-                window.removeEventListener("contextmenu", handleClick, true);
-                window.removeEventListener("keydown", handleKeyDown, true);
-            };
-        }, [cellContextMenu.open]);
-
         const orderedAttributes = useMemo(() => {
             if (data.length === 0) return [];
             return buildResultColumnDescriptors(data, entityDefinitions, query, queryMetadata);
@@ -181,21 +143,9 @@ export const ResultsWindow = React.memo(
                     ),
                     renderCell: (row) => {
                         const rawValue = row.attributes[dataKey];
-                        const clipboardValue = valueToClipboardText(rawValue);
 
                         return (
-                            <TableCellLayout
-                                onContextMenu={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    setCellContextMenu({
-                                        open: true,
-                                        x: event.clientX,
-                                        y: event.clientY,
-                                        value: clipboardValue,
-                                    });
-                                }}
-                            >
+                            <TableCellLayout>
                                 <span className={styles.cellContent}>
                                     {renderValue(rawValue)}
                                 </span>
@@ -281,22 +231,29 @@ export const ResultsWindow = React.memo(
 
         const renderRow: RowRenderer<ResultRow> = ({ item, rowId }, style) => (
             <DataGridRow<ResultRow> key={rowId} style={style}>
-                {({ renderCell }) => (
-                    <DataGridCell>{renderCell(item)}</DataGridCell>
-                )}
+                {({ renderCell, columnId }) => {
+                    const column = orderedAttributes.find((entry) => entry.key === columnId);
+                    const cellValue = column
+                        ? valueToClipboardText(item.attributes[column.dataKey])
+                        : "";
+
+                    return (
+                        <DataGridCell
+                            onDoubleClick={async () => {
+                                try {
+                                    await navigator.clipboard.writeText(cellValue);
+                                    notifySuccess("Coped to clipboard");
+                                } catch {
+                                    notifyError("Could not copy to clipboard.");
+                                }
+                            }}
+                        >
+                            {renderCell(item)}
+                        </DataGridCell>
+                    );
+                }}
             </DataGridRow>
         );
-
-        const handleCopyValue = async () => {
-            try {
-                await navigator.clipboard.writeText(cellContextMenu.value);
-                notifySuccess("Coped to clipboard");
-            } catch {
-                notifyError("Could not copy to clipboard.");
-            } finally {
-                setCellContextMenu((prev) => ({ ...prev, open: false }));
-            }
-        };
 
         return (
             <div
@@ -349,30 +306,6 @@ export const ResultsWindow = React.memo(
                         {renderRow}
                     </DataGridBody>
                 </DataGrid>
-                {cellContextMenu.open ? (
-                    <div
-                        ref={contextMenuRef}
-                        className={styles.contextMenu}
-                        style={{ top: cellContextMenu.y, left: cellContextMenu.x }}
-                    >
-                        <button
-                            type="button"
-                            className={styles.contextMenuButton}
-                            onClick={() => {
-                                void handleCopyValue();
-                            }}
-                        >
-                            Copy value
-                        </button>
-                        <button
-                            type="button"
-                            className={`${styles.contextMenuButton} ${styles.contextMenuButtonDisabled}`}
-                            disabled
-                        >
-                            Copy link
-                        </button>
-                    </div>
-                ) : null}
             </div>
         );
     }
