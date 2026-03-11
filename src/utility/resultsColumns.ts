@@ -3,7 +3,6 @@ import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { SqlQueryMetadata } from "../binding/model/SqlQueryMetadata";
 
 const ROW_NUMBER_ATTRIBUTE = "__rownum";
-const ROW_NUMBER_LABEL = "Row #";
 
 function normalizeEntityName(name: string): string {
     const cleaned = name.replace(/[\[\]"`]/g, "").trim();
@@ -55,9 +54,7 @@ export function buildResultColumnDescriptors(
 
     const attributes = Object.keys(data[0].attributes);
     const hasRowNumber = attributes.includes(ROW_NUMBER_ATTRIBUTE);
-    const dataAttributes = hasRowNumber
-        ? attributes.filter((attribute) => attribute !== ROW_NUMBER_ATTRIBUTE)
-        : attributes;
+    const dataAttributes = attributes.filter((attribute) => attribute !== ROW_NUMBER_ATTRIBUTE);
 
     if (queryMetadata?.columnsOrder?.length) {
         const ordered = queryMetadata.columnsOrder
@@ -107,7 +104,7 @@ const prependRowNumber = (
 ) => {
     if (!includeRowNumber) return orderedAttributes;
     return [
-        { attribute: ROW_NUMBER_LABEL, dataKey: ROW_NUMBER_ATTRIBUTE },
+        { attribute: "", dataKey: ROW_NUMBER_ATTRIBUTE },
         ...orderedAttributes,
     ];
 };

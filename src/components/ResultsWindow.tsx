@@ -27,6 +27,7 @@ import {
     getPrimaryIdAttributeForQuery,
 } from "../utility/resultsColumns";
 import { useResultsWindowStyles } from "../styles/ResultsWindowStyles";
+import { useAppToast } from "../utility/toast";
 
 const DEFAULT_COL_WIDTH = 300;
 const MIN_COL_WIDTH = 120;
@@ -35,7 +36,6 @@ const ROW_NUMBER_MIN_WIDTH = 40;
 const ROW_HEIGHT = 36;
 const HEADER_HEIGHT = 40;
 const AUTO_FIT_COLUMNS = false;
-const ROW_NUMBER_LABEL = "Row #";
 
 function isEntityReference(value: Value): value is EntityReference {
     return (
@@ -47,6 +47,14 @@ function isEntityReference(value: Value): value is EntityReference {
 }
 
 function renderValue(value: Value): React.ReactNode {
+    if (value === null || value === undefined) return "NULL";
+    if (isEntityReference(value)) {
+        return value.id;
+    }
+    return String(value);
+}
+
+function valueToClipboardText(value: Value): string {
     if (value === null || value === undefined) return "NULL";
     if (isEntityReference(value)) {
         return value.id;
@@ -94,6 +102,7 @@ export const ResultsWindow = React.memo(
         const { targetDocument } = useFluent();
         const scrollbarWidth = useScrollbarWidth({ targetDocument }) ?? 0;
         const styles = useResultsWindowStyles();
+        const { notifySuccess, notifyError } = useAppToast();
 
         const containerRef = useRef<HTMLDivElement>(null);
         const [containerHeight, setContainerHeight] = useState<number>(800);
@@ -129,20 +138,28 @@ export const ResultsWindow = React.memo(
             return orderedAttributes.map(({ key, attribute, dataKey }) =>
                 createTableColumn<ResultRow>({
                     columnId: key,
-                    renderHeaderCell: () => attribute,
-                    renderCell: (row) => (
-                        <TableCellLayout>
-                            {renderValue(row.attributes[dataKey])}
-                        </TableCellLayout>
+                    renderHeaderCell: () => (
+                        <span className={styles.headerContent}>{attribute}</span>
                     ),
+                    renderCell: (row) => {
+                        const rawValue = row.attributes[dataKey];
+
+                        return (
+                            <TableCellLayout>
+                                <span className={styles.cellContent}>
+                                    {renderValue(rawValue)}
+                                </span>
+                            </TableCellLayout>
+                        );
+                    },
                 })
             );
-        }, [orderedAttributes]);
+        }, [orderedAttributes, styles.cellContent, styles.headerContent]);
 
         const columnSizingOptions = useMemo<TableColumnSizingOptions>(() => {
             const options: TableColumnSizingOptions = {};
-            for (const { key, attribute } of orderedAttributes) {
-                const isRowNumber = attribute === ROW_NUMBER_LABEL;
+            for (const { key, dataKey } of orderedAttributes) {
+                const isRowNumber = dataKey === "__rownum";
                 options[key] = {
                     defaultWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : DEFAULT_COL_WIDTH,
                     minWidth: isRowNumber ? ROW_NUMBER_MIN_WIDTH : MIN_COL_WIDTH,
@@ -214,9 +231,27 @@ export const ResultsWindow = React.memo(
 
         const renderRow: RowRenderer<ResultRow> = ({ item, rowId }, style) => (
             <DataGridRow<ResultRow> key={rowId} style={style}>
-                {({ renderCell }) => (
-                    <DataGridCell>{renderCell(item)}</DataGridCell>
-                )}
+                {({ renderCell, columnId }) => {
+                    const column = orderedAttributes.find((entry) => entry.key === columnId);
+                    const cellValue = column
+                        ? valueToClipboardText(item.attributes[column.dataKey])
+                        : "";
+
+                    return (
+                        <DataGridCell
+                            onDoubleClick={async () => {
+                                try {
+                                    await navigator.clipboard.writeText(cellValue);
+                                    notifySuccess("Coped to clipboard");
+                                } catch {
+                                    notifyError("Could not copy to clipboard.");
+                                }
+                            }}
+                        >
+                            {renderCell(item)}
+                        </DataGridCell>
+                    );
+                }}
             </DataGridRow>
         );
 
