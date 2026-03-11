@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
 use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
 
@@ -421,14 +421,8 @@ pub fn sort_rows_by_order(rows: &mut [ResultRow], order_by: &[OrderBy]) {
 
     rows.sort_by(|left, right| {
         for order in order_by {
-            let left_value = left
-                .attributes
-                .get(&order.column)
-                .unwrap_or(&Value::Null);
-            let right_value = right
-                .attributes
-                .get(&order.column)
-                .unwrap_or(&Value::Null);
+            let left_value = left.attributes.get(&order.column).unwrap_or(&Value::Null);
+            let right_value = right.attributes.get(&order.column).unwrap_or(&Value::Null);
             let mut cmp = compare_values(left_value, right_value);
             if order.descending {
                 cmp = cmp.reverse();
@@ -706,8 +700,8 @@ fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
 #[cfg(test)]
 mod tests {
     use super::{
-        aggregate_fallback_plan, aggregate_rows, sort_rows_by_order, AggregateTarget, OrderBy,
-        SelectColumns,
+        AggregateTarget, OrderBy, SelectColumns, aggregate_fallback_plan, aggregate_rows,
+        sort_rows_by_order,
     };
     use crate::sql::{AggregateExpr, AggregateFunction, SelectItem, SelectItemKind, SelectStmt};
     use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
@@ -750,29 +744,26 @@ mod tests {
         };
 
         let plan = aggregate_fallback_plan(&stmt).expect("aggregate plan");
-        let entities = vec![make_entity(Some("CA")), make_entity(Some("CA")), make_entity(None)];
+        let entities = vec![
+            make_entity(Some("CA")),
+            make_entity(Some("CA")),
+            make_entity(None),
+        ];
         let rows = aggregate_rows(
             entities,
             &plan,
-            &vec![
-                "count".to_string(),
-                "address1_stateorprovince".to_string(),
-            ],
+            &vec!["count".to_string(), "address1_stateorprovince".to_string()],
         );
 
         let ca_row = rows
             .iter()
             .find(|row| {
-                row.attributes
-                    .get("address1_stateorprovince")
+                row.attributes.get("address1_stateorprovince")
                     == Some(&Value::String("CA".to_string()))
             })
             .expect("CA group");
 
-        assert_eq!(
-            ca_row.attributes.get("count"),
-            Some(&Value::Int(2))
-        );
+        assert_eq!(ca_row.attributes.get("count"), Some(&Value::Int(2)));
     }
 
     #[test]
@@ -849,10 +840,7 @@ mod tests {
         let mut rows = aggregate_rows(
             entities,
             &plan,
-            &vec![
-                "count".to_string(),
-                "address1_stateorprovince".to_string(),
-            ],
+            &vec!["count".to_string(), "address1_stateorprovince".to_string()],
         );
 
         sort_rows_by_order(

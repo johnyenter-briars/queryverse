@@ -1,10 +1,11 @@
 use log::{debug, error};
+use powerplatform_dataverse_client::dataverse::requestparameters::RequestParameters;
 use powerplatform_dataverse_client::dataverse::serviceclient::ServiceClient;
 use uuid::Uuid;
 
 use crate::{
     Database,
-    auth::{connection::load_connections, token::get_access_token},
+    auth::{connection::load_connections, settings::load_settings, token::get_access_token},
     binding::model::{
         deletesqlexecuteresponse::DeleteSqlExecuteResponse,
         deletesqlpreviewresponse::DeleteSqlPreviewResponse,
@@ -151,13 +152,25 @@ pub async fn execute_delete_sql(
     }
 
     let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
+    let settings = load_settings().unwrap_or_default();
+    let request_parameters = RequestParameters {
+        bypass_business_logic_execution_custom_sync: settings
+            .bypass_business_logic_execution_custom_sync,
+        bypass_business_logic_execution_custom_async: settings
+            .bypass_business_logic_execution_custom_async,
+        bypass_custom_plugin_execution: settings.bypass_custom_plugin_execution,
+        suppress_callback_registration_expander_job: settings
+            .suppress_callback_registration_expander_job,
+    };
 
     let mut deleted = 0usize;
     let mut failed = 0usize;
     let mut errors: Vec<String> = Vec::new();
 
     for id in &batch.ids {
-        let result = service_client.delete_entity(&batch.entity_set, id).await;
+        let result = service_client
+            .delete_entity_with_options(&batch.entity_set, id, &request_parameters)
+            .await;
         match result {
             Ok(_) => deleted += 1,
             Err(error) => {

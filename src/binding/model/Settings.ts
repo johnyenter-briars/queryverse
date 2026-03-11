@@ -3,6 +3,10 @@ export interface Settings {
     keyBindingsEnabled: boolean;
     fontSize: number;
     fetchXmlSingleQuotes: boolean;
+    bypassBusinessLogicExecutionCustomSync: boolean;
+    bypassBusinessLogicExecutionCustomAsync: boolean;
+    bypassCustomPluginExecution: boolean;
+    suppressCallbackRegistrationExpanderJob: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -10,5 +14,9 @@ export const DEFAULT_SETTINGS: Settings = {
     keyBindingsEnabled: true,
     fontSize: 16,
     fetchXmlSingleQuotes: true,
+    bypassBusinessLogicExecutionCustomSync: false,
+    bypassBusinessLogicExecutionCustomAsync: false,
+    bypassCustomPluginExecution: false,
+    suppressCallbackRegistrationExpanderJob: false,
 };
 

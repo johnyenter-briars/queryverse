@@ -1,10 +1,11 @@
 use log::{debug, error};
+use powerplatform_dataverse_client::dataverse::requestparameters::RequestParameters;
 use powerplatform_dataverse_client::dataverse::serviceclient::ServiceClient;
 use uuid::Uuid;
 
 use crate::{
     Database,
-    auth::{connection::load_connections, token::get_access_token},
+    auth::{connection::load_connections, settings::load_settings, token::get_access_token},
     binding::model::{
         updatesqlexecuteresponse::UpdateSqlExecuteResponse,
         updatesqlpreviewresponse::UpdateSqlPreviewResponse,
@@ -81,11 +82,9 @@ pub async fn prepare_update_sql(
         error
     })?;
 
-    if stmt
-        .assignments
-        .iter()
-        .any(|assignment| normalize_ident(&assignment.column) == normalize_ident(&primary_id_attribute))
-    {
+    if stmt.assignments.iter().any(|assignment| {
+        normalize_ident(&assignment.column) == normalize_ident(&primary_id_attribute)
+    }) {
         return Err("UPDATE cannot modify the primary ID attribute.".to_string());
     }
 
@@ -96,8 +95,7 @@ pub async fn prepare_update_sql(
         &attributes,
     )?;
 
-    let fetch = sql::update_to_fetchxml(&stmt, &primary_id_attribute)
-        .map_err(|e| e.to_string())?;
+    let fetch = sql::update_to_fetchxml(&stmt, &primary_id_attribute).map_err(|e| e.to_string())?;
 
     let entities = service_client
         .retrieve_multiple_fetchxml(&fetch.entity_set, &fetch.fetchxml)
@@ -194,6 +192,16 @@ pub async fn execute_update_sql(
     }
 
     let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
+    let settings = load_settings().unwrap_or_default();
+    let request_parameters = RequestParameters {
+        bypass_business_logic_execution_custom_sync: settings
+            .bypass_business_logic_execution_custom_sync,
+        bypass_business_logic_execution_custom_async: settings
+            .bypass_business_logic_execution_custom_async,
+        bypass_custom_plugin_execution: settings.bypass_custom_plugin_execution,
+        suppress_callback_registration_expander_job: settings
+            .suppress_callback_registration_expander_job,
+    };
 
     let mut updated = 0usize;
     let mut failed = 0usize;
@@ -201,7 +209,7 @@ pub async fn execute_update_sql(
 
     for id in &batch.ids {
         let result = service_client
-            .update_entity(&batch.entity_set, id, &batch.updates)
+            .update_entity_with_options(&batch.entity_set, id, &batch.updates, &request_parameters)
             .await;
         match result {
             Ok(_) => updated += 1,
