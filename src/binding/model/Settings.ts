@@ -3,6 +3,8 @@ export interface Settings {
     keyBindingsEnabled: boolean;
     fontSize: number;
     fetchXmlSingleQuotes: boolean;
+    bypassCustomPluginExecution: boolean;
+    suppressCallbackRegistrationExpanderJob: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -10,5 +12,7 @@ export const DEFAULT_SETTINGS: Settings = {
     keyBindingsEnabled: true,
     fontSize: 16,
     fetchXmlSingleQuotes: true,
+    bypassCustomPluginExecution: false,
+    suppressCallbackRegistrationExpanderJob: false,
 };
 

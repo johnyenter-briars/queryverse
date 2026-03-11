@@ -679,7 +679,7 @@ impl Parser {
         }
     }
 
-fn error_at_current(&self, message: &str) -> ParseError {
+    fn error_at_current(&self, message: &str) -> ParseError {
         ParseError::new(message, self.current().line, self.current().column)
     }
 }

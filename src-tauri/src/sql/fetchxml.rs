@@ -20,7 +20,8 @@ pub fn to_fetchxml(
     let column_outputs = projection_output_names(stmt, entity_name, stmt.entity_alias.as_deref())?;
     let group_by = validate_group_by(stmt)?;
     let alias_map = build_alias_map(stmt, entity_name, aggregate_mode, &group_by)?;
-    let mut written_attributes: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut written_attributes: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
 
     out.push_str("<fetch");
     if let Some(top) = stmt.top {
@@ -127,8 +128,7 @@ fn write_attribute(
 ) -> Result<(), TranslationError> {
     match &item.kind {
         SelectItemKind::Attribute(name) => {
-            let (_, raw_attribute_name) =
-                split_qualified(name).unwrap_or((None, name.as_str()));
+            let (_, raw_attribute_name) = split_qualified(name).unwrap_or((None, name.as_str()));
             let attribute_name =
                 lookup_name_attribute(raw_attribute_name).unwrap_or(raw_attribute_name);
             if aggregate_mode {
@@ -507,14 +507,7 @@ fn write_join(
 
     if let Some(attrs) = attributes {
         for item in attrs {
-            write_attribute(
-                &item,
-                base_entity,
-                None,
-                aggregate_mode,
-                group_by,
-                out,
-            )?;
+            write_attribute(&item, base_entity, None, aggregate_mode, group_by, out)?;
         }
     }
 
@@ -682,7 +675,6 @@ fn output_name(
         SelectItemKind::Aggregate(aggregate) => Ok(default_aggregate_alias(aggregate)),
     }
 }
-
 
 fn aggregate_alias(
     item: &SelectItem,

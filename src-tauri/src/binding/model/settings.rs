@@ -9,6 +9,10 @@ pub struct Settings {
     pub font_size: u32,
     #[serde(default = "default_fetchxml_single_quotes")]
     pub fetch_xml_single_quotes: bool,
+    #[serde(default)]
+    pub bypass_custom_plugin_execution: bool,
+    #[serde(default)]
+    pub suppress_callback_registration_expander_job: bool,
 }
 
 fn default_font_size() -> u32 {
@@ -26,6 +30,8 @@ impl Default for Settings {
             key_bindings_enabled: true,
             font_size: default_font_size(),
             fetch_xml_single_quotes: default_fetchxml_single_quotes(),
+            bypass_custom_plugin_execution: false,
+            suppress_callback_registration_expander_job: false,
         }
     }
 }

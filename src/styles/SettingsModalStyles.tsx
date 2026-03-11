@@ -1,20 +1,59 @@
 import { makeStyles, shorthands, tokens } from "@fluentui/react-components";
 
 export const useSettingsModalStyles = makeStyles({
-    surface: {
-        width: "420px",
-        maxWidth: "100%",
-    },
     body: {
         display: "flex",
         flexDirection: "column",
         gap: tokens.spacingVerticalM,
+        width: "100%",
         ...shorthands.padding(tokens.spacingVerticalS, 0),
+    },
+    columns: {
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+        gap: tokens.spacingHorizontalL,
+        alignItems: "start",
+        width: "100%",
+    },
+    mainColumn: {
+        display: "flex",
+        flexDirection: "column",
+        gap: tokens.spacingVerticalM,
+        minWidth: 0,
+    },
+    sideColumn: {
+        display: "flex",
+        flexDirection: "column",
+        gap: tokens.spacingVerticalM,
+        minWidth: 0,
     },
     section: {
         display: "flex",
         flexDirection: "column",
         gap: tokens.spacingVerticalXS,
+    },
+    mainPanel: {
+        display: "flex",
+        flexDirection: "column",
+        gap: tokens.spacingVerticalS,
+        ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
+        ...shorthands.borderRadius(tokens.borderRadiusLarge),
+        backgroundColor: tokens.colorNeutralBackground2,
+        border: `1px solid ${tokens.colorNeutralStroke2}`,
+    },
+    sidePanel: {
+        display: "flex",
+        flexDirection: "column",
+        gap: tokens.spacingVerticalS,
+        ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
+        ...shorthands.borderRadius(tokens.borderRadiusLarge),
+        backgroundColor: tokens.colorNeutralBackground2,
+        border: `1px solid ${tokens.colorNeutralStroke2}`,
+    },
+    toggleGroup: {
+        display: "flex",
+        flexDirection: "column",
+        gap: tokens.spacingVerticalS,
     },
     shortcutsList: {
         display: "flex",
@@ -29,7 +68,7 @@ export const useSettingsModalStyles = makeStyles({
     },
     shortcutRow: {
         display: "grid",
-        gridTemplateColumns: "140px 1fr",
+        gridTemplateColumns: "160px 1fr",
         alignItems: "center",
         gap: tokens.spacingHorizontalS,
     },

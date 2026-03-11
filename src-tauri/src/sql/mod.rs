@@ -7,8 +7,8 @@ mod parser;
 pub mod util;
 
 pub use ast::{
-    AggregateExpr, AggregateFunction, AggregateTarget, DeleteStmt, Expr, Literal, SelectColumns,
-    OrderBy, SelectItem, SelectItemKind, SelectStmt, UpdateAssignment, UpdateStmt,
+    AggregateExpr, AggregateFunction, AggregateTarget, DeleteStmt, Expr, Literal, OrderBy,
+    SelectColumns, SelectItem, SelectItemKind, SelectStmt, UpdateAssignment, UpdateStmt,
 };
 pub use errors::{ParseError, SqlError, TranslationError};
 
@@ -281,9 +281,11 @@ mod tests {
         let sql = "select count(*), address1_country from account group by address1_country";
         let result = sql_to_fetchxml(sql).expect("fetchxml");
         assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
-        assert!(result
-            .fetchxml
-            .contains("attribute name=\"accountid\" alias=\"count\" aggregate=\"count\""));
+        assert!(
+            result
+                .fetchxml
+                .contains("attribute name=\"accountid\" alias=\"count\" aggregate=\"count\"")
+        );
         assert!(result.fetchxml.contains(
             "attribute name=\"address1_country\" alias=\"col_address1_country\" groupby=\"true\""
         ));
@@ -298,9 +300,11 @@ mod tests {
         let sql = "select count(*), address1_city from account group by address1_city order by address1_city asc";
         let result = sql_to_fetchxml(sql).expect("fetchxml");
         assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
-        assert!(result
-            .fetchxml
-            .contains("attribute name=\"accountid\" alias=\"count\" aggregate=\"count\""));
+        assert!(
+            result
+                .fetchxml
+                .contains("attribute name=\"accountid\" alias=\"count\" aggregate=\"count\"")
+        );
         assert!(result.fetchxml.contains(
             "attribute name=\"address1_city\" alias=\"col_address1_city\" groupby=\"true\""
         ));
@@ -316,9 +320,11 @@ mod tests {
         let sql = "select count(*), address1_stateorprovince from account group by address1_stateorprovince order by count(*) desc";
         let result = sql_to_fetchxml(sql).expect("fetchxml");
         assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
-        assert!(result
-            .fetchxml
-            .contains("attribute name=\"accountid\" alias=\"count\" aggregate=\"count\""));
+        assert!(
+            result
+                .fetchxml
+                .contains("attribute name=\"accountid\" alias=\"count\" aggregate=\"count\"")
+        );
         assert!(
             result
                 .fetchxml

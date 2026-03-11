@@ -145,8 +145,7 @@ pub async fn execute_sql_with_client(
                                 error
                             })?;
 
-                        let mut rows =
-                            aggregate::aggregate_rows(entities, &plan, &columns_order);
+                        let mut rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
                         fill_entity_reference_names(&mut rows, &columns_order);
                         aggregate::sort_rows_by_order(&mut rows, &stmt.order_by);
                         assign_row_numbers(&mut rows);
