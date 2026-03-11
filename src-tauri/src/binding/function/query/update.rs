@@ -194,6 +194,10 @@ pub async fn execute_update_sql(
     let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
     let settings = load_settings().unwrap_or_default();
     let request_parameters = RequestParameters {
+        bypass_business_logic_execution_custom_sync: settings
+            .bypass_business_logic_execution_custom_sync,
+        bypass_business_logic_execution_custom_async: settings
+            .bypass_business_logic_execution_custom_async,
         bypass_custom_plugin_execution: settings.bypass_custom_plugin_execution,
         suppress_callback_registration_expander_job: settings
             .suppress_callback_registration_expander_job,

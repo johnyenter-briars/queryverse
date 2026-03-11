@@ -39,6 +39,10 @@ export function SettingsModal({
             draft.keyBindingsEnabled !== settings.keyBindingsEnabled ||
             draft.fontSize !== settings.fontSize ||
             draft.fetchXmlSingleQuotes !== settings.fetchXmlSingleQuotes ||
+            draft.bypassBusinessLogicExecutionCustomSync !==
+                settings.bypassBusinessLogicExecutionCustomSync ||
+            draft.bypassBusinessLogicExecutionCustomAsync !==
+                settings.bypassBusinessLogicExecutionCustomAsync ||
             draft.bypassCustomPluginExecution !== settings.bypassCustomPluginExecution ||
             draft.suppressCallbackRegistrationExpanderJob !==
                 settings.suppressCallbackRegistrationExpanderJob,
@@ -169,6 +173,46 @@ export function SettingsModal({
                         <div className={styles.sidePanel}>
                             <Text weight="semibold">Dataverse RequestParameters</Text>
                             <div className={styles.toggleGroup}>
+                                <Switch
+                                    label="Bypass business logic execution: CustomSync"
+                                    checked={draft.bypassBusinessLogicExecutionCustomSync}
+                                    onChange={(_, data) =>
+                                        setDraft((prev) => ({
+                                            ...prev,
+                                            bypassBusinessLogicExecutionCustomSync: data.checked,
+                                        }))
+                                    }
+                                />
+                                <Text className={styles.description}>
+                                    Sends `MSCRM.BypassBusinessLogicExecution=CustomSync` when
+                                    enabled.
+                                </Text>
+
+                                <Switch
+                                    label="Bypass business logic execution: CustomAsync"
+                                    checked={draft.bypassBusinessLogicExecutionCustomAsync}
+                                    onChange={(_, data) =>
+                                        setDraft((prev) => ({
+                                            ...prev,
+                                            bypassBusinessLogicExecutionCustomAsync: data.checked,
+                                        }))
+                                    }
+                                />
+                                <Text className={styles.description}>
+                                    Sends `MSCRM.BypassBusinessLogicExecution=CustomAsync` when
+                                    enabled. If both sync and async are enabled, the request sends
+                                    `CustomSync,CustomAsync`.
+                                </Text>
+
+                                <Switch
+                                    label="Bypass business logic execution step IDs"
+                                    checked={false}
+                                    disabled
+                                />
+                                <Text className={styles.description}>
+                                    Not implemented yet.
+                                </Text>
+
                                 <Switch
                                     label="Bypass custom plugin execution"
                                     checked={draft.bypassCustomPluginExecution}
