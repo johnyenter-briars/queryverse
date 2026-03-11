@@ -167,7 +167,7 @@ export function SettingsModal({
 
                     <div className={styles.sideColumn}>
                         <div className={styles.sidePanel}>
-                            <Text weight="semibold">Dataverse Write Options</Text>
+                            <Text weight="semibold">Dataverse RequestParameters</Text>
                             <div className={styles.toggleGroup}>
                                 <Switch
                                     label="Bypass custom plugin execution"

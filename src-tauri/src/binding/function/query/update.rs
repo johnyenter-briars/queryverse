@@ -1,6 +1,6 @@
 use log::{debug, error};
+use powerplatform_dataverse_client::dataverse::requestparameters::RequestParameters;
 use powerplatform_dataverse_client::dataverse::serviceclient::ServiceClient;
-use powerplatform_dataverse_client::dataverse::writeoptions::WriteOperationOptions;
 use uuid::Uuid;
 
 use crate::{
@@ -193,7 +193,7 @@ pub async fn execute_update_sql(
 
     let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
     let settings = load_settings().unwrap_or_default();
-    let write_options = WriteOperationOptions {
+    let request_parameters = RequestParameters {
         bypass_custom_plugin_execution: settings.bypass_custom_plugin_execution,
         suppress_callback_registration_expander_job: settings
             .suppress_callback_registration_expander_job,
@@ -205,7 +205,7 @@ pub async fn execute_update_sql(
 
     for id in &batch.ids {
         let result = service_client
-            .update_entity_with_options(&batch.entity_set, id, &batch.updates, &write_options)
+            .update_entity_with_options(&batch.entity_set, id, &batch.updates, &request_parameters)
             .await;
         match result {
             Ok(_) => updated += 1,
