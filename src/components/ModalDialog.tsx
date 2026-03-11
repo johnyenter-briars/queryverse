@@ -28,9 +28,16 @@ export function ModalDialog({
     width,
     actions,
 }: ModalDialogProps) {
+    const surfaceStyle = width
+        ? {
+              width,
+              maxWidth: width,
+          }
+        : undefined;
+
     return (
         <Dialog open={open} onOpenChange={(_, data) => (data.open ? null : onClose())}>
-            <DialogSurface style={width ? { width } : undefined}>
+            <DialogSurface style={surfaceStyle}>
                 <DialogBody>
                     <DialogTitle>{title}</DialogTitle>
                     <DialogContent>{children}</DialogContent>
