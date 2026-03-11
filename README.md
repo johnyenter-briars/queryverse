@@ -29,6 +29,48 @@ QueryVerse is a [Dataverse](https://www.microsoft.com/en-us/power-platform/datav
   - Copy to JSON
   - Open JSON in a new window
 
+## Current Features
+- Execute Dataverse SQL queries from a desktop client.
+- Translate SQL to FetchXML.
+- Preview generated FetchXML before execution.
+- Run paged Dataverse reads through the Rust backend.
+- Open multiple query tabs.
+- Associate tabs with saved Dataverse connections.
+- Create, update, and persist connection profiles.
+- Open SQL files from disk.
+- Save SQL files.
+- Save SQL files as new files.
+- Open a SQL file on startup from CLI.
+- Select a startup connection from CLI.
+- Set backend log level from CLI.
+- Open webview devtools from CLI.
+- Browse Dataverse schema metadata.
+- Load entity definitions for the selected connection.
+- Load entity attributes on demand.
+- Execute `UPDATE` statements with preview-before-confirm flow.
+- Execute `DELETE` statements with preview-before-confirm flow.
+- Show affected row count before update/delete execution.
+- Show current Dataverse request-parameter state in update/delete confirmation dialogs.
+- Persist app settings locally.
+- Configure editor font size.
+- Enable or disable Vim mode for SQL tabs.
+- Enable or disable app keyboard shortcuts.
+- Toggle single quotes in FetchXML preview output.
+- Configure Dataverse request parameters from settings.
+- Support `BypassBusinessLogicExecution` request parameters.
+- Support `BypassCustomPluginExecution` request parameter.
+- Support `SuppressCallbackRegistrationExpanderJob` request parameter.
+- Show `BypassBusinessLogicExecutionStepIds` as not implemented yet in settings.
+- Apply Dataverse request parameters to update operations.
+- Apply Dataverse request parameters to delete operations.
+- Show query results in a virtualized grid.
+- Keep a visible row number column in results.
+- Show stronger grid-style row and cell separators in results.
+- Double-click a result cell to copy its value to the clipboard.
+- Show toast notifications for copy and other frontend actions.
+- Show query execution errors inline in the results area.
+- Keep per-tab query text, results, and execution state.
+
 ## Dev CLI Params
 When running the Tauri dev app, the following CLI params are supported:
 - `--sql-file <path>`: Open a SQL file on startup.
