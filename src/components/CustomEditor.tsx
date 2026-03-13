@@ -3,6 +3,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import { initVimMode } from "monaco-vim";
 import Editor, { OnMount } from "@monaco-editor/react";
 import type { editor as MonacoEditor, Position, IDisposable } from "monaco-editor";
+import { getTabsterAttribute } from "tabster";
 type MonacoApi = typeof import("monaco-editor");
 import { useCustomEditorStyles } from "../styles/CustomEditorStyles";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
@@ -51,6 +52,9 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     entityAttributes,
 }: ICustomEditor, ref) => {
     const styles = useCustomEditorStyles();
+    const uncontrolledCompletelyAttributes = getTabsterAttribute({
+        uncontrolled: { completely: true },
+    });
     const vimModeRef = useRef<any>(null);
     const statusBarRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<any>(null);
@@ -66,14 +70,28 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     const parseContextRef = useRef<SqlParseContext | null>(null);
     const lastUpdateEntityRef = useRef<string | null>(null);
     const lastDeleteEntityRef = useRef<string | null>(null);
+    const lastSyncedValueRef = useRef<string>(value);
 
-    // Keep the editor responsive by buffering keystrokes locally and
-    // committing to app state on a short debounce and on blur.
     const [localValue, setLocalValue] = useState<string>(value);
 
     useEffect(() => {
-        // Sync when the active tab/value changes externally.
+        const editor = editorRef.current;
+        const model = editor?.getModel?.();
+
+        if (!model) {
+            setLocalValue(value);
+            lastSyncedValueRef.current = value;
+            return;
+        }
+
+        const currentValue = model.getValue();
+        if (value === lastSyncedValueRef.current || value === currentValue) {
+            return;
+        }
+
+        model.setValue(value);
         setLocalValue(value);
+        lastSyncedValueRef.current = value;
     }, [value]);
 
     useEffect(() => {
@@ -103,6 +121,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
             {
                 keybinding: monaco.KeyCode.Tab,
                 command: "acceptSelectedSuggestion",
+                when: "suggestWidgetVisible",
             },
         ]);
 
@@ -244,51 +263,61 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     }, [entityDefinitions, language, localValue, monacoReady, onEntitiesSelected]);
 
     return (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div
+            {...uncontrolledCompletelyAttributes}
+            // Monaco needs full control of Tab handling. The weaker uncontrolled
+            // mode still allows Tabster to move focus out of the editor.
+            style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
+        >
             <Editor
                 height="100%"
                 language={language ?? "sql"}
-                value={localValue}
+                defaultValue={value}
                 theme="vs-dark"
                 onMount={handleEditorMount}
                 onChange={(v) => {
                     const nextValue = v || "";
                     setLocalValue(nextValue);
-                onChange(nextValue);
-                const selected = findSelectedEntity(
-                    nextValue,
-                    entityDefinitions
-                );
-                if (selected !== lastEntityRef.current) {
-                    lastEntityRef.current = selected;
-                    if (selected && onEntitySelected) {
-                        onEntitySelected(selected);
+                    lastSyncedValueRef.current = nextValue;
+                    onChange(nextValue);
+                    const selected = findSelectedEntity(
+                        nextValue,
+                        entityDefinitions
+                    );
+                    if (selected !== lastEntityRef.current) {
+                        lastEntityRef.current = selected;
+                        if (selected && onEntitySelected) {
+                            onEntitySelected(selected);
+                        }
                     }
-                }
 
-                const updateSelected = findUpdateEntity(
-                    nextValue,
-                    entityDefinitions
-                );
-                if (updateSelected !== lastUpdateEntityRef.current) {
-                    lastUpdateEntityRef.current = updateSelected;
-                    if (updateSelected && onEntitySelected) {
-                        onEntitySelected(updateSelected);
+                    const updateSelected = findUpdateEntity(
+                        nextValue,
+                        entityDefinitions
+                    );
+                    if (updateSelected !== lastUpdateEntityRef.current) {
+                        lastUpdateEntityRef.current = updateSelected;
+                        if (updateSelected && onEntitySelected) {
+                            onEntitySelected(updateSelected);
+                        }
                     }
-                }
 
-                const deleteSelected = findDeleteEntity(
-                    nextValue,
-                    entityDefinitions
-                );
-                if (deleteSelected !== lastDeleteEntityRef.current) {
-                    lastDeleteEntityRef.current = deleteSelected;
-                    if (deleteSelected && onEntitySelected) {
-                        onEntitySelected(deleteSelected);
+                    const deleteSelected = findDeleteEntity(
+                        nextValue,
+                        entityDefinitions
+                    );
+                    if (deleteSelected !== lastDeleteEntityRef.current) {
+                        lastDeleteEntityRef.current = deleteSelected;
+                        if (deleteSelected && onEntitySelected) {
+                            onEntitySelected(deleteSelected);
+                        }
                     }
-                }
-            }}
-                options={{ readOnly: Boolean(readOnly), fontSize: localFontSize }}
+                }}
+                options={{
+                    readOnly: Boolean(readOnly),
+                    fontSize: localFontSize,
+                    acceptSuggestionOnEnter: "off",
+                }}
             />
             <div ref={statusBarRef} className={styles.statusBar}>
             </div>
