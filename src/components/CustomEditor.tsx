@@ -121,6 +121,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
             {
                 keybinding: monaco.KeyCode.Tab,
                 command: "acceptSelectedSuggestion",
+                when: "suggestWidgetVisible",
             },
         ]);
 
