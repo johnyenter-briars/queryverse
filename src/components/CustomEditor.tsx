@@ -312,7 +312,11 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                         }
                     }
                 }}
-                options={{ readOnly: Boolean(readOnly), fontSize: localFontSize }}
+                options={{
+                    readOnly: Boolean(readOnly),
+                    fontSize: localFontSize,
+                    acceptSuggestionOnEnter: "off",
+                }}
             />
             <div ref={statusBarRef} className={styles.statusBar}>
             </div>
