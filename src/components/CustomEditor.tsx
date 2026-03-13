@@ -3,6 +3,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import { initVimMode } from "monaco-vim";
 import Editor, { OnMount } from "@monaco-editor/react";
 import type { editor as MonacoEditor, Position, IDisposable } from "monaco-editor";
+import { getTabsterAttribute } from "tabster";
 type MonacoApi = typeof import("monaco-editor");
 import { useCustomEditorStyles } from "../styles/CustomEditorStyles";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
@@ -51,6 +52,9 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     entityAttributes,
 }: ICustomEditor, ref) => {
     const styles = useCustomEditorStyles();
+    const uncontrolledCompletelyAttributes = getTabsterAttribute({
+        uncontrolled: { completely: true },
+    });
     const vimModeRef = useRef<any>(null);
     const statusBarRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<any>(null);
@@ -258,7 +262,12 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     }, [entityDefinitions, language, localValue, monacoReady, onEntitiesSelected]);
 
     return (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div
+            {...uncontrolledCompletelyAttributes}
+            // Monaco needs full control of Tab handling. The weaker uncontrolled
+            // mode still allows Tabster to move focus out of the editor.
+            style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
+        >
             <Editor
                 height="100%"
                 language={language ?? "sql"}
