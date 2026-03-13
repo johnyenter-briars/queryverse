@@ -66,14 +66,28 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     const parseContextRef = useRef<SqlParseContext | null>(null);
     const lastUpdateEntityRef = useRef<string | null>(null);
     const lastDeleteEntityRef = useRef<string | null>(null);
+    const lastSyncedValueRef = useRef<string>(value);
 
-    // Keep the editor responsive by buffering keystrokes locally and
-    // committing to app state on a short debounce and on blur.
     const [localValue, setLocalValue] = useState<string>(value);
 
     useEffect(() => {
-        // Sync when the active tab/value changes externally.
+        const editor = editorRef.current;
+        const model = editor?.getModel?.();
+
+        if (!model) {
+            setLocalValue(value);
+            lastSyncedValueRef.current = value;
+            return;
+        }
+
+        const currentValue = model.getValue();
+        if (value === lastSyncedValueRef.current || value === currentValue) {
+            return;
+        }
+
+        model.setValue(value);
         setLocalValue(value);
+        lastSyncedValueRef.current = value;
     }, [value]);
 
     useEffect(() => {
@@ -248,46 +262,47 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
             <Editor
                 height="100%"
                 language={language ?? "sql"}
-                value={localValue}
+                defaultValue={value}
                 theme="vs-dark"
                 onMount={handleEditorMount}
                 onChange={(v) => {
                     const nextValue = v || "";
                     setLocalValue(nextValue);
-                onChange(nextValue);
-                const selected = findSelectedEntity(
-                    nextValue,
-                    entityDefinitions
-                );
-                if (selected !== lastEntityRef.current) {
-                    lastEntityRef.current = selected;
-                    if (selected && onEntitySelected) {
-                        onEntitySelected(selected);
+                    lastSyncedValueRef.current = nextValue;
+                    onChange(nextValue);
+                    const selected = findSelectedEntity(
+                        nextValue,
+                        entityDefinitions
+                    );
+                    if (selected !== lastEntityRef.current) {
+                        lastEntityRef.current = selected;
+                        if (selected && onEntitySelected) {
+                            onEntitySelected(selected);
+                        }
                     }
-                }
 
-                const updateSelected = findUpdateEntity(
-                    nextValue,
-                    entityDefinitions
-                );
-                if (updateSelected !== lastUpdateEntityRef.current) {
-                    lastUpdateEntityRef.current = updateSelected;
-                    if (updateSelected && onEntitySelected) {
-                        onEntitySelected(updateSelected);
+                    const updateSelected = findUpdateEntity(
+                        nextValue,
+                        entityDefinitions
+                    );
+                    if (updateSelected !== lastUpdateEntityRef.current) {
+                        lastUpdateEntityRef.current = updateSelected;
+                        if (updateSelected && onEntitySelected) {
+                            onEntitySelected(updateSelected);
+                        }
                     }
-                }
 
-                const deleteSelected = findDeleteEntity(
-                    nextValue,
-                    entityDefinitions
-                );
-                if (deleteSelected !== lastDeleteEntityRef.current) {
-                    lastDeleteEntityRef.current = deleteSelected;
-                    if (deleteSelected && onEntitySelected) {
-                        onEntitySelected(deleteSelected);
+                    const deleteSelected = findDeleteEntity(
+                        nextValue,
+                        entityDefinitions
+                    );
+                    if (deleteSelected !== lastDeleteEntityRef.current) {
+                        lastDeleteEntityRef.current = deleteSelected;
+                        if (deleteSelected && onEntitySelected) {
+                            onEntitySelected(deleteSelected);
+                        }
                     }
-                }
-            }}
+                }}
                 options={{ readOnly: Boolean(readOnly), fontSize: localFontSize }}
             />
             <div ref={statusBarRef} className={styles.statusBar}>
