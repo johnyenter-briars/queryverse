@@ -2,8 +2,8 @@ use log::error;
 use uuid::Uuid;
 
 use crate::Database;
+use crate::auth::config::auth_config_from_connection;
 use crate::auth::connection::{load_connections, save_connection, save_connections, utc_timestamp};
-use crate::auth::token::prime_token_cache;
 use crate::binding::model::{
     connection::Connection, createconnectionpayload::CreateConnectionPayload,
     createconnectionrequest::CreateConnectionRequest,
@@ -12,9 +12,8 @@ use crate::binding::model::{
     updateconnectionrequest::UpdateConnectionRequest,
     updateconnectionresponse::UpdateConnectionResponse,
 };
-use powerplatform_dataverse_client::auth::credentials::{
-    exchange_authorization_code, validate_client_credentials,
-};
+use powerplatform_dataverse_client::auth::config::AuthConfig;
+use powerplatform_dataverse_client::{LogLevel, dataverse::serviceclient::ServiceClient};
 
 #[tauri::command]
 pub async fn create_connection(
@@ -27,69 +26,56 @@ pub async fn create_connection(
             client_id,
             client_secret,
             tenant_id,
-            scope,
             dataverse_url,
+            token_cache_store_path,
         } => {
-            validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope)
+            let connection = Connection {
+                id: Some(Uuid::new_v4()),
+                name,
+                auth: AuthConfig::ClientCredentials {
+                    client_id,
+                    client_secret,
+                    tenant_id,
+                    dataverse_url,
+                    token_cache_store_path,
+                },
+                generated_on: utc_timestamp(),
+            };
+            let auth = auth_config_from_connection(&connection);
+            let _ = ServiceClient::new_with_auth(auth, LogLevel::Error)
                 .await
                 .map_err(|error| {
-                    error!("create_connection validate_client_credentials failed: {error}");
+                    error!("create_connection client credentials validation failed: {error}");
                     error
                 })?;
-
-            Connection::ClientCredentials {
-                id: Some(Uuid::new_v4()),
-                name,
-                client_id,
-                client_secret,
-                tenant_id,
-                scope,
-                dataverse_url,
-                generated_on: utc_timestamp(),
-            }
+            connection
         }
-        CreateConnectionPayload::AuthorizationCode {
+        CreateConnectionPayload::DeviceCode {
             name,
             client_id,
-            client_secret,
             tenant_id,
-            scope,
-            authorization_code,
-            redirect_uri,
-            username,
-            password,
             dataverse_url,
+            token_cache_store_path,
         } => {
-            todo!("#11");
-            let token = exchange_authorization_code(
-                &client_id,
-                &client_secret,
-                &tenant_id,
-                &scope,
-                &authorization_code,
-                &redirect_uri,
-                &username,
-                &password,
-            )
-            .await
-            .map_err(|error| {
-                error!("create_connection exchange_authorization_code failed: {error}");
-                error
-            })?;
-
-            Connection::AuthorizationCode {
+            let connection = Connection {
                 id: Some(Uuid::new_v4()),
                 name,
-                client_id,
-                client_secret,
-                tenant_id,
-                scope,
-                access_token: token.access_token,
-                refresh_token: token.refresh_token,
-                expires_at: token.expires_at.to_string(),
-                dataverse_url,
+                auth: AuthConfig::DeviceCode {
+                    client_id,
+                    tenant_id,
+                    dataverse_url,
+                    token_cache_store_path,
+                },
                 generated_on: utc_timestamp(),
-            }
+            };
+            let auth = auth_config_from_connection(&connection);
+            let _ = ServiceClient::new_with_auth(auth, LogLevel::Error)
+                .await
+                .map_err(|error| {
+                    error!("create_connection device code validation failed: {error}");
+                    error
+                })?;
+            connection
         }
     };
 
@@ -126,7 +112,7 @@ pub async fn set_connection(
         .iter()
         .find(|connection| connection.id().as_ref() == Some(&request.connection_id));
 
-    let Some(selected_connection) = selected_connection else {
+    let Some(_selected_connection) = selected_connection else {
         return Err("Connection not found".to_string());
     };
 
@@ -137,7 +123,6 @@ pub async fn set_connection(
             .map_err(|_| "Failed to lock connection state".to_string())?;
         *selected = Some(request.connection_id);
     }
-    prime_token_cache(selected_connection, &database).await?;
     Ok(())
 }
 
@@ -169,69 +154,56 @@ pub async fn update_connection(
             client_id,
             client_secret,
             tenant_id,
-            scope,
             dataverse_url,
+            token_cache_store_path,
         } => {
-            validate_client_credentials(&client_id, &client_secret, &tenant_id, &scope)
+            let connection = Connection {
+                id: existing_id,
+                name,
+                auth: AuthConfig::ClientCredentials {
+                    client_id,
+                    client_secret,
+                    tenant_id,
+                    dataverse_url,
+                    token_cache_store_path,
+                },
+                generated_on: utc_timestamp(),
+            };
+            let auth = auth_config_from_connection(&connection);
+            let _ = ServiceClient::new_with_auth(auth, LogLevel::Error)
                 .await
                 .map_err(|error| {
-                    error!("update_connection validate_client_credentials failed: {error}");
+                    error!("update_connection client credentials validation failed: {error}");
                     error
                 })?;
-
-            Connection::ClientCredentials {
-                id: existing_id,
-                name,
-                client_id,
-                client_secret,
-                tenant_id,
-                scope,
-                dataverse_url,
-                generated_on: utc_timestamp(),
-            }
+            connection
         }
-        CreateConnectionPayload::AuthorizationCode {
+        CreateConnectionPayload::DeviceCode {
             name,
             client_id,
-            client_secret,
             tenant_id,
-            scope,
-            authorization_code,
-            redirect_uri,
-            username,
-            password,
             dataverse_url,
+            token_cache_store_path,
         } => {
-            todo!("#11");
-            let token = exchange_authorization_code(
-                &client_id,
-                &client_secret,
-                &tenant_id,
-                &scope,
-                &authorization_code,
-                &redirect_uri,
-                &username,
-                &password,
-            )
-            .await
-            .map_err(|error| {
-                error!("update_connection exchange_authorization_code failed: {error}");
-                error
-            })?;
-
-            Connection::AuthorizationCode {
+            let connection = Connection {
                 id: existing_id,
                 name,
-                client_id,
-                client_secret,
-                tenant_id,
-                scope,
-                access_token: token.access_token,
-                refresh_token: token.refresh_token,
-                expires_at: token.expires_at.to_string(),
-                dataverse_url,
+                auth: AuthConfig::DeviceCode {
+                    client_id,
+                    tenant_id,
+                    dataverse_url,
+                    token_cache_store_path,
+                },
                 generated_on: utc_timestamp(),
-            }
+            };
+            let auth = auth_config_from_connection(&connection);
+            let _ = ServiceClient::new_with_auth(auth, LogLevel::Error)
+                .await
+                .map_err(|error| {
+                    error!("update_connection device code validation failed: {error}");
+                    error
+                })?;
+            connection
         }
     };
 

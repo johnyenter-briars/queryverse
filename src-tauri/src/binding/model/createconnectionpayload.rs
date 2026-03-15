@@ -17,43 +17,30 @@ pub enum CreateConnectionPayload {
         #[serde(rename = "tenantId")]
         tenant_id: String,
 
-        #[serde(rename = "scope")]
-        scope: String,
-
         #[serde(rename = "dataverseUrl")]
         dataverse_url: String,
+
+        #[serde(default)]
+        #[serde(rename = "tokenCacheStorePath")]
+        token_cache_store_path: Option<String>,
     },
 
-    #[serde(rename = "AuthorizationCode", alias = "OAuth")]
-    AuthorizationCode {
+    #[serde(rename = "DeviceCode", alias = "AuthorizationCode", alias = "OAuth")]
+    DeviceCode {
         #[serde(rename = "name")]
         name: String,
 
         #[serde(rename = "clientId")]
         client_id: String,
 
-        #[serde(rename = "clientSecret")]
-        client_secret: String,
-
         #[serde(rename = "tenantId")]
         tenant_id: String,
 
-        #[serde(rename = "scope")]
-        scope: String,
-
-        #[serde(rename = "authorizationCode")]
-        authorization_code: String,
-
-        #[serde(rename = "redirectUri")]
-        redirect_uri: String,
-
-        #[serde(rename = "username")]
-        username: String,
-
-        #[serde(rename = "password")]
-        password: String,
-
         #[serde(rename = "dataverseUrl")]
         dataverse_url: String,
+
+        #[serde(default)]
+        #[serde(rename = "tokenCacheStorePath")]
+        token_cache_store_path: Option<String>,
     },
 }

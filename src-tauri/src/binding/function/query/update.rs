@@ -5,7 +5,9 @@ use uuid::Uuid;
 
 use crate::{
     Database,
-    auth::{connection::load_connections, settings::load_settings, token::get_access_token},
+    auth::{
+        config::auth_config_from_connection, connection::load_connections, settings::load_settings,
+    },
     binding::model::{
         updatesqlexecuteresponse::UpdateSqlExecuteResponse,
         updatesqlpreviewresponse::UpdateSqlPreviewResponse,
@@ -54,14 +56,8 @@ pub async fn prepare_update_sql(
         .find(|connection| connection.id().as_ref() == Some(&connection_id))
         .ok_or("Connection not found")?;
 
-    let token = get_access_token(&connection, &database).await?;
-
-    let dataverse_url = connection.dataverse_url();
-    if dataverse_url.trim().is_empty() {
-        return Err("Connection is missing a Dataverse URL".to_string());
-    }
-
-    let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
+    let auth = auth_config_from_connection(&connection);
+    let service_client = ServiceClient::new_with_auth(auth, context.log_level).await?;
 
     let (entity_set, entity_logical) = sql::resolve_entity_names(&stmt.entity);
     let definitions =
@@ -184,14 +180,8 @@ pub async fn execute_update_sql(
         .find(|connection| connection.id().as_ref() == Some(&current_connection_id))
         .ok_or("Connection not found")?;
 
-    let token = get_access_token(&connection, &database).await?;
-
-    let dataverse_url = connection.dataverse_url();
-    if dataverse_url.trim().is_empty() {
-        return Err("Connection is missing a Dataverse URL".to_string());
-    }
-
-    let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
+    let auth = auth_config_from_connection(&connection);
+    let service_client = ServiceClient::new_with_auth(auth, context.log_level).await?;
     let settings = load_settings().unwrap_or_default();
     let request_parameters = RequestParameters {
         bypass_business_logic_execution_custom_sync: settings

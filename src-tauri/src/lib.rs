@@ -22,14 +22,12 @@ use crate::binding::function::{
     settings::{get_settings, save_settings},
 };
 pub use powerplatform_dataverse_client::LogLevel;
-use powerplatform_dataverse_client::{
-    auth::token::CachedToken,
-    dataverse::{entityattribute::EntityAttribute, entitydefinition::EntityDefinition},
+use powerplatform_dataverse_client::dataverse::{
+    entityattribute::EntityAttribute, entitydefinition::EntityDefinition,
 };
 
 pub struct Database {
     pub selected_connection_id: Mutex<Option<Uuid>>,
-    pub token_cache: Mutex<HashMap<Uuid, CachedToken>>,
     pub entity_definitions_cache: Mutex<HashMap<Uuid, Vec<EntityDefinition>>>,
     pub entity_attributes_cache: Mutex<HashMap<(Uuid, String), Vec<EntityAttribute>>>,
     pub update_batches: Mutex<HashMap<String, UpdateBatch>>,
@@ -68,7 +66,6 @@ impl Default for Database {
     fn default() -> Self {
         Self {
             selected_connection_id: Mutex::new(None),
-            token_cache: Mutex::new(HashMap::new()),
             entity_definitions_cache: Mutex::new(HashMap::new()),
             entity_attributes_cache: Mutex::new(HashMap::new()),
             update_batches: Mutex::new(HashMap::new()),

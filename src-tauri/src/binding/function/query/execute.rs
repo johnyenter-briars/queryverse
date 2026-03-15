@@ -4,7 +4,9 @@ use std::collections::HashMap;
 
 use crate::{
     Database,
-    auth::{connection::load_connections, settings::load_settings, token::get_access_token},
+    auth::{
+        config::auth_config_from_connection, connection::load_connections, settings::load_settings,
+    },
     binding::model::{
         executesqlrequest::ExecuteSqlRequest,
         executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
@@ -71,15 +73,8 @@ pub async fn execute_sql(
         .find(|connection| connection.id().as_ref() == Some(&connection_id))
         .ok_or("Connection not found")?;
 
-    let token = get_access_token(&connection, &database).await?;
-
-    let dataverse_url = connection.dataverse_url();
-
-    if dataverse_url.trim().is_empty() {
-        return Err("Connection is missing a Dataverse URL".to_string());
-    }
-
-    let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
+    let auth = auth_config_from_connection(&connection);
+    let service_client = ServiceClient::new_with_auth(auth, context.log_level).await?;
     let stmt = sql::parse(&request.sql).map_err(|e| e.to_string())?;
     let parsed = sql::to_fetchxml(&stmt).map_err(|e| e.to_string())?;
     let _ = get_entity_definitions_cached(&service_client, &database, connection_id).await;

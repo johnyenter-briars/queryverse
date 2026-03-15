@@ -2959,10 +2959,14 @@ checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 name = "powerplatform-dataverse-client"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "dirs",
  "log",
  "reqwest",
  "serde",
  "serde_json",
+ "tokio",
  "urlencoding",
  "uuid",
 ]
