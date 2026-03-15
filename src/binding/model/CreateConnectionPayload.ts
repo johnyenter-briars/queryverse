@@ -3,6 +3,7 @@ export type CreateConnectionPayload =
     | DeviceCodeCreatePayload;
 
 export interface ClientCredentialsCreatePayload {
+    id?: string | null;
     method: "ClientCredentials";
     name: string;
     clientId: string;
@@ -13,6 +14,7 @@ export interface ClientCredentialsCreatePayload {
 }
 
 export interface DeviceCodeCreatePayload {
+    id?: string | null;
     method: "DeviceCode";
     name: string;
     clientId: string;

@@ -1,8 +1,10 @@
 use chrono::Utc;
 use std::fs;
 use std::path::PathBuf;
+use uuid::Uuid;
 
 use crate::binding::model::connection::Connection;
+use powerplatform_dataverse_client::auth::config::AuthConfig;
 
 pub fn load_connections() -> Result<Vec<Connection>, String> {
     let path = connections_path()?;
@@ -43,6 +45,31 @@ pub fn queryverse_data_dir() -> Result<PathBuf, String> {
     let dir = base.join("QueryVerse");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
+}
+
+pub fn default_token_cache_store_path(connection_id: Uuid) -> Result<String, String> {
+    let dir = queryverse_data_dir()?
+        .join("tokencache")
+        .join(connection_id.to_string());
+    Ok(dir.to_string_lossy().to_string())
+}
+
+pub fn get_default_connection() -> Result<Connection, String> {
+    let connection_id = Uuid::new_v4();
+    let token_cache_store_path = Some(default_token_cache_store_path(connection_id)?);
+
+    Ok(Connection {
+        id: Some(connection_id),
+        name: String::new(),
+        auth: AuthConfig::ClientCredentials {
+            client_id: String::new(),
+            client_secret: String::new(),
+            tenant_id: String::new(),
+            dataverse_url: String::new(),
+            token_cache_store_path,
+        },
+        generated_on: utc_timestamp(),
+    })
 }
 
 pub fn utc_timestamp() -> String {

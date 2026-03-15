@@ -1,10 +1,15 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "method")]
 pub enum CreateConnectionPayload {
     #[serde(rename = "ClientCredentials", alias = "ClientSecret")]
     ClientCredentials {
+        #[serde(default)]
+        #[serde(rename = "id")]
+        id: Option<Uuid>,
+
         #[serde(rename = "name")]
         name: String,
 
@@ -27,6 +32,10 @@ pub enum CreateConnectionPayload {
 
     #[serde(rename = "DeviceCode", alias = "AuthorizationCode", alias = "OAuth")]
     DeviceCode {
+        #[serde(default)]
+        #[serde(rename = "id")]
+        id: Option<Uuid>,
+
         #[serde(rename = "name")]
         name: String,
 

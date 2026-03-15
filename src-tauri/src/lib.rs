@@ -11,7 +11,7 @@ use tauri::Manager;
 use uuid::Uuid;
 
 use crate::binding::function::{
-    connection::{create_connection, list_connections, set_connection, update_connection},
+    connection::{create_connection, get_default_connection, list_connections, set_connection, update_connection},
     file::{open_sql_file, open_sql_file_path, save_sql_file, save_sql_file_as},
     launch::get_launch_context,
     logging::log_frontend,
@@ -160,6 +160,7 @@ pub fn run() {
         .manage(Database::default())
         .invoke_handler(tauri::generate_handler![
             create_connection,
+            get_default_connection,
             list_connections,
             set_connection,
             update_connection,

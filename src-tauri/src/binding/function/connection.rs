@@ -3,7 +3,10 @@ use uuid::Uuid;
 
 use crate::Database;
 use crate::auth::serviceclient::remove_service_client;
-use crate::auth::connection::{load_connections, save_connection, save_connections, utc_timestamp};
+use crate::auth::connection::{
+    get_default_connection as build_default_connection, load_connections, save_connection,
+    save_connections, utc_timestamp,
+};
 use crate::binding::model::{
     connection::Connection, createconnectionpayload::CreateConnectionPayload,
     createconnectionrequest::CreateConnectionRequest,
@@ -22,6 +25,7 @@ pub async fn create_connection(
 ) -> Result<CreateConnectionResponse, String> {
     let connection = match connection_request.value {
         CreateConnectionPayload::ClientCredentials {
+            id,
             name,
             client_id,
             client_secret,
@@ -30,7 +34,7 @@ pub async fn create_connection(
             token_cache_store_path,
         } => {
             let connection = Connection {
-                id: Some(Uuid::new_v4()),
+                id: Some(id.unwrap_or_else(Uuid::new_v4)),
                 name,
                 auth: AuthConfig::ClientCredentials {
                     client_id,
@@ -50,6 +54,7 @@ pub async fn create_connection(
             connection
         }
         CreateConnectionPayload::DeviceCode {
+            id,
             name,
             client_id,
             tenant_id,
@@ -57,7 +62,7 @@ pub async fn create_connection(
             token_cache_store_path,
         } => {
             let connection = Connection {
-                id: Some(Uuid::new_v4()),
+                id: Some(id.unwrap_or_else(Uuid::new_v4)),
                 name,
                 auth: AuthConfig::DeviceCode {
                     client_id,
@@ -87,6 +92,11 @@ pub async fn create_connection(
         success: true,
         value: connection,
     })
+}
+
+#[tauri::command]
+pub async fn get_default_connection(_window: tauri::Window) -> Result<Connection, String> {
+    build_default_connection()
 }
 
 #[tauri::command]
@@ -149,6 +159,7 @@ pub async fn update_connection(
 
     let updated_connection = match payload {
         CreateConnectionPayload::ClientCredentials {
+            id: _,
             name,
             client_id,
             client_secret,
@@ -177,6 +188,7 @@ pub async fn update_connection(
             connection
         }
         CreateConnectionPayload::DeviceCode {
+            id: _,
             name,
             client_id,
             tenant_id,

@@ -21,7 +21,12 @@ import { useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import { combineClasses } from "../utility/class";
-import { createConnection, listConnections, updateConnection } from "../binding/function";
+import {
+    createConnection,
+    getDefaultConnection,
+    listConnections,
+    updateConnection,
+} from "../binding/function";
 import { Connection } from "../binding/model/Connection";
 import { RequestType } from "../binding/model/QVRequest";
 import { useConnectionsMenuStyles } from "../styles/ConnectionsMenuStyles";
@@ -31,6 +36,7 @@ import { logError } from "../utility/logging";
 type ConnectionMethod = "ClientCredentials" | "DeviceCode";
 
 type ConnectionFormState = {
+    id: string;
     method: ConnectionMethod;
     name: string;
     clientId: string;
@@ -41,6 +47,7 @@ type ConnectionFormState = {
 };
 
 const emptyFormState = (method: ConnectionMethod = "ClientCredentials"): ConnectionFormState => ({
+    id: "",
     method,
     name: "",
     clientId: "",
@@ -56,6 +63,7 @@ const isClientCredentials = (
     connection.auth.method === "ClientCredentials";
 
 const toFormState = (connection: Connection): ConnectionFormState => ({
+    id: connection.id ?? "",
     method: connection.auth.method,
     name: connection.name ?? "",
     clientId: connection.auth.clientId ?? "",
@@ -68,6 +76,10 @@ const toFormState = (connection: Connection): ConnectionFormState => ({
 const validationErrorFor = (state: ConnectionFormState): string | null => {
     if (!state.name.trim()) {
         return "Connection name is required.";
+    }
+
+    if (!state.id.trim()) {
+        return "Connection ID is required.";
     }
 
     if (!state.clientId.trim()) {
@@ -93,6 +105,7 @@ const validationErrorFor = (state: ConnectionFormState): string | null => {
 const buildPayload = (state: ConnectionFormState) =>
     state.method === "ClientCredentials"
         ? {
+              id: state.id.trim(),
               method: "ClientCredentials" as const,
               name: state.name.trim(),
               clientId: state.clientId.trim(),
@@ -102,6 +115,7 @@ const buildPayload = (state: ConnectionFormState) =>
               tokenCacheStorePath: state.tokenCacheStorePath.trim() || null,
           }
         : {
+              id: state.id.trim(),
               method: "DeviceCode" as const,
               name: state.name.trim(),
               clientId: state.clientId.trim(),
@@ -150,6 +164,16 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
     useEffect(() => {
         loadConnections();
     }, []);
+
+    const loadDefaultConnection = async (method: ConnectionMethod = "ClientCredentials") => {
+        const connection = await getDefaultConnection();
+        setCreateFormState({
+            ...toFormState(connection),
+            method,
+            tenantId: method === "DeviceCode" ? "organizations" : "",
+            clientSecret: "",
+        });
+    };
 
     const closeCreate = () => {
         setCreateOpen(false);
@@ -249,11 +273,17 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         setFormState: Dispatch<SetStateAction<ConnectionFormState>>
     ) => (
         <div className={styles.modalForm}>
+            <Field label="Connection ID">
+                <Input value={formState.id} disabled />
+            </Field>
+
             <RadioGroup
                 value={formState.method}
                 onChange={(_, data) =>
                     setFormState((prev) => ({
                         ...emptyFormState(data.value as ConnectionMethod),
+                        id: prev.id,
+                        clientId: prev.clientId,
                         name: prev.name,
                         dataverseUrl: prev.dataverseUrl,
                         tokenCacheStorePath: prev.tokenCacheStorePath,
@@ -347,9 +377,9 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                             appearance="primary"
                             size="small"
                             icon={<AddCircleRegular />}
-                            onClick={() => {
-                                setCreateFormState(emptyFormState());
+                            onClick={async () => {
                                 setCreateStatus(null);
+                                await loadDefaultConnection();
                                 setCreateOpen(true);
                             }}
                         >
