@@ -91,4 +91,19 @@ export const useConnectionsMenuStyles = makeStyles({
         paddingTop: tokens.spacingVerticalS,
         paddingBottom: tokens.spacingVerticalS,
     },
+    modalForm: {
+        display: "grid",
+        gap: tokens.spacingVerticalM,
+    },
+    modalStatusSlot: {
+        minHeight: "24px",
+        display: "flex",
+        alignItems: "center",
+    },
+    modalStatusSuccess: {
+        color: tokens.colorPaletteGreenForeground1,
+    },
+    modalStatusError: {
+        color: tokens.colorPaletteRedForeground1,
+    },
 });

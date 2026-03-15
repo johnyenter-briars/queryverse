@@ -248,7 +248,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         formState: ConnectionFormState,
         setFormState: Dispatch<SetStateAction<ConnectionFormState>>
     ) => (
-        <div style={{ display: "grid", gap: "12px" }}>
+        <div className={styles.modalForm}>
             <RadioGroup
                 value={formState.method}
                 onChange={(_, data) =>
@@ -396,18 +396,19 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                 closeLabel="Cancel"
             >
                 {renderForm(createFormState, setCreateFormState)}
-                {createStatus ? (
-                    <Text
-                        style={{
-                            color:
+                <div className={styles.modalStatusSlot}>
+                    {createStatus ? (
+                        <Text
+                            className={
                                 createStatus.type === "success"
-                                    ? tokens.colorPaletteGreenForeground1
-                                    : tokens.colorPaletteRedForeground1,
-                        }}
-                    >
-                        {createStatus.message}
-                    </Text>
-                ) : null}
+                                    ? styles.modalStatusSuccess
+                                    : styles.modalStatusError
+                            }
+                        >
+                            {createStatus.message}
+                        </Text>
+                    ) : null}
+                </div>
                 <Button
                     appearance="primary"
                     onClick={handleCreateConnection}
@@ -424,18 +425,19 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                 closeLabel="Cancel"
             >
                 {renderForm(editFormState, setEditFormState)}
-                {editStatus ? (
-                    <Text
-                        style={{
-                            color:
+                <div className={styles.modalStatusSlot}>
+                    {editStatus ? (
+                        <Text
+                            className={
                                 editStatus.type === "success"
-                                    ? tokens.colorPaletteGreenForeground1
-                                    : tokens.colorPaletteRedForeground1,
-                        }}
-                    >
-                        {editStatus.message}
-                    </Text>
-                ) : null}
+                                    ? styles.modalStatusSuccess
+                                    : styles.modalStatusError
+                            }
+                        >
+                            {editStatus.message}
+                        </Text>
+                    ) : null}
+                </div>
                 <Button appearance="primary" onClick={handleSaveEdit}>
                     Save Changes
                 </Button>
