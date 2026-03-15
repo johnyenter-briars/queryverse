@@ -45,7 +45,7 @@ const emptyFormState = (method: ConnectionMethod = "ClientCredentials"): Connect
     name: "",
     clientId: "",
     clientSecret: "",
-    tenantId: "",
+    tenantId: method === "DeviceCode" ? "organizations" : "",
     dataverseUrl: "",
     tokenCacheStorePath: "",
 });
@@ -294,9 +294,10 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                 </Field>
             ) : null}
 
-            <Field label={formState.method === "ClientCredentials" ? "Tenant ID" : "Tenant ID (optional)"}>
+            <Field label="Tenant ID">
                 <Input
                     value={formState.tenantId}
+                    disabled={formState.method === "DeviceCode"}
                     onChange={(_, data) =>
                         setFormState((prev) => ({ ...prev, tenantId: data.value }))
                     }
