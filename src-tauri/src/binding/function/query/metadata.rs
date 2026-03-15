@@ -1,14 +1,13 @@
 use crate::{
     Database,
-    auth::{config::auth_config_from_connection, connection::load_connections},
+    auth::{connection::load_connections, serviceclient::get_or_create_service_client},
     binding::model::response::MultipleResponse,
 };
 use log::debug;
 use powerplatform_dataverse_client::{
     LogLevel,
     dataverse::{
-        entityattribute::EntityAttribute, entitydefinition::EntityDefinition,
-        serviceclient::ServiceClient,
+        entityattribute::EntityAttribute, entitydefinition::EntityDefinition, serviceclient::ServiceClient,
     },
 };
 use uuid::Uuid;
@@ -101,8 +100,8 @@ pub async fn list_entity_definitions(
         .find(|connection| connection.id().as_ref() == Some(&connection_id))
         .ok_or("Connection not found")?;
 
-    let auth = auth_config_from_connection(&connection);
-    let service_client = ServiceClient::new_with_auth(auth, context.log_level).await?;
+    let service_client =
+        get_or_create_service_client(&connection, &database, context.log_level).await?;
     let value = get_entity_definitions_cached(&service_client, &database, connection_id).await?;
 
     Ok(MultipleResponse {
@@ -133,8 +132,8 @@ pub async fn list_entity_attributes(
         .find(|connection| connection.id().as_ref() == Some(&connection_id))
         .ok_or("Connection not found")?;
 
-    let auth = auth_config_from_connection(&connection);
-    let service_client = ServiceClient::new_with_auth(auth, context.log_level).await?;
+    let service_client =
+        get_or_create_service_client(&connection, &database, context.log_level).await?;
     let value = get_entity_attributes_cached(
         &service_client,
         &database,

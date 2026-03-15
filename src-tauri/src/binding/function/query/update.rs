@@ -1,12 +1,12 @@
 use log::{debug, error};
 use powerplatform_dataverse_client::dataverse::requestparameters::RequestParameters;
-use powerplatform_dataverse_client::dataverse::serviceclient::ServiceClient;
 use uuid::Uuid;
 
 use crate::{
     Database,
     auth::{
-        config::auth_config_from_connection, connection::load_connections, settings::load_settings,
+        connection::load_connections, serviceclient::get_or_create_service_client,
+        settings::load_settings,
     },
     binding::model::{
         updatesqlexecuteresponse::UpdateSqlExecuteResponse,
@@ -56,8 +56,8 @@ pub async fn prepare_update_sql(
         .find(|connection| connection.id().as_ref() == Some(&connection_id))
         .ok_or("Connection not found")?;
 
-    let auth = auth_config_from_connection(&connection);
-    let service_client = ServiceClient::new_with_auth(auth, context.log_level).await?;
+    let service_client =
+        get_or_create_service_client(&connection, &database, context.log_level).await?;
 
     let (entity_set, entity_logical) = sql::resolve_entity_names(&stmt.entity);
     let definitions =
@@ -180,8 +180,8 @@ pub async fn execute_update_sql(
         .find(|connection| connection.id().as_ref() == Some(&current_connection_id))
         .ok_or("Connection not found")?;
 
-    let auth = auth_config_from_connection(&connection);
-    let service_client = ServiceClient::new_with_auth(auth, context.log_level).await?;
+    let service_client =
+        get_or_create_service_client(&connection, &database, context.log_level).await?;
     let settings = load_settings().unwrap_or_default();
     let request_parameters = RequestParameters {
         bypass_business_logic_execution_custom_sync: settings

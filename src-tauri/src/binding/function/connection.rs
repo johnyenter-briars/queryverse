@@ -2,7 +2,7 @@ use log::error;
 use uuid::Uuid;
 
 use crate::Database;
-use crate::auth::config::auth_config_from_connection;
+use crate::auth::serviceclient::remove_service_client;
 use crate::auth::connection::{load_connections, save_connection, save_connections, utc_timestamp};
 use crate::binding::model::{
     connection::Connection, createconnectionpayload::CreateConnectionPayload,
@@ -41,8 +41,7 @@ pub async fn create_connection(
                 },
                 generated_on: utc_timestamp(),
             };
-            let auth = auth_config_from_connection(&connection);
-            let _ = ServiceClient::new_with_auth(auth, LogLevel::Error)
+            let _ = ServiceClient::new_with_auth(connection.auth.clone(), LogLevel::Error)
                 .await
                 .map_err(|error| {
                     error!("create_connection client credentials validation failed: {error}");
@@ -68,8 +67,7 @@ pub async fn create_connection(
                 },
                 generated_on: utc_timestamp(),
             };
-            let auth = auth_config_from_connection(&connection);
-            let _ = ServiceClient::new_with_auth(auth, LogLevel::Error)
+            let _ = ServiceClient::new_with_auth(connection.auth.clone(), LogLevel::Error)
                 .await
                 .map_err(|error| {
                     error!("create_connection device code validation failed: {error}");
@@ -130,6 +128,7 @@ pub async fn set_connection(
 pub async fn update_connection(
     _window: tauri::Window,
     connection_request: UpdateConnectionRequest,
+    database: tauri::State<'_, Database>,
 ) -> Result<UpdateConnectionResponse, String> {
     let UpdateConnectionRequest { id, index, payload } = connection_request;
     let mut connections = load_connections()?;
@@ -169,8 +168,7 @@ pub async fn update_connection(
                 },
                 generated_on: utc_timestamp(),
             };
-            let auth = auth_config_from_connection(&connection);
-            let _ = ServiceClient::new_with_auth(auth, LogLevel::Error)
+            let _ = ServiceClient::new_with_auth(connection.auth.clone(), LogLevel::Error)
                 .await
                 .map_err(|error| {
                     error!("update_connection client credentials validation failed: {error}");
@@ -196,8 +194,7 @@ pub async fn update_connection(
                 },
                 generated_on: utc_timestamp(),
             };
-            let auth = auth_config_from_connection(&connection);
-            let _ = ServiceClient::new_with_auth(auth, LogLevel::Error)
+            let _ = ServiceClient::new_with_auth(connection.auth.clone(), LogLevel::Error)
                 .await
                 .map_err(|error| {
                     error!("update_connection device code validation failed: {error}");
@@ -212,6 +209,26 @@ pub async fn update_connection(
         error!("update_connection save_connections failed: {error}");
         error
     })?;
+
+    if let Some(connection_id) = updated_connection.id() {
+        remove_service_client(connection_id, &database.service_clients).await?;
+
+        {
+            let mut definitions = database
+                .entity_definitions_cache
+                .lock()
+                .map_err(|_| "Failed to lock metadata cache".to_string())?;
+            definitions.remove(&connection_id);
+        }
+
+        {
+            let mut attributes = database
+                .entity_attributes_cache
+                .lock()
+                .map_err(|_| "Failed to lock metadata cache".to_string())?;
+            attributes.retain(|(cached_connection_id, _), _| *cached_connection_id != connection_id);
+        }
+    }
 
     Ok(UpdateConnectionResponse {
         message: "Connection validated.".to_string(),

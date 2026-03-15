@@ -5,7 +5,8 @@ pub mod sql;
 
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use tauri::async_runtime::Mutex as AsyncMutex;
 use tauri::Manager;
 use uuid::Uuid;
 
@@ -23,11 +24,12 @@ use crate::binding::function::{
 };
 pub use powerplatform_dataverse_client::LogLevel;
 use powerplatform_dataverse_client::dataverse::{
-    entityattribute::EntityAttribute, entitydefinition::EntityDefinition,
+    entityattribute::EntityAttribute, entitydefinition::EntityDefinition, serviceclient::ServiceClient,
 };
 
 pub struct Database {
     pub selected_connection_id: Mutex<Option<Uuid>>,
+    pub service_clients: AsyncMutex<HashMap<Uuid, Arc<ServiceClient>>>,
     pub entity_definitions_cache: Mutex<HashMap<Uuid, Vec<EntityDefinition>>>,
     pub entity_attributes_cache: Mutex<HashMap<(Uuid, String), Vec<EntityAttribute>>>,
     pub update_batches: Mutex<HashMap<String, UpdateBatch>>,
@@ -66,6 +68,7 @@ impl Default for Database {
     fn default() -> Self {
         Self {
             selected_connection_id: Mutex::new(None),
+            service_clients: AsyncMutex::new(HashMap::new()),
             entity_definitions_cache: Mutex::new(HashMap::new()),
             entity_attributes_cache: Mutex::new(HashMap::new()),
             update_batches: Mutex::new(HashMap::new()),

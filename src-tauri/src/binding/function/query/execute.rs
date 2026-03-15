@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use crate::{
     Database,
     auth::{
-        config::auth_config_from_connection, connection::load_connections, settings::load_settings,
+        connection::load_connections, serviceclient::get_or_create_service_client,
+        settings::load_settings,
     },
     binding::model::{
         executesqlrequest::ExecuteSqlRequest,
@@ -73,8 +74,8 @@ pub async fn execute_sql(
         .find(|connection| connection.id().as_ref() == Some(&connection_id))
         .ok_or("Connection not found")?;
 
-    let auth = auth_config_from_connection(&connection);
-    let service_client = ServiceClient::new_with_auth(auth, context.log_level).await?;
+    let service_client =
+        get_or_create_service_client(&connection, &database, context.log_level).await?;
     let stmt = sql::parse(&request.sql).map_err(|e| e.to_string())?;
     let parsed = sql::to_fetchxml(&stmt).map_err(|e| e.to_string())?;
     let _ = get_entity_definitions_cached(&service_client, &database, connection_id).await;
