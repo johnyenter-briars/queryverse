@@ -2,7 +2,7 @@ use log::error;
 use uuid::Uuid;
 
 use crate::Database;
-use crate::auth::serviceclient::remove_service_client;
+use crate::auth::serviceclient::{ensure_device_code_auth, remove_service_client};
 use crate::auth::connection::{
     get_default_connection as build_default_connection, load_connections, save_connection,
     save_connections, utc_timestamp,
@@ -20,7 +20,7 @@ use powerplatform_dataverse_client::{LogLevel, dataverse::serviceclient::Service
 
 #[tauri::command]
 pub async fn create_connection(
-    _window: tauri::Window,
+    window: tauri::Window,
     connection_request: CreateConnectionRequest,
 ) -> Result<CreateConnectionResponse, String> {
     let connection = match connection_request.value {
@@ -45,6 +45,7 @@ pub async fn create_connection(
                 },
                 generated_on: utc_timestamp(),
             };
+            ensure_device_code_auth(&connection.auth, &window, connection.id()).await?;
             let _ = ServiceClient::new_with_auth(connection.auth.clone(), LogLevel::Error)
                 .await
                 .map_err(|error| {
@@ -72,6 +73,7 @@ pub async fn create_connection(
                 },
                 generated_on: utc_timestamp(),
             };
+            ensure_device_code_auth(&connection.auth, &window, connection.id()).await?;
             let _ = ServiceClient::new_with_auth(connection.auth.clone(), LogLevel::Error)
                 .await
                 .map_err(|error| {
@@ -136,7 +138,7 @@ pub async fn set_connection(
 
 #[tauri::command]
 pub async fn update_connection(
-    _window: tauri::Window,
+    window: tauri::Window,
     connection_request: UpdateConnectionRequest,
     database: tauri::State<'_, Database>,
 ) -> Result<UpdateConnectionResponse, String> {
@@ -179,6 +181,7 @@ pub async fn update_connection(
                 },
                 generated_on: utc_timestamp(),
             };
+            ensure_device_code_auth(&connection.auth, &window, connection.id()).await?;
             let _ = ServiceClient::new_with_auth(connection.auth.clone(), LogLevel::Error)
                 .await
                 .map_err(|error| {
@@ -206,6 +209,7 @@ pub async fn update_connection(
                 },
                 generated_on: utc_timestamp(),
             };
+            ensure_device_code_auth(&connection.auth, &window, connection.id()).await?;
             let _ = ServiceClient::new_with_auth(connection.auth.clone(), LogLevel::Error)
                 .await
                 .map_err(|error| {

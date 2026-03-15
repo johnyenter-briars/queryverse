@@ -82,7 +82,7 @@ pub(crate) async fn get_entity_attributes_cached(
 
 #[tauri::command]
 pub async fn list_entity_definitions(
-    _window: tauri::Window,
+    window: tauri::Window,
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
 ) -> Result<MultipleResponse<EntityDefinition>, String> {
@@ -101,7 +101,8 @@ pub async fn list_entity_definitions(
         .ok_or("Connection not found")?;
 
     let service_client =
-        get_or_create_service_client(&connection, &database, context.log_level).await?;
+        get_or_create_service_client(&connection, &database, context.log_level, Some(&window))
+            .await?;
     let value = get_entity_definitions_cached(&service_client, &database, connection_id).await?;
 
     Ok(MultipleResponse {
@@ -113,7 +114,7 @@ pub async fn list_entity_definitions(
 
 #[tauri::command]
 pub async fn list_entity_attributes(
-    _window: tauri::Window,
+    window: tauri::Window,
     logical_name: String,
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
@@ -133,7 +134,8 @@ pub async fn list_entity_attributes(
         .ok_or("Connection not found")?;
 
     let service_client =
-        get_or_create_service_client(&connection, &database, context.log_level).await?;
+        get_or_create_service_client(&connection, &database, context.log_level, Some(&window))
+            .await?;
     let value = get_entity_attributes_cached(
         &service_client,
         &database,

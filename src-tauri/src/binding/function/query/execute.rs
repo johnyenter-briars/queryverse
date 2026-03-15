@@ -55,7 +55,7 @@ pub async fn parse_sql_to_fetchxml(
 
 #[tauri::command]
 pub async fn execute_sql(
-    _window: tauri::Window,
+    window: tauri::Window,
     request: ExecuteSqlRequest,
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
@@ -75,7 +75,8 @@ pub async fn execute_sql(
         .ok_or("Connection not found")?;
 
     let service_client =
-        get_or_create_service_client(&connection, &database, context.log_level).await?;
+        get_or_create_service_client(&connection, &database, context.log_level, Some(&window))
+            .await?;
     let stmt = sql::parse(&request.sql).map_err(|e| e.to_string())?;
     let parsed = sql::to_fetchxml(&stmt).map_err(|e| e.to_string())?;
     let _ = get_entity_definitions_cached(&service_client, &database, connection_id).await;

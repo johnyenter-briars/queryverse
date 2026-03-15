@@ -23,7 +23,7 @@ use super::metadata::{get_entity_attributes_cached, get_entity_definitions_cache
 
 #[tauri::command]
 pub async fn prepare_update_sql(
-    _window: tauri::Window,
+    window: tauri::Window,
     sql: String,
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
@@ -57,7 +57,8 @@ pub async fn prepare_update_sql(
         .ok_or("Connection not found")?;
 
     let service_client =
-        get_or_create_service_client(&connection, &database, context.log_level).await?;
+        get_or_create_service_client(&connection, &database, context.log_level, Some(&window))
+            .await?;
 
     let (entity_set, entity_logical) = sql::resolve_entity_names(&stmt.entity);
     let definitions =
@@ -147,7 +148,7 @@ pub async fn prepare_update_sql(
 
 #[tauri::command]
 pub async fn execute_update_sql(
-    _window: tauri::Window,
+    window: tauri::Window,
     token: String,
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
@@ -181,7 +182,8 @@ pub async fn execute_update_sql(
         .ok_or("Connection not found")?;
 
     let service_client =
-        get_or_create_service_client(&connection, &database, context.log_level).await?;
+        get_or_create_service_client(&connection, &database, context.log_level, Some(&window))
+            .await?;
     let settings = load_settings().unwrap_or_default();
     let request_parameters = RequestParameters {
         bypass_business_logic_execution_custom_sync: settings
