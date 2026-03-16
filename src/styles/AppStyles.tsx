@@ -1,6 +1,6 @@
 import { shorthands, tokens, webDarkTheme, makeStyles } from "@fluentui/react-components";
 
-const DRAWER_WIDTH = "300px";
+const DRAWER_WIDTH = "420px";
 
 
 export const useAppStyles = makeStyles({

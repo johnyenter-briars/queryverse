@@ -244,6 +244,15 @@ pub async fn update_connection(
                 .map_err(|_| "Failed to lock metadata cache".to_string())?;
             attributes.retain(|(cached_connection_id, _), _| *cached_connection_id != connection_id);
         }
+
+        {
+            let mut relationships = database
+                .entity_relationships_cache
+                .lock()
+                .map_err(|_| "Failed to lock metadata cache".to_string())?;
+            relationships
+                .retain(|(cached_connection_id, _), _| *cached_connection_id != connection_id);
+        }
     }
 
     Ok(UpdateConnectionResponse {

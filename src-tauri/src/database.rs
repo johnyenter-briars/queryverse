@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use powerplatform_dataverse_client::dataverse::{
     entityattribute::EntityAttribute, entitydefinition::EntityDefinition,
+    entityrelationship::EntityRelationship,
     serviceclient::ServiceClient,
 };
 
@@ -18,6 +19,8 @@ pub struct Database {
     pub entity_definitions_cache: Mutex<HashMap<Uuid, Vec<EntityDefinition>>>,
     // Caches attribute metadata by connection and entity logical name.
     pub entity_attributes_cache: Mutex<HashMap<(Uuid, String), Vec<EntityAttribute>>>,
+    // Caches relationship metadata by connection and entity logical name.
+    pub entity_relationships_cache: Mutex<HashMap<(Uuid, String), Vec<EntityRelationship>>>,
     // Holds prepared update batches until the user executes or discards them.
     pub update_batches: Mutex<HashMap<String, UpdateSet>>,
     // Holds prepared delete batches until the user executes or discards them.
@@ -63,6 +66,7 @@ impl Default for Database {
             service_clients: AsyncMutex::new(HashMap::new()),
             entity_definitions_cache: Mutex::new(HashMap::new()),
             entity_attributes_cache: Mutex::new(HashMap::new()),
+            entity_relationships_cache: Mutex::new(HashMap::new()),
             // Prepared mutation batches exist only for the lifetime of the current app session.
             update_batches: Mutex::new(HashMap::new()),
             delete_batches: Mutex::new(HashMap::new()),

@@ -16,8 +16,8 @@ use crate::binding::function::{
     logging::log_frontend,
     query::{
         discard_delete_sql, discard_update_sql, execute_delete_sql, execute_sql,
-        execute_update_sql, list_entity_attributes, list_entity_definitions, parse_sql_to_fetchxml,
-        prepare_delete_sql, prepare_update_sql,
+        execute_update_sql, list_entity_attributes, list_entity_definitions,
+        list_entity_relationships, parse_sql_to_fetchxml, prepare_delete_sql, prepare_update_sql,
     },
     settings::{get_settings, save_settings},
 };
@@ -130,6 +130,7 @@ pub fn run() {
             execute_sql,
             list_entity_attributes,
             list_entity_definitions,
+            list_entity_relationships,
             parse_sql_to_fetchxml,
             prepare_update_sql,
             execute_update_sql,
