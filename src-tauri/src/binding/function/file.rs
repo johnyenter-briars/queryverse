@@ -64,10 +64,10 @@ pub async fn save_sql_file_as(
     request: SaveSqlFileAsRequest,
 ) -> Result<Option<SaveSqlFileAsResponse>, String> {
     let mut dialog = rfd::FileDialog::new().add_filter("SQL", &["sql"]);
-    if let Some(file_name) = request.file_name.as_deref() {
-        if !file_name.trim().is_empty() {
-            dialog = dialog.set_file_name(file_name);
-        }
+    if let Some(file_name) = request.file_name.as_deref()
+        && !file_name.trim().is_empty()
+    {
+        dialog = dialog.set_file_name(file_name);
     }
     let file = dialog.save_file();
 

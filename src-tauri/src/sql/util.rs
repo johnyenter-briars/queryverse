@@ -37,20 +37,17 @@ pub fn fill_entity_reference_names(rows: &mut [ResultRow], columns_order: &[Stri
 
     for row in rows.iter_mut() {
         for (name_column, base_column) in &name_columns {
-            let should_fill = match row.attributes.get(name_column) {
-                None => true,
-                Some(Value::Null) => true,
-                _ => false,
-            };
+            let should_fill =
+                matches!(row.attributes.get(name_column), None | Some(Value::Null));
             if !should_fill {
                 continue;
             }
 
-            if let Some(Value::EntityReference(reference)) = row.attributes.get(base_column) {
-                if let Some(name) = &reference.name {
-                    row.attributes
-                        .insert(name_column.clone(), Value::String(name.clone()));
-                }
+            if let Some(Value::EntityReference(reference)) = row.attributes.get(base_column)
+                && let Some(name) = &reference.name
+            {
+                row.attributes
+                    .insert(name_column.clone(), Value::String(name.clone()));
             }
         }
     }
@@ -82,10 +79,10 @@ mod tests {
 
         fill_entity_reference_names(&mut rows, &[String::from("modifiedbyname")]);
 
-        assert_eq!(
+        assert!(matches!(
             rows[0].attributes.get("modifiedbyname"),
-            Some(&Value::String("Jane Doe".to_string()))
-        );
+            Some(Value::String(value)) if value == "Jane Doe"
+        ));
     }
 
     #[test]
@@ -107,9 +104,9 @@ mod tests {
 
         fill_entity_reference_names(&mut rows, &[String::from("owneridname")]);
 
-        assert_eq!(
+        assert!(matches!(
             rows[0].attributes.get("owneridname"),
-            Some(&Value::String("Existing Name".to_string()))
-        );
+            Some(Value::String(value)) if value == "Existing Name"
+        ));
     }
 }

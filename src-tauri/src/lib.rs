@@ -110,10 +110,10 @@ fn parse_cli_args() -> LaunchContext {
             continue;
         }
         if arg == "--log-level" {
-            if let Some(value) = args.next() {
-                if let Some(parsed) = parse_log_level(&value) {
-                    log_level = parsed;
-                }
+            if let Some(value) = args.next()
+                && let Some(parsed) = parse_log_level(&value)
+            {
+                log_level = parsed;
             }
             continue;
         }

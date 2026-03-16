@@ -8,6 +8,12 @@ pub struct ResultRow {
     pub attributes: HashMap<Attribute, Value>,
 }
 
+impl Default for ResultRow {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ResultRow {
     pub fn new() -> Self {
         ResultRow {
