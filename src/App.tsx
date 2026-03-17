@@ -244,6 +244,11 @@ export default function App() {
                 ?.LocalizedLabels?.[0]?.Label ??
             entity.SchemaName ??
             entity.LogicalName);
+    const getEntityDefinition = (logicalName: string): EntityDefinition | undefined =>
+        entityDefinitions.find(
+            (definition) =>
+                definition.LogicalName.toLowerCase() === logicalName.toLowerCase()
+        );
 
     useEffect(() => {
         let cancelled = false;
@@ -922,51 +927,119 @@ export default function App() {
         }
     };
 
-    const handleLoadEntityMetadata = async (logicalName: string) => {
+    const handleLoadEntityMetadata = async (
+        logicalName: string,
+        source: "editor" | "schema" = "schema"
+    ) => {
         if (!logicalName) return;
-        if (
+        const definition = getEntityDefinition(logicalName);
+        const shouldAlsoLoadActivityPointer =
+            Boolean(definition?.IsActivity) &&
+            logicalName.toLowerCase() !== "activitypointer";
+
+        const isEntityLoaded =
             entityAttributesByLogical[logicalName] &&
-            entityRelationshipsByLogical[logicalName]
-        ) {
+            entityRelationshipsByLogical[logicalName];
+        const isActivityPointerLoaded =
+            !shouldAlsoLoadActivityPointer ||
+            (entityAttributesByLogical.activitypointer &&
+                entityRelationshipsByLogical.activitypointer);
+
+        if (isEntityLoaded && isActivityPointerLoaded) {
             return;
         }
         if (entityAttributesLoading[logicalName]) return;
+        if (shouldAlsoLoadActivityPointer && entityAttributesLoading.activitypointer) return;
 
         setEntityAttributesLoading((prev) => ({ ...prev, [logicalName]: true }));
+        if (shouldAlsoLoadActivityPointer) {
+            setEntityAttributesLoading((prev) => ({ ...prev, activitypointer: true }));
+        }
         setEntityAttributesError((prev) => ({ ...prev, [logicalName]: null }));
+        if (shouldAlsoLoadActivityPointer) {
+            setEntityAttributesError((prev) => ({ ...prev, activitypointer: null }));
+        }
 
         try {
-            const [attributesResponse, relationshipsResponse] = await Promise.all([
+            const requests: Promise<any>[] = [
                 listEntityAttributes(logicalName),
                 listEntityRelationships(logicalName),
-            ]);
-            if (attributesResponse.success && relationshipsResponse.success) {
+            ];
+            if (shouldAlsoLoadActivityPointer) {
+                requests.push(
+                    listEntityAttributes("activitypointer"),
+                    listEntityRelationships("activitypointer")
+                );
+            }
+
+            const responses = await Promise.all(requests);
+            const [attributesResponse, relationshipsResponse, activityAttributesResponse, activityRelationshipsResponse] =
+                responses;
+            if (
+                attributesResponse.success &&
+                relationshipsResponse.success &&
+                (!shouldAlsoLoadActivityPointer ||
+                    (activityAttributesResponse.success && activityRelationshipsResponse.success))
+            ) {
                 setEntityAttributesByLogical((prev) => ({
                     ...prev,
                     [logicalName]: attributesResponse.value,
+                    ...(shouldAlsoLoadActivityPointer
+                        ? { activitypointer: activityAttributesResponse.value }
+                        : {}),
                 }));
                 setEntityRelationshipsByLogical((prev) => ({
                     ...prev,
                     [logicalName]: relationshipsResponse.value,
+                    ...(shouldAlsoLoadActivityPointer
+                        ? { activitypointer: activityRelationshipsResponse.value }
+                        : {}),
+                }));
+            } else {
+                const message =
+                    attributesResponse.message ||
+                    relationshipsResponse.message ||
+                    activityAttributesResponse?.message ||
+                    activityRelationshipsResponse?.message ||
+                    "Failed to load entity metadata.";
+                if (source === "editor" && activeTab?.kind === "query") {
+                    updateTab(activeTab.id, (tab) => ({
+                        ...tab,
+                        executeError: message,
+                    }));
+                } else {
+                    setEntityAttributesError((prev) => ({
+                        ...prev,
+                        [logicalName]: message,
+                    }));
+                }
+            }
+        } catch (error) {
+            const message = getErrorMessage(error);
+            if (source === "editor" && activeTab?.kind === "query") {
+                updateTab(activeTab.id, (tab) => ({
+                    ...tab,
+                    executeError: message,
                 }));
             } else {
                 setEntityAttributesError((prev) => ({
                     ...prev,
-                    [logicalName]:
-                        attributesResponse.message ||
-                        relationshipsResponse.message ||
-                        "Failed to load entity metadata.",
+                    [logicalName]: message,
                 }));
             }
-        } catch (error) {
-            setEntityAttributesError((prev) => ({
-                ...prev,
-                [logicalName]: getErrorMessage(error),
-            }));
+            if (shouldAlsoLoadActivityPointer) {
+                if (source !== "editor") {
+                    setEntityAttributesError((prev) => ({
+                        ...prev,
+                        activitypointer: message,
+                    }));
+                }
+            }
         } finally {
             setEntityAttributesLoading((prev) => ({
                 ...prev,
                 [logicalName]: false,
+                ...(shouldAlsoLoadActivityPointer ? { activitypointer: false } : {}),
             }));
         }
     };
@@ -1351,12 +1424,14 @@ export default function App() {
                                         activeTab?.kind === "query" ? entityDefinitions : []
                                     }
                                     entityAttributes={entityAttributesByLogical}
-                                    onEntitySelected={handleLoadEntityMetadata}
-                                    onEntitiesSelected={(logicalNames) => {
-                                        logicalNames.forEach((name) => {
-                                            handleLoadEntityMetadata(name);
-                                        });
-                                    }}
+                                        onEntitySelected={(logicalName) => {
+                                            handleLoadEntityMetadata(logicalName, "editor");
+                                        }}
+                                        onEntitiesSelected={(logicalNames) => {
+                                            logicalNames.forEach((name) => {
+                                                handleLoadEntityMetadata(name, "editor");
+                                            });
+                                        }}
                                     onChange={() => {
                                         if (activeTab?.kind !== "query") return;
                                         if (activeTab.isEditorDirty) return;

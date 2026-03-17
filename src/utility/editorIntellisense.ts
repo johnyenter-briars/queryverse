@@ -11,6 +11,45 @@ import { SqlParseContext } from "./sqlParser";
 const normalizeTableName = (input: string) =>
     input.replace(/^[\[\"]+|[\]\"]+$/g, "").toLowerCase();
 
+const getEntityDefinition = (
+    logicalName: string,
+    entityDefinitions?: EntityDefinition[]
+): EntityDefinition | undefined =>
+    entityDefinitions?.find(
+        (definition) =>
+            normalizeTableName(definition.LogicalName) === normalizeTableName(logicalName)
+    );
+
+const getAttributesForIntellisense = (
+    logicalName: string | null | undefined,
+    entityDefinitions?: EntityDefinition[],
+    entityAttributes?: Record<string, EntityAttribute[]>
+): EntityAttribute[] | undefined => {
+    if (!logicalName || !entityAttributes) return undefined;
+
+    const merged: EntityAttribute[] = [];
+    const seen = new Set<string>();
+    const pushAttributes = (attributes?: EntityAttribute[]) => {
+        if (!attributes?.length) return;
+        for (const attribute of attributes) {
+            const key = `${attribute.LogicalName.toLowerCase()}::${attribute.SchemaName.toLowerCase()}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            merged.push(attribute);
+        }
+    };
+
+    pushAttributes(entityAttributes[logicalName]);
+
+    const definition = getEntityDefinition(logicalName, entityDefinitions);
+
+    if (definition?.IsActivity) {
+        pushAttributes(entityAttributes.activitypointer);
+    }
+
+    return merged;
+};
+
 /**
  * Resolve the primary entity from the last FROM clause in the SQL text.
  * @param text Full SQL text.
@@ -343,7 +382,11 @@ export const getSqlCompletionItems = ({
         const aliasKey = normalizeTableName(aliasContext.alias);
         const target = parseContext?.aliases?.[aliasKey];
         const logicalName = target?.logicalName;
-        const attributes = logicalName ? entityAttributes[logicalName] : undefined;
+        const attributes = getAttributesForIntellisense(
+            logicalName,
+            entityDefinitions,
+            entityAttributes
+        );
         if (attributes?.length) {
             const range = new monaco.Range(
                 position.lineNumber,
@@ -429,9 +472,11 @@ export const getSqlCompletionItems = ({
                 ? findDeleteEntity(fullText, entityDefinitions)
                 : parseContext?.tables?.[0]?.logicalName ??
                   findUpdateTargetEntity(fullText, entityDefinitions);
-            const attributes = updateTarget
-                ? entityAttributes[updateTarget]
-                : undefined;
+            const attributes = getAttributesForIntellisense(
+                updateTarget,
+                entityDefinitions,
+                entityAttributes
+            );
             if (attributes?.length) {
                 const word = model.getWordUntilPosition(position);
                 const range = new monaco.Range(
@@ -474,7 +519,11 @@ export const getSqlCompletionItems = ({
                 ? tablesInScope[0]
                 : findSelectedEntity(fullText, entityDefinitions);
 
-        const attributes = selectedEntity ? entityAttributes[selectedEntity] : undefined;
+        const attributes = getAttributesForIntellisense(
+            selectedEntity,
+            entityDefinitions,
+            entityAttributes
+        );
         if (attributes?.length) {
             const word = model.getWordUntilPosition(position);
             const range = new monaco.Range(

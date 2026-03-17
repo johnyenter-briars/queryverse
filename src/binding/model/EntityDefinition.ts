@@ -4,5 +4,6 @@ export type EntityDefinition = {
     DisplayName?: unknown;
     EntitySetName: string;
     IsCustomEntity: boolean;
+    IsActivity?: boolean;
     PrimaryIdAttribute?: string;
 };
