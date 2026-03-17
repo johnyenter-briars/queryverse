@@ -1,24 +1,18 @@
-export type CreateConnectionPayload =
-    | ClientCredentialsCreatePayload
-    | DeviceCodeCreatePayload;
+export type AuthConfig = ClientCredentialsAuthConfig | DeviceCodeAuthConfig;
 
-export interface ClientCredentialsCreatePayload {
-    id?: string | null;
+export type ClientCredentialsAuthConfig = {
     method: "ClientCredentials";
-    name: string;
     clientId: string;
     clientSecret: string;
     tenantId: string;
     dataverseUrl: string;
     tokenCacheStorePath?: string | null;
-}
+};
 
-export interface DeviceCodeCreatePayload {
-    id?: string | null;
+export type DeviceCodeAuthConfig = {
     method: "DeviceCode";
-    name: string;
     clientId: string;
     tenantId: string;
     dataverseUrl: string;
     tokenCacheStorePath?: string | null;
-}
+};

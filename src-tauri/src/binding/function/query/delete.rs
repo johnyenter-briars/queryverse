@@ -1,11 +1,13 @@
 use log::{debug, error};
 use powerplatform_dataverse_client::dataverse::requestparameters::RequestParameters;
-use powerplatform_dataverse_client::dataverse::serviceclient::ServiceClient;
 use uuid::Uuid;
 
 use crate::{
     Database,
-    auth::{connection::load_connections, settings::load_settings, token::get_access_token},
+    auth::{
+        connection::load_connections, serviceclient::get_or_create_service_client,
+        settings::load_settings,
+    },
     binding::model::{
         deletesqlexecuteresponse::DeleteSqlExecuteResponse,
         deletesqlpreviewresponse::DeleteSqlPreviewResponse,
@@ -18,7 +20,7 @@ use super::metadata::get_entity_definitions_cached;
 
 #[tauri::command]
 pub async fn prepare_delete_sql(
-    _window: tauri::Window,
+    window: tauri::Window,
     sql: String,
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
@@ -47,14 +49,9 @@ pub async fn prepare_delete_sql(
         .find(|connection| connection.id().as_ref() == Some(&connection_id))
         .ok_or("Connection not found")?;
 
-    let token = get_access_token(&connection, &database).await?;
-
-    let dataverse_url = connection.dataverse_url();
-    if dataverse_url.trim().is_empty() {
-        return Err("Connection is missing a Dataverse URL".to_string());
-    }
-
-    let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
+    let service_client =
+        get_or_create_service_client(&connection, &database, context.log_level, Some(&window))
+            .await?;
 
     let (entity_set, entity_logical) = sql::resolve_entity_names(&stmt.entity);
     let definitions =
@@ -111,7 +108,7 @@ pub async fn prepare_delete_sql(
 
 #[tauri::command]
 pub async fn execute_delete_sql(
-    _window: tauri::Window,
+    window: tauri::Window,
     token: String,
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
@@ -144,14 +141,9 @@ pub async fn execute_delete_sql(
         .find(|connection| connection.id().as_ref() == Some(&current_connection_id))
         .ok_or("Connection not found")?;
 
-    let token = get_access_token(&connection, &database).await?;
-
-    let dataverse_url = connection.dataverse_url();
-    if dataverse_url.trim().is_empty() {
-        return Err("Connection is missing a Dataverse URL".to_string());
-    }
-
-    let service_client = ServiceClient::new(&dataverse_url, &token, context.log_level);
+    let service_client =
+        get_or_create_service_client(&connection, &database, context.log_level, Some(&window))
+            .await?;
     let settings = load_settings().unwrap_or_default();
     let request_parameters = RequestParameters {
         bypass_business_logic_execution_custom_sync: settings

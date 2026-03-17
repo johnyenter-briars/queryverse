@@ -22,6 +22,7 @@ import { UpdateSqlPreviewResponse } from "./model/UpdateSqlPreviewResponse";
 import { UpdateSqlExecuteResponse } from "./model/UpdateSqlExecuteResponse";
 import { DeleteSqlPreviewResponse } from "./model/DeleteSqlPreviewResponse";
 import { DeleteSqlExecuteResponse } from "./model/DeleteSqlExecuteResponse";
+import { Connection } from "./model/Connection";
 import { logDebug } from "../utility/logging";
 
 const summarizeResponse = (response: unknown): unknown => {
@@ -83,6 +84,14 @@ export const createConnection = async (
     });
 
     logBindingResponse("create_connection", response);
+
+    return response;
+};
+
+export const getDefaultConnection = async (): Promise<Connection> => {
+    const response: Connection = await invoke("get_default_connection");
+
+    logBindingResponse("get_default_connection", response);
 
     return response;
 };

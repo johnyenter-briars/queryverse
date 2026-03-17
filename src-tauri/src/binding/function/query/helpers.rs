@@ -56,10 +56,10 @@ pub(crate) fn validate_update_attributes(
                 || normalize_ident(&attribute.schema_name) == normalized
         });
 
-        if let Some(attribute) = matched {
-            if matches!(attribute.is_valid_for_update, Some(false)) {
-                invalid.push(column);
-            }
+        if let Some(attribute) = matched
+            && matches!(attribute.is_valid_for_update, Some(false))
+        {
+            invalid.push(column);
         }
     }
 
@@ -74,16 +74,14 @@ pub(crate) fn validate_update_attributes(
 }
 
 fn normalize_update_column(raw: &str, entity: &str, entity_alias: Option<&str>) -> String {
-    if let Some((table, column)) = split_qualified(raw) {
-        if let Some(table) = table {
-            if table.eq_ignore_ascii_case(entity) {
-                return column.to_string();
-            }
-            if let Some(alias) = entity_alias {
-                if table.eq_ignore_ascii_case(alias) {
-                    return column.to_string();
-                }
-            }
+    if let Some((Some(table), column)) = split_qualified(raw) {
+        if table.eq_ignore_ascii_case(entity) {
+            return column.to_string();
+        }
+        if let Some(alias) = entity_alias
+            && table.eq_ignore_ascii_case(alias)
+        {
+            return column.to_string();
         }
     }
     raw.to_string()

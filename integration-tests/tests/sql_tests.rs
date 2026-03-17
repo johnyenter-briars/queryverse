@@ -1,4 +1,4 @@
-use powerplatform_dataverse_client::auth::credentials::fetch_client_credentials_token;
+use powerplatform_dataverse_client::auth::config::AuthConfig;
 use powerplatform_dataverse_client::dataverse::serviceclient::ServiceClient;
 use powerplatform_dataverse_client::LogLevel;
 
@@ -13,19 +13,16 @@ const SQL_TIMEOUT_SECS: u64 = 180;
 async fn create_client() -> Result<ServiceClient, String> {
     let secrets = load_secrets()?;
 
-    let token = fetch_client_credentials_token(
-        &secrets.client_id,
-        &secrets.client_secret,
-        &secrets.tenant_id,
-        &secrets.scope,
-    )
-    .await?;
+    if let Some(connection_string) = &secrets.connection_string {
+        return ServiceClient::new(connection_string, LogLevel::Information).await;
+    }
 
-    Ok(ServiceClient::new(
-        &secrets.dataverse_url,
-        &token,
-        LogLevel::Information,
-    ))
+    let auth = secrets.auth_config()?;
+    match auth {
+        AuthConfig::ClientCredentials { .. } | AuthConfig::DeviceCode { .. } => {
+            ServiceClient::new_with_auth(auth, LogLevel::Information).await
+        }
+    }
 }
 
 async fn execute_sql(client: &ServiceClient, sql_text: &str) -> Result<ExecuteSqlResponse, String> {

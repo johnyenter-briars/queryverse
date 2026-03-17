@@ -13,22 +13,15 @@ pub fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultR
     let mut attributes = std::collections::HashMap::new();
     for (key, value) in entity.attributes {
         if let Some(formatted_key) = lookup_formatted_key(&key) {
-            let should_insert = match attributes.get(&formatted_key) {
-                None => true,
-                Some(Value::Null) => true,
-                _ => false,
-            };
+            let should_insert =
+                matches!(attributes.get(&formatted_key), None | Some(Value::Null));
             if should_insert {
                 attributes.insert(formatted_key, value);
             }
             continue;
         }
         if let Some(base) = lookup_base_attribute(&key) {
-            let should_insert = match attributes.get(&base) {
-                None => true,
-                Some(Value::Null) => true,
-                _ => false,
-            };
+            let should_insert = matches!(attributes.get(&base), None | Some(Value::Null));
             if should_insert {
                 attributes.insert(base, value);
             }
@@ -84,10 +77,10 @@ impl AggregatePlan {
             .collect();
 
         for aggregate in &self.aggregates {
-            if let Some(target) = &aggregate.target {
-                if !columns.contains(target) {
-                    columns.push(target.clone());
-                }
+            if let Some(target) = &aggregate.target
+                && !columns.contains(target)
+            {
+                columns.push(target.clone());
             }
         }
 
@@ -292,9 +285,7 @@ fn ensure_attributes(fetchxml: &str, columns: &[String]) -> Result<String, Strin
 }
 
 fn split_qualified_column(value: &str) -> Option<(String, String)> {
-    let mut parts = value.splitn(2, '.');
-    let table = parts.next()?;
-    let column = parts.next()?;
+    let (table, column) = value.split_once('.')?;
     Some((table.to_string(), column.to_string()))
 }
 
@@ -623,10 +614,10 @@ fn push_candidate(candidates: &mut Vec<String>, value: &str) {
         candidates.push(value.to_string());
     }
 
-    if let Some((_, column)) = value.rsplit_once('.') {
-        if !candidates.contains(&column.to_string()) {
-            candidates.push(column.to_string());
-        }
+    if let Some((_, column)) = value.rsplit_once('.')
+        && !candidates.contains(&column.to_string())
+    {
+        candidates.push(column.to_string());
     }
 }
 
@@ -705,9 +696,10 @@ mod tests {
     };
     use crate::sql::{AggregateExpr, AggregateFunction, SelectItem, SelectItemKind, SelectStmt};
     use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
+    use uuid::Uuid;
 
     fn make_entity(group_value: Option<&str>) -> Entity {
-        let mut entity = Entity::new();
+        let mut entity = Entity::new(Uuid::nil(), "account", None);
         if let Some(value) = group_value {
             entity.attributes.insert(
                 "col_address1_stateorprovince".to_string(),
@@ -752,23 +744,26 @@ mod tests {
         let rows = aggregate_rows(
             entities,
             &plan,
-            &vec!["count".to_string(), "address1_stateorprovince".to_string()],
+            &["count".to_string(), "address1_stateorprovince".to_string()],
         );
 
         let ca_row = rows
             .iter()
-            .find(|row| {
-                row.attributes.get("address1_stateorprovince")
-                    == Some(&Value::String("CA".to_string()))
-            })
+            .find(|row| matches!(
+                row.attributes.get("address1_stateorprovince"),
+                Some(Value::String(value)) if value == "CA"
+            ))
             .expect("CA group");
 
-        assert_eq!(ca_row.attributes.get("count"), Some(&Value::Int(2)));
+        assert!(matches!(
+            ca_row.attributes.get("count"),
+            Some(Value::Int(2))
+        ));
     }
 
     #[test]
     fn maps_lookup_value_keys_to_base_attribute() {
-        let mut entity = Entity::new();
+        let mut entity = Entity::new(Uuid::nil(), "account", None);
         entity.attributes.insert(
             "_createdby_value".to_string(),
             Value::String("abc".to_string()),
@@ -776,19 +771,19 @@ mod tests {
 
         let row = super::entity_to_result_row(
             entity,
-            &vec!["accountid".to_string(), "createdby".to_string()],
+            &["accountid".to_string(), "createdby".to_string()],
         );
 
-        assert_eq!(
+        assert!(matches!(
             row.attributes.get("createdby"),
-            Some(&Value::String("abc".to_string()))
-        );
+            Some(Value::String(value)) if value == "abc"
+        ));
         assert!(!row.attributes.contains_key("_createdby_value"));
     }
 
     #[test]
     fn maps_formatted_lookup_to_name_column() {
-        let mut entity = Entity::new();
+        let mut entity = Entity::new(Uuid::nil(), "account", None);
         entity.attributes.insert(
             "_createdby_value@OData.Community.Display.V1.FormattedValue".to_string(),
             Value::String("A User".to_string()),
@@ -796,13 +791,13 @@ mod tests {
 
         let row = super::entity_to_result_row(
             entity,
-            &vec!["accountid".to_string(), "createdby".to_string()],
+            &["accountid".to_string(), "createdby".to_string()],
         );
 
-        assert_eq!(
+        assert!(matches!(
             row.attributes.get("createdbyname"),
-            Some(&Value::String("A User".to_string()))
-        );
+            Some(Value::String(value)) if value == "A User"
+        ));
     }
 
     #[test]
@@ -840,7 +835,7 @@ mod tests {
         let mut rows = aggregate_rows(
             entities,
             &plan,
-            &vec!["count".to_string(), "address1_stateorprovince".to_string()],
+            &["count".to_string(), "address1_stateorprovince".to_string()],
         );
 
         sort_rows_by_order(
@@ -852,6 +847,6 @@ mod tests {
         );
 
         let first = rows.first().expect("row");
-        assert_eq!(first.attributes.get("count"), Some(&Value::Int(2)));
+        assert!(matches!(first.attributes.get("count"), Some(Value::Int(2))));
     }
 }

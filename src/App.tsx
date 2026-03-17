@@ -5,8 +5,10 @@ import {
     TabList,
     Tab,
     Button,
+    Text,
 } from "@fluentui/react-components";
 import { Add24Regular, Link24Filled } from "@fluentui/react-icons";
+import { listen } from "@tauri-apps/api/event";
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor, type CustomEditorHandle } from "./components/CustomEditor";
 import { ShortcutManager } from "./components/ShortcutManager";
@@ -74,6 +76,15 @@ type EditorTab = {
     executeError: string | null;
     isExecuting: boolean;
     queryMetadata: SqlQueryMetadata | null;
+};
+
+type DeviceCodeAuthModalState = {
+    open: boolean;
+    verificationUri: string;
+    verificationUriComplete: string | null;
+    userCode: string;
+    message: string;
+    stage: "code" | "waiting" | "success" | "error";
 };
 
 const createQueryTab = (id: number): EditorTab => ({
@@ -170,6 +181,14 @@ export default function App() {
     const [entityAttributesError, setEntityAttributesError] = useState<
         Record<string, string | null>
     >({});
+    const [deviceCodeModal, setDeviceCodeModal] = useState<DeviceCodeAuthModalState>({
+        open: false,
+        verificationUri: "",
+        verificationUriComplete: null,
+        userCode: "",
+        message: "",
+        stage: "code",
+    });
     const { notifyError, notifySuccess, notifyWarning } = useAppToast();
 
     const styles = useAppStyles();
@@ -203,6 +222,50 @@ export default function App() {
 
         return () => {
             cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        let unlisten: (() => void) | null = null;
+
+        const subscribe = async () => {
+            unlisten = await listen<{
+                stage: "code" | "waiting" | "success";
+                connectionId?: string | null;
+                verificationUri?: string | null;
+                verificationUriComplete?: string | null;
+                userCode?: string | null;
+                message?: string | null;
+            }>("device-code-auth", (event) => {
+                const payload = event.payload;
+                if (payload.stage === "success") {
+                    setDeviceCodeModal((prev) => ({
+                        ...prev,
+                        open: false,
+                        stage: "success",
+                        message: payload.message ?? "Device code authentication completed.",
+                    }));
+                    return;
+                }
+
+                setDeviceCodeModal((prev) => ({
+                    open: true,
+                    verificationUri: payload.verificationUri ?? prev.verificationUri,
+                    verificationUriComplete:
+                        payload.verificationUriComplete ?? prev.verificationUriComplete,
+                    userCode: payload.userCode ?? prev.userCode,
+                    message: payload.message ?? prev.message,
+                    stage: payload.stage,
+                }));
+            });
+        };
+
+        void subscribe();
+
+        return () => {
+            if (unlisten) {
+                unlisten();
+            }
         };
     }, []);
 
@@ -985,6 +1048,33 @@ export default function App() {
                         setSettingsOpen(false);
                     }}
                 />
+                <ModalDialog
+                    open={deviceCodeModal.open}
+                    title="Device Code Sign-In"
+                    onClose={() => setDeviceCodeModal((prev) => ({ ...prev, open: false }))}
+                    closeLabel="Hide"
+                    width="460px"
+                >
+                    <div className={styles.deviceCodeModal}>
+                        <div className={styles.deviceCodeRow}>
+                            <Text weight="semibold">Open this URL</Text>
+                            <div className={styles.deviceCodeBlock}>
+                                {deviceCodeModal.verificationUriComplete ??
+                                    deviceCodeModal.verificationUri}
+                            </div>
+                        </div>
+                        <div className={styles.deviceCodeRow}>
+                            <Text weight="semibold">Enter this code</Text>
+                            <div className={styles.deviceCodeBlock}>
+                                {deviceCodeModal.userCode}
+                            </div>
+                        </div>
+                        <Text>
+                            {deviceCodeModal.message ||
+                                "Complete sign-in in the browser. QueryVerse will continue automatically."}
+                        </Text>
+                    </div>
+                </ModalDialog>
                 <ModalDialog
                     open={connectionPickerOpen}
                     title="Set Connection"

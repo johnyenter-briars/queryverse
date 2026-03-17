@@ -207,7 +207,7 @@ impl<'a> Lexer<'a> {
 
     fn skip_whitespace_and_comments(&mut self) -> Result<(), ParseError> {
         loop {
-            while self.peek_char().map_or(false, |ch| ch.is_whitespace()) {
+            while self.peek_char().is_some_and(|ch| ch.is_whitespace()) {
                 self.bump();
             }
 

@@ -5,12 +5,13 @@ pub mod sql;
 
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use tauri::async_runtime::Mutex as AsyncMutex;
 use tauri::Manager;
 use uuid::Uuid;
 
 use crate::binding::function::{
-    connection::{create_connection, list_connections, set_connection, update_connection},
+    connection::{create_connection, get_default_connection, list_connections, set_connection, update_connection},
     file::{open_sql_file, open_sql_file_path, save_sql_file, save_sql_file_as},
     launch::get_launch_context,
     logging::log_frontend,
@@ -22,14 +23,13 @@ use crate::binding::function::{
     settings::{get_settings, save_settings},
 };
 pub use powerplatform_dataverse_client::LogLevel;
-use powerplatform_dataverse_client::{
-    auth::token::CachedToken,
-    dataverse::{entityattribute::EntityAttribute, entitydefinition::EntityDefinition},
+use powerplatform_dataverse_client::dataverse::{
+    entityattribute::EntityAttribute, entitydefinition::EntityDefinition, serviceclient::ServiceClient,
 };
 
 pub struct Database {
     pub selected_connection_id: Mutex<Option<Uuid>>,
-    pub token_cache: Mutex<HashMap<Uuid, CachedToken>>,
+    pub service_clients: AsyncMutex<HashMap<Uuid, Arc<ServiceClient>>>,
     pub entity_definitions_cache: Mutex<HashMap<Uuid, Vec<EntityDefinition>>>,
     pub entity_attributes_cache: Mutex<HashMap<(Uuid, String), Vec<EntityAttribute>>>,
     pub update_batches: Mutex<HashMap<String, UpdateBatch>>,
@@ -68,7 +68,7 @@ impl Default for Database {
     fn default() -> Self {
         Self {
             selected_connection_id: Mutex::new(None),
-            token_cache: Mutex::new(HashMap::new()),
+            service_clients: AsyncMutex::new(HashMap::new()),
             entity_definitions_cache: Mutex::new(HashMap::new()),
             entity_attributes_cache: Mutex::new(HashMap::new()),
             update_batches: Mutex::new(HashMap::new()),
@@ -110,10 +110,10 @@ fn parse_cli_args() -> LaunchContext {
             continue;
         }
         if arg == "--log-level" {
-            if let Some(value) = args.next() {
-                if let Some(parsed) = parse_log_level(&value) {
-                    log_level = parsed;
-                }
+            if let Some(value) = args.next()
+                && let Some(parsed) = parse_log_level(&value)
+            {
+                log_level = parsed;
             }
             continue;
         }
@@ -160,6 +160,7 @@ pub fn run() {
         .manage(Database::default())
         .invoke_handler(tauri::generate_handler![
             create_connection,
+            get_default_connection,
             list_connections,
             set_connection,
             update_connection,

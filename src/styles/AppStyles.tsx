@@ -122,6 +122,25 @@ export const useAppStyles = makeStyles({
         width: "280px",
         maxWidth: "100%",
     },
+    deviceCodeModal: {
+        width: "420px",
+        maxWidth: "100%",
+        display: "grid",
+        gap: tokens.spacingVerticalM,
+    },
+    deviceCodeBlock: {
+        backgroundColor: webDarkTheme.colorNeutralBackground3,
+        border: `1px solid ${tokens.colorNeutralStroke2}`,
+        borderRadius: tokens.borderRadiusMedium,
+        padding: tokens.spacingHorizontalM,
+        fontFamily: "Consolas, monospace",
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+    },
+    deviceCodeRow: {
+        display: "grid",
+        gap: tokens.spacingVerticalXXS,
+    },
     connectionPickerItem: {
         justifyContent: "flex-start",
         gap: tokens.spacingHorizontalS,

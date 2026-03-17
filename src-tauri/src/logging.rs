@@ -81,10 +81,10 @@ impl Log for DailyFileLogger {
     }
 
     fn flush(&self) {
-        if let Ok(mut state) = self.state.lock() {
-            if let Some(current) = state.as_mut() {
-                let _ = current.file.flush();
-            }
+        if let Ok(mut state) = self.state.lock()
+            && let Some(current) = state.as_mut()
+        {
+            let _ = current.file.flush();
         }
     }
 }

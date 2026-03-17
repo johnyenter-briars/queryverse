@@ -33,7 +33,7 @@ pub fn to_fetchxml(
     if aggregate_mode {
         out.push_str(" aggregate=\"true\"");
     }
-    out.push_str(">");
+    out.push('>');
 
     out.push_str("<entity name=\"");
     out.push_str(&escape_xml(entity_name));
@@ -55,14 +55,14 @@ pub fn to_fetchxml(
         SelectColumns::Columns(columns) => {
             for column in columns {
                 if let SelectItemKind::Attribute(name) = &column.kind {
-                    if let Some((Some(table), _attr)) = split_qualified(name) {
-                        if let Some(join_key) = join_map.resolve_join_key(table) {
-                            join_attributes
-                                .entry(join_key)
-                                .or_default()
-                                .push(column.clone());
-                            continue;
-                        }
+                    if let Some((Some(table), _attr)) = split_qualified(name)
+                        && let Some(join_key) = join_map.resolve_join_key(table)
+                    {
+                        join_attributes
+                            .entry(join_key)
+                            .or_default()
+                            .push(column.clone());
+                        continue;
                     }
 
                     if column.alias.is_none() {
@@ -131,12 +131,12 @@ fn write_attribute(
             let (_, raw_attribute_name) = split_qualified(name).unwrap_or((None, name.as_str()));
             let attribute_name =
                 lookup_name_attribute(raw_attribute_name).unwrap_or(raw_attribute_name);
-            if aggregate_mode {
-                if group_by.is_empty() || !group_by_matches_item(item, group_by) {
-                    return Err(TranslationError::new(
-                        "Non-aggregate columns must appear in GROUP BY when using aggregates",
-                    ));
-                }
+            if aggregate_mode
+                && (group_by.is_empty() || !group_by_matches_item(item, group_by))
+            {
+                return Err(TranslationError::new(
+                    "Non-aggregate columns must appear in GROUP BY when using aggregates",
+                ));
             }
 
             out.push_str("<attribute name=\"");
@@ -394,16 +394,14 @@ fn split_qualified(value: &str) -> Option<(Option<&str>, &str)> {
 }
 
 fn strip_base_prefix(value: &str, base_entity: &str, base_alias: Option<&str>) -> String {
-    if let Some((table, column)) = split_qualified(value) {
-        if let Some(table) = table {
-            if table.eq_ignore_ascii_case(base_entity) {
-                return column.to_string();
-            }
-            if let Some(alias) = base_alias {
-                if table.eq_ignore_ascii_case(alias) {
-                    return column.to_string();
-                }
-            }
+    if let Some((Some(table), column)) = split_qualified(value) {
+        if table.eq_ignore_ascii_case(base_entity) {
+            return column.to_string();
+        }
+        if let Some(alias) = base_alias
+            && table.eq_ignore_ascii_case(alias)
+        {
+            return column.to_string();
         }
     }
     value.to_string()
@@ -423,10 +421,10 @@ impl JoinMap {
             if name.eq_ignore_ascii_case(&key) {
                 return Some(name.to_ascii_lowercase());
             }
-            if let Some(alias) = alias {
-                if alias.eq_ignore_ascii_case(&key) {
-                    return Some(name.to_ascii_lowercase());
-                }
+            if let Some(alias) = alias
+                && alias.eq_ignore_ascii_case(&key)
+            {
+                return Some(name.to_ascii_lowercase());
             }
         }
         None
@@ -436,10 +434,10 @@ impl JoinMap {
         if self.base.eq_ignore_ascii_case(table) {
             return true;
         }
-        if let Some(alias) = &self.base_alias {
-            if alias.eq_ignore_ascii_case(table) {
-                return true;
-            }
+        if let Some(alias) = &self.base_alias
+            && alias.eq_ignore_ascii_case(table)
+        {
+            return true;
         }
         false
     }
@@ -624,10 +622,10 @@ fn validate_group_by(
                     if remaining.remove(name) {
                         matched = true;
                     }
-                    if let Some(alias) = &item.alias {
-                        if remaining.remove(alias) {
-                            matched = true;
-                        }
+                    if let Some(alias) = &item.alias
+                        && remaining.remove(alias)
+                    {
+                        matched = true;
                     }
 
                     if matched {

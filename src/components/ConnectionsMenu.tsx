@@ -17,75 +17,138 @@ import {
     AddCircleRegular,
     Open24Regular,
 } from "@fluentui/react-icons";
-import { combineClasses } from "../utility/class";
-import { createConnection, listConnections, updateConnection } from "../binding/function";
-import { ClientCredentialsConnection, Connection } from "../binding/model/Connection";
-import { RequestType } from "../binding/model/QVRequest";
 import { useEffect, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
+
+import { combineClasses } from "../utility/class";
+import {
+    createConnection,
+    getDefaultConnection,
+    listConnections,
+    updateConnection,
+} from "../binding/function";
+import { Connection } from "../binding/model/Connection";
+import { RequestType } from "../binding/model/QVRequest";
 import { useConnectionsMenuStyles } from "../styles/ConnectionsMenuStyles";
 import { ModalDialog } from "./ModalDialog";
 import { logError } from "../utility/logging";
 
+type ConnectionMethod = "ClientCredentials" | "DeviceCode";
+
+type ConnectionFormState = {
+    id: string;
+    method: ConnectionMethod;
+    name: string;
+    clientId: string;
+    clientSecret: string;
+    tenantId: string;
+    dataverseUrl: string;
+    tokenCacheStorePath: string;
+};
+
+const emptyFormState = (method: ConnectionMethod = "ClientCredentials"): ConnectionFormState => ({
+    id: "",
+    method,
+    name: "",
+    clientId: "",
+    clientSecret: "",
+    tenantId: method === "DeviceCode" ? "organizations" : "",
+    dataverseUrl: "",
+    tokenCacheStorePath: "",
+});
+
+const isClientCredentials = (
+    connection: Connection
+): connection is Connection & { auth: { method: "ClientCredentials"; clientSecret: string } } =>
+    connection.auth.method === "ClientCredentials";
+
+const toFormState = (connection: Connection): ConnectionFormState => ({
+    id: connection.id ?? "",
+    method: connection.auth.method,
+    name: connection.name ?? "",
+    clientId: connection.auth.clientId ?? "",
+    clientSecret: isClientCredentials(connection) ? connection.auth.clientSecret ?? "" : "",
+    tenantId: connection.auth.tenantId ?? "",
+    dataverseUrl: connection.auth.dataverseUrl ?? "",
+    tokenCacheStorePath: connection.auth.tokenCacheStorePath ?? "",
+});
+
+const validationErrorFor = (state: ConnectionFormState): string | null => {
+    if (!state.name.trim()) {
+        return "Connection name is required.";
+    }
+
+    if (!state.id.trim()) {
+        return "Connection ID is required.";
+    }
+
+    if (!state.clientId.trim()) {
+        return "Client ID is required.";
+    }
+
+    if (!state.dataverseUrl.trim()) {
+        return "Dataverse URL is required.";
+    }
+
+    if (state.method === "ClientCredentials") {
+        if (!state.clientSecret.trim()) {
+            return "Client secret is required.";
+        }
+        if (!state.tenantId.trim()) {
+            return "Tenant ID is required.";
+        }
+    }
+
+    return null;
+};
+
+const buildPayload = (state: ConnectionFormState) =>
+    state.method === "ClientCredentials"
+        ? {
+              id: state.id.trim(),
+              method: "ClientCredentials" as const,
+              name: state.name.trim(),
+              clientId: state.clientId.trim(),
+              clientSecret: state.clientSecret,
+              tenantId: state.tenantId.trim(),
+              dataverseUrl: state.dataverseUrl.trim(),
+              tokenCacheStorePath: state.tokenCacheStorePath.trim() || null,
+          }
+        : {
+              id: state.id.trim(),
+              method: "DeviceCode" as const,
+              name: state.name.trim(),
+              clientId: state.clientId.trim(),
+              tenantId: state.tenantId.trim(),
+              dataverseUrl: state.dataverseUrl.trim(),
+              tokenCacheStorePath: state.tokenCacheStorePath.trim() || null,
+          };
+
 export interface IConnectionsMenuProps {
     isOpen: boolean;
     onOpenConnection: (connection: Connection) => void;
-};
+}
 
 export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuProps) {
     const styles = useConnectionsMenuStyles();
+    const [connections, setConnections] = useState<Connection[]>([]);
     const [createOpen, setCreateOpen] = useState(false);
-    const [createMethod, setCreateMethod] = useState<"ClientCredentials" | "AuthorizationCode">("ClientCredentials");
-    const [createStatus, setCreateStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
     const [editOpen, setEditOpen] = useState(false);
     const [editIndex, setEditIndex] = useState<number | null>(null);
-    const [editStatus, setEditStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
-    const [formState, setFormState] = useState({
-        name: "",
-        clientId: "",
-        clientSecret: "",
-        tenantId: "",
-        scope: "",
-        authorizationCode: "",
-        redirectUri: "",
-        username: "",
-        password: "",
-        dataverseUrl: "",
-    });
-    const [editFormState, setEditFormState] = useState({
-        method: "ClientCredentials" as "ClientCredentials" | "AuthorizationCode",
-        name: "",
-        clientId: "",
-        clientSecret: "",
-        tenantId: "",
-        scope: "",
-        authorizationCode: "",
-        redirectUri: "",
-        username: "",
-        password: "",
-        dataverseUrl: "",
-    });
-
-    const deriveScopeFromUrl = (value: string) => {
-        const trimmed = value.trim();
-        if (!trimmed) {
-            return "";
-        }
-
-        try {
-            const normalized = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
-            const parsed = new URL(normalized);
-            return `${parsed.origin}/.default`;
-        } catch {
-            return "";
-        }
-    };
-
-    const flyoutClasses = combineClasses(
-        styles.flyoutBase,
-        isOpen && styles.flyoutOpen
+    const [createStatus, setCreateStatus] = useState<{
+        type: "success" | "error";
+        message: string;
+    } | null>(null);
+    const [editStatus, setEditStatus] = useState<{
+        type: "success" | "error";
+        message: string;
+    } | null>(null);
+    const [createFormState, setCreateFormState] = useState<ConnectionFormState>(
+        emptyFormState()
     );
+    const [editFormState, setEditFormState] = useState<ConnectionFormState>(emptyFormState());
 
-    const [connections, setConnections] = useState<Connection[]>([]);
+    const flyoutClasses = combineClasses(styles.flyoutBase, isOpen && styles.flyoutOpen);
 
     const loadConnections = async () => {
         try {
@@ -102,109 +165,47 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         loadConnections();
     }, []);
 
-    const resetForm = () => {
-        setFormState({
-            name: "",
-            clientId: "",
+    const loadDefaultConnection = async (method: ConnectionMethod = "ClientCredentials") => {
+        const connection = await getDefaultConnection();
+        setCreateFormState({
+            ...toFormState(connection),
+            method,
+            tenantId: method === "DeviceCode" ? "organizations" : "",
             clientSecret: "",
-            tenantId: "",
-            scope: "",
-            authorizationCode: "",
-            redirectUri: "",
-            username: "",
-            password: "",
-            dataverseUrl: "",
         });
-        setCreateMethod("ClientCredentials");
+    };
+
+    const closeCreate = () => {
+        setCreateOpen(false);
+        setCreateFormState(emptyFormState());
         setCreateStatus(null);
     };
 
-    const handleCloseCreate = () => {
-        setCreateOpen(false);
-        resetForm();
-    };
-
-    const handleCloseEdit = () => {
+    const closeEdit = () => {
         setEditOpen(false);
         setEditIndex(null);
         setEditStatus(null);
     };
 
-    const isClientCredentialsConnection = (
-        connection: Connection
-    ): connection is ClientCredentialsConnection =>
-        connection.method === "ClientCredentials";
-
-    const handleOpenEdit = (conn: Connection, index: number) => {
-        setEditStatus(null);
+    const openEdit = (connection: Connection, index: number) => {
         setEditIndex(index);
-
-        if (isClientCredentialsConnection(conn)) {
-            setEditFormState({
-                method: "ClientCredentials",
-                name: conn.name ?? "",
-                clientId: conn.clientId ?? "",
-                clientSecret: conn.clientSecret ?? "",
-                tenantId: conn.tenantId ?? "",
-                scope: conn.scope ?? "",
-                authorizationCode: "",
-                redirectUri: "",
-                username: "",
-                password: "",
-                dataverseUrl: conn.dataverseUrl ?? "",
-            });
-        } else {
-            setEditFormState({
-                method: "AuthorizationCode",
-                name: conn.name ?? "",
-                clientId: "",
-                clientSecret: "",
-                tenantId: "",
-                scope: "",
-                authorizationCode: "",
-                redirectUri: "",
-                username: "",
-                password: "",
-                dataverseUrl: conn.dataverseUrl ?? "",
-            });
-        }
-
+        setEditFormState(toFormState(connection));
+        setEditStatus(null);
         setEditOpen(true);
     };
 
     const handleCreateConnection = async () => {
         setCreateStatus(null);
-
-        const derivedScope = deriveScopeFromUrl(formState.dataverseUrl);
-        const payload =
-            createMethod === "ClientCredentials"
-                ? {
-                    method: "ClientCredentials" as const,
-                    name: formState.name.trim(),
-                    clientId: formState.clientId.trim(),
-                    clientSecret: formState.clientSecret,
-                    tenantId: formState.tenantId.trim(),
-                    scope: derivedScope,
-                    dataverseUrl: formState.dataverseUrl.trim(),
-                }
-                : {
-                    method: "AuthorizationCode" as const,
-                    name: formState.name.trim(),
-                    clientId: formState.clientId.trim(),
-                    clientSecret: formState.clientSecret,
-                    tenantId: formState.tenantId.trim(),
-                    scope: derivedScope,
-                    authorizationCode: formState.authorizationCode.trim(),
-                    redirectUri: formState.redirectUri.trim(),
-                    username: formState.username.trim(),
-                    password: formState.password,
-                    dataverseUrl: formState.dataverseUrl.trim(),
-                };
+        const validationError = validationErrorFor(createFormState);
+        if (validationError) {
+            setCreateStatus({ type: "error", message: validationError });
+            return;
+        }
 
         try {
             const response = await createConnection({
                 requestType: RequestType.Create,
-                value: payload,
+                value: buildPayload(createFormState),
             });
 
             if (response.success) {
@@ -227,106 +228,24 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         }
     };
 
-    const getEditValidationError = () => {
-        if (!editFormState.name.trim()) {
-            return "Connection name is required.";
-        }
-
-        if (!editFormState.dataverseUrl.trim()) {
-            return "Dataverse URL is required.";
-        }
-
-        if (editFormState.method === "ClientCredentials") {
-            if (!editFormState.clientId.trim()) {
-                return "Client ID is required.";
-            }
-            if (!editFormState.clientSecret.trim()) {
-                return "Client secret is required.";
-            }
-            if (!editFormState.tenantId.trim()) {
-                return "Tenant ID is required.";
-            }
-            if (!editFormState.scope.trim()) {
-                return "Scope is required.";
-            }
-        } else {
-            if (!editFormState.clientId.trim()) {
-                return "Client ID is required.";
-            }
-            if (!editFormState.clientSecret.trim()) {
-                return "Client secret is required.";
-            }
-            if (!editFormState.tenantId.trim()) {
-                return "Tenant ID is required.";
-            }
-            if (!editFormState.scope.trim()) {
-                return "Scope is required.";
-            }
-            if (!editFormState.redirectUri.trim()) {
-                return "Redirect URI is required.";
-            }
-            if (!editFormState.username.trim()) {
-                return "Username is required.";
-            }
-            if (!editFormState.password.trim()) {
-                return "Password is required.";
-            }
-        }
-
-        return null;
-    };
-
     const handleSaveEdit = async () => {
         setEditStatus(null);
-
-        const validationError = getEditValidationError();
+        const validationError = validationErrorFor(editFormState);
         if (validationError) {
-            setEditStatus({
-                type: "error",
-                message: validationError,
-            });
+            setEditStatus({ type: "error", message: validationError });
             return;
         }
 
         if (editIndex === null) {
-            setEditStatus({
-                type: "error",
-                message: "No connection selected.",
-            });
+            setEditStatus({ type: "error", message: "No connection selected." });
             return;
         }
 
-        const targetIndex = editIndex;
-        const payload =
-            editFormState.method === "ClientCredentials"
-                ? {
-                    method: "ClientCredentials" as const,
-                    name: editFormState.name.trim(),
-                    clientId: editFormState.clientId.trim(),
-                    clientSecret: editFormState.clientSecret,
-                    tenantId: editFormState.tenantId.trim(),
-                    scope: editFormState.scope.trim(),
-                    dataverseUrl: editFormState.dataverseUrl.trim(),
-                }
-                : {
-                    method: "AuthorizationCode" as const,
-                    name: editFormState.name.trim(),
-                    clientId: editFormState.clientId.trim(),
-                    clientSecret: editFormState.clientSecret,
-                    tenantId: editFormState.tenantId.trim(),
-                    scope: editFormState.scope.trim(),
-                    authorizationCode: editFormState.authorizationCode.trim(),
-                    redirectUri: editFormState.redirectUri.trim(),
-                    username: editFormState.username.trim(),
-                    password: editFormState.password,
-                    dataverseUrl: editFormState.dataverseUrl.trim(),
-                };
-
         try {
             const response = await updateConnection({
-                id: connections[targetIndex]?.id ?? null,
-                index: targetIndex,
-                payload,
+                id: connections[editIndex]?.id ?? null,
+                index: editIndex,
+                payload: buildPayload(editFormState),
             });
 
             if (response.success) {
@@ -349,24 +268,106 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         }
     };
 
-    const isCreateDisabled =
-        !formState.name.trim() ||
-        !formState.clientId.trim() ||
-        !formState.clientSecret.trim() ||
-        !formState.tenantId.trim() ||
-        !formState.scope.trim() ||
-        !formState.dataverseUrl.trim() ||
-        (createMethod === "AuthorizationCode" &&
-            (!formState.redirectUri.trim() ||
-                !formState.username.trim() ||
-                !formState.password.trim()));
+    const renderForm = (
+        formState: ConnectionFormState,
+        setFormState: Dispatch<SetStateAction<ConnectionFormState>>
+    ) => (
+        <div className={styles.modalForm}>
+            <Field label="Connection ID">
+                <Input value={formState.id} disabled />
+            </Field>
+
+            <RadioGroup
+                value={formState.method}
+                onChange={(_, data) =>
+                    setFormState((prev) => ({
+                        ...emptyFormState(data.value as ConnectionMethod),
+                        id: prev.id,
+                        clientId: prev.clientId,
+                        name: prev.name,
+                        dataverseUrl: prev.dataverseUrl,
+                        tokenCacheStorePath: prev.tokenCacheStorePath,
+                    }))
+                }
+            >
+                <Radio value="ClientCredentials" label="Client Credentials" />
+                <Radio value="DeviceCode" label="Device Code" />
+            </RadioGroup>
+
+            <Field label="Connection name">
+                <Input
+                    value={formState.name}
+                    onChange={(_, data) =>
+                        setFormState((prev) => ({ ...prev, name: data.value }))
+                    }
+                />
+            </Field>
+
+            <Field label="Client ID / App ID">
+                <Input
+                    value={formState.clientId}
+                    onChange={(_, data) =>
+                        setFormState((prev) => ({ ...prev, clientId: data.value }))
+                    }
+                />
+            </Field>
+
+            {formState.method === "ClientCredentials" ? (
+                <Field label="Client secret">
+                    <Input
+                        type="password"
+                        value={formState.clientSecret}
+                        onChange={(_, data) =>
+                            setFormState((prev) => ({ ...prev, clientSecret: data.value }))
+                        }
+                    />
+                </Field>
+            ) : null}
+
+            <Field label="Tenant ID">
+                <Input
+                    value={formState.tenantId}
+                    disabled={formState.method === "DeviceCode"}
+                    onChange={(_, data) =>
+                        setFormState((prev) => ({ ...prev, tenantId: data.value }))
+                    }
+                />
+            </Field>
+
+            <Field label="Dataverse URL">
+                <Input
+                    value={formState.dataverseUrl}
+                    onChange={(_, data) =>
+                        setFormState((prev) => ({ ...prev, dataverseUrl: data.value }))
+                    }
+                />
+            </Field>
+
+            <Field label="Token cache path (optional)">
+                <Input
+                    value={formState.tokenCacheStorePath}
+                    onChange={(_, data) =>
+                        setFormState((prev) => ({
+                            ...prev,
+                            tokenCacheStorePath: data.value,
+                        }))
+                    }
+                />
+            </Field>
+
+            <Text size={200}>
+                {formState.method === "DeviceCode"
+                    ? "Device code sign-in will open in the browser flow when the connection is validated or used. The device code itself is still logged to the backend console."
+                    : "Client credentials connections are validated immediately using the supplied client ID, secret, tenant, and Dataverse URL."}
+            </Text>
+        </div>
+    );
+
+    const createDisabled = validationErrorFor(createFormState) !== null;
 
     return (
-        <div
-            className={flyoutClasses}
-            style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
-        >
-            <div className={`${styles.flyoutHalf}`}>
+        <div className={flyoutClasses} style={{ pointerEvents: isOpen ? "auto" : "none" }}>
+            <div className={styles.flyoutHalf}>
                 <div className={styles.section}>
                     <div className={styles.sectionHeader}>
                         <div className={styles.sectionTitle}>
@@ -376,8 +377,9 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                             appearance="primary"
                             size="small"
                             icon={<AddCircleRegular />}
-                            onClick={() => {
-                                resetForm();
+                            onClick={async () => {
+                                setCreateStatus(null);
+                                await loadDefaultConnection();
                                 setCreateOpen(true);
                             }}
                         >
@@ -391,28 +393,28 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                         <Tree size="small" aria-label="Connections List" className={styles.list}>
                             {connections.map((conn, index) => (
                                 <TreeItem key={`conn-${index}`} itemType="leaf">
-                                <TreeItemLayout
-                                    onClick={() => handleOpenEdit(conn, index)}
-                                >
-                                    <div className={styles.connectionRow}>
-                                        <Link24Filled
-                                            style={{ color: tokens.colorPaletteGreenForeground1 }}
-                                        />
-                                        <span className={styles.connectionName}>{conn.name}</span>
-                                        <Button
-                                            appearance="subtle"
-                                            size="small"
-                                            icon={<Open24Regular />}
-                                            aria-label={`Open query for ${conn.name}`}
-                                            onClick={(event) => {
-                                                event.stopPropagation();
-                                                onOpenConnection(conn);
-                                            }}
-                                        />
-                                    </div>
-                                </TreeItemLayout>
-                            </TreeItem>
-                        ))}
+                                    <TreeItemLayout onClick={() => openEdit(conn, index)}>
+                                        <div className={styles.connectionRow}>
+                                            <Link24Filled
+                                                style={{
+                                                    color: tokens.colorPaletteGreenForeground1,
+                                                }}
+                                            />
+                                            <span className={styles.connectionName}>{conn.name}</span>
+                                            <Button
+                                                appearance="subtle"
+                                                size="small"
+                                                icon={<Open24Regular />}
+                                                aria-label={`Open query for ${conn.name}`}
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    onOpenConnection(conn);
+                                                }}
+                                            />
+                                        </div>
+                                    </TreeItemLayout>
+                                </TreeItem>
+                            ))}
                         </Tree>
                     )}
                 </div>
@@ -421,250 +423,56 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
             <ModalDialog
                 open={createOpen}
                 title="Create Connection"
-                onClose={handleCloseCreate}
+                onClose={closeCreate}
                 closeLabel="Cancel"
             >
-                <div style={{ display: "grid", gap: "12px" }}>
-                    <RadioGroup
-                        value={createMethod}
-                        onChange={(_, data) =>
-                            setCreateMethod(data.value as "ClientCredentials" | "AuthorizationCode")
-                        }
-                    >
-                        <Radio value="AuthorizationCode" label="Authorization Code" />
-                        <Radio value="ClientCredentials" label="Client Credentials" />
-                    </RadioGroup>
-
-                    <Field label="Connection name">
-                        <Input
-                            value={formState.name}
-                            onChange={(_, data) => setFormState((prev) => ({ ...prev, name: data.value }))}
-                        />
-                    </Field>
-                    <Field label="Client ID">
-                        <Input
-                            value={formState.clientId}
-                            onChange={(_, data) => setFormState((prev) => ({ ...prev, clientId: data.value }))}
-                        />
-                    </Field>
-                    <Field label="Client secret">
-                        <Input
-                            type="password"
-                            value={formState.clientSecret}
-                            onChange={(_, data) => setFormState((prev) => ({ ...prev, clientSecret: data.value }))}
-                        />
-                    </Field>
-                    <Field label="Tenant ID">
-                        <Input
-                            value={formState.tenantId}
-                            onChange={(_, data) => setFormState((prev) => ({ ...prev, tenantId: data.value }))}
-                        />
-                    </Field>
-                    <Field label="Datavere URL">
-                        <Input
-                            value={formState.dataverseUrl}
-                            onChange={(_, data) =>
-                                setFormState((prev) => ({
-                                    ...prev,
-                                    dataverseUrl: data.value,
-                                    scope: deriveScopeFromUrl(data.value),
-                                }))
-                            }
-                        />
-                    </Field>
-
-                    {createMethod === "AuthorizationCode" ? (
-                        <>
-                            <Field label="Authorization code">
-                                <Input
-                                    value={formState.authorizationCode}
-                                    onChange={(_, data) =>
-                                        setFormState((prev) => ({ ...prev, authorizationCode: data.value }))
-                                    }
-                                />
-                            </Field>
-                            <Field label="Redirect URI">
-                                <Input
-                                    value={formState.redirectUri}
-                                    onChange={(_, data) =>
-                                        setFormState((prev) => ({ ...prev, redirectUri: data.value }))
-                                    }
-                                />
-                            </Field>
-                            <Field label="Username">
-                                <Input
-                                    value={formState.username}
-                                    onChange={(_, data) =>
-                                        setFormState((prev) => ({ ...prev, username: data.value }))
-                                    }
-                                />
-                            </Field>
-                            <Field label="Password">
-                                <Input
-                                    type="password"
-                                    value={formState.password}
-                                    onChange={(_, data) =>
-                                        setFormState((prev) => ({ ...prev, password: data.value }))
-                                    }
-                                />
-                            </Field>
-                        </>
-                    ) : null}
-
+                {renderForm(createFormState, setCreateFormState)}
+                <div className={styles.modalStatusSlot}>
                     {createStatus ? (
                         <Text
-                            style={{
-                                color:
-                                    createStatus.type === "success"
-                                        ? tokens.colorPaletteGreenForeground1
-                                        : tokens.colorPaletteRedForeground1,
-                            }}
+                            className={
+                                createStatus.type === "success"
+                                    ? styles.modalStatusSuccess
+                                    : styles.modalStatusError
+                            }
                         >
                             {createStatus.message}
                         </Text>
                     ) : null}
-
-                    <Button
-                        appearance="primary"
-                        onClick={handleCreateConnection}
-                        disabled={isCreateDisabled}
-                    >
-                        Create Connection
-                    </Button>
                 </div>
+                <Button
+                    appearance="primary"
+                    onClick={handleCreateConnection}
+                    disabled={createDisabled}
+                >
+                    Create Connection
+                </Button>
             </ModalDialog>
 
             <ModalDialog
                 open={editOpen}
                 title="Edit Connection"
-                onClose={handleCloseEdit}
+                onClose={closeEdit}
                 closeLabel="Cancel"
             >
-                <div style={{ display: "grid", gap: "12px" }}>
-                    <Field label="Connection name">
-                        <Input
-                            value={editFormState.name}
-                            onChange={(_, data) => setEditFormState((prev) => ({ ...prev, name: data.value }))}
-                        />
-                    </Field>
-
-                    {editFormState.method === "ClientCredentials" ? (
-                        <>
-                            <Field label="Client ID">
-                                <Input
-                                    value={editFormState.clientId}
-                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, clientId: data.value }))}
-                                />
-                            </Field>
-                            <Field label="Client secret">
-                                <Input
-                                    type="password"
-                                    value={editFormState.clientSecret}
-                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, clientSecret: data.value }))}
-                                />
-                            </Field>
-                            <Field label="Tenant ID">
-                                <Input
-                                    value={editFormState.tenantId}
-                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, tenantId: data.value }))}
-                                />
-                            </Field>
-                            <Field label="Scope">
-                                <Input
-                                    value={editFormState.scope}
-                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, scope: data.value }))}
-                                />
-                            </Field>
-                        </>
-                    ) : (
-                        <>
-                            <Field label="Client ID">
-                                <Input
-                                    value={editFormState.clientId}
-                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, clientId: data.value }))}
-                                />
-                            </Field>
-                            <Field label="Client secret">
-                                <Input
-                                    type="password"
-                                    value={editFormState.clientSecret}
-                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, clientSecret: data.value }))}
-                                />
-                            </Field>
-                            <Field label="Tenant ID">
-                                <Input
-                                    value={editFormState.tenantId}
-                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, tenantId: data.value }))}
-                                />
-                            </Field>
-                            <Field label="Scope">
-                                <Input
-                                    value={editFormState.scope}
-                                    onChange={(_, data) => setEditFormState((prev) => ({ ...prev, scope: data.value }))}
-                                />
-                            </Field>
-                            <Field label="Authorization code">
-                                <Input
-                                    value={editFormState.authorizationCode}
-                                    onChange={(_, data) =>
-                                        setEditFormState((prev) => ({ ...prev, authorizationCode: data.value }))
-                                    }
-                                />
-                            </Field>
-                            <Field label="Redirect URI">
-                                <Input
-                                    value={editFormState.redirectUri}
-                                    onChange={(_, data) =>
-                                        setEditFormState((prev) => ({ ...prev, redirectUri: data.value }))
-                                    }
-                                />
-                            </Field>
-                            <Field label="Username">
-                                <Input
-                                    value={editFormState.username}
-                                    onChange={(_, data) =>
-                                        setEditFormState((prev) => ({ ...prev, username: data.value }))
-                                    }
-                                />
-                            </Field>
-                            <Field label="Password">
-                                <Input
-                                    type="password"
-                                    value={editFormState.password}
-                                    onChange={(_, data) =>
-                                        setEditFormState((prev) => ({ ...prev, password: data.value }))
-                                    }
-                                />
-                            </Field>
-                        </>
-                    )}
-
-                    <Field label="Dataverse URL">
-                        <Input
-                            value={editFormState.dataverseUrl}
-                            onChange={(_, data) => setEditFormState((prev) => ({ ...prev, dataverseUrl: data.value }))}
-                        />
-                    </Field>
-
+                {renderForm(editFormState, setEditFormState)}
+                <div className={styles.modalStatusSlot}>
                     {editStatus ? (
                         <Text
-                            style={{
-                                color:
-                                    editStatus.type === "success"
-                                        ? tokens.colorPaletteGreenForeground1
-                                        : tokens.colorPaletteRedForeground1,
-                            }}
+                            className={
+                                editStatus.type === "success"
+                                    ? styles.modalStatusSuccess
+                                    : styles.modalStatusError
+                            }
                         >
                             {editStatus.message}
                         </Text>
                     ) : null}
-
-                    <Button appearance="primary" onClick={handleSaveEdit}>
-                        Save Changes
-                    </Button>
                 </div>
+                <Button appearance="primary" onClick={handleSaveEdit}>
+                    Save Changes
+                </Button>
             </ModalDialog>
-
         </div>
     );
 }
