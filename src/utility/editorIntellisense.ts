@@ -224,6 +224,26 @@ export const isInWhereClause = (text: string, cursorOffset: number) => {
 };
 
 /**
+ * Determine whether the cursor is positioned inside a SELECT ... GROUP BY clause.
+ * @param text Full SQL text.
+ * @param cursorOffset Cursor offset in the text.
+ * @returns True when inside a SELECT GROUP BY clause.
+ */
+export const isInGroupByClause = (text: string, cursorOffset: number) => {
+    const lower = text.toLowerCase();
+    const groupByIndex = lower.lastIndexOf("group by", cursorOffset);
+    if (groupByIndex === -1) return false;
+    const fromIndex = lower.lastIndexOf("from", groupByIndex);
+    if (fromIndex === -1) return false;
+    const nextKeyword = findNextKeyword(lower, groupByIndex + 8, [
+        "having",
+        "order by",
+    ]);
+    if (nextKeyword !== -1 && cursorOffset > nextKeyword) return false;
+    return cursorOffset >= groupByIndex + 8;
+};
+
+/**
  * Determine whether the cursor is positioned inside an UPDATE ... WHERE clause.
  * @param text Full SQL text.
  * @param cursorOffset Cursor offset in the text.
@@ -539,10 +559,12 @@ export const getSqlCompletionItems = ({
 
     // Alias/table suggestions inside select/where/join-on clauses.
     const isInJoinOn = isInJoinOnClause(fullText, cursorOffset);
+    const inGroupBy = isInGroupByClause(fullText, cursorOffset);
     if (
         parseContext?.tables?.length &&
         (isInSelectList(fullText, cursorOffset) ||
             isInWhereClause(fullText, cursorOffset) ||
+            inGroupBy ||
             isInJoinOn)
     ) {
         const word = model.getWordUntilPosition(position);
@@ -578,7 +600,7 @@ export const getSqlCompletionItems = ({
         if (suggestions.length) return suggestions;
     }
 
-    // Column suggestions for SELECT/WHERE/SET contexts without an alias prefix.
+    // Column suggestions for SELECT/WHERE/GROUP BY/SET contexts without an alias prefix.
     const inUpdateSet = isInSetClause(fullText, cursorOffset);
     const inUpdateWhere = isInUpdateWhereClause(fullText, cursorOffset);
     const inDeleteWhere = isInDeleteWhereClause(fullText, cursorOffset);
@@ -586,6 +608,7 @@ export const getSqlCompletionItems = ({
         entityAttributes &&
         (isInSelectList(fullText, cursorOffset) ||
             isInWhereClause(fullText, cursorOffset) ||
+            inGroupBy ||
             inUpdateSet ||
             inUpdateWhere ||
             inDeleteWhere)
