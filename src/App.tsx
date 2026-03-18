@@ -1461,14 +1461,15 @@ export default function App() {
                                         activeTab?.kind === "query" ? entityDefinitions : []
                                     }
                                     entityAttributes={entityAttributesByLogical}
-                                        onEntitySelected={(logicalName) => {
-                                            handleLoadEntityMetadata(logicalName, "editor");
-                                        }}
-                                        onEntitiesSelected={(logicalNames) => {
-                                            logicalNames.forEach((name) => {
-                                                handleLoadEntityMetadata(name, "editor");
-                                            });
-                                        }}
+                                    entityRelationships={entityRelationshipsByLogical}
+                                    onEntitySelected={(logicalName) => {
+                                        handleLoadEntityMetadata(logicalName, "editor");
+                                    }}
+                                    onEntitiesSelected={(logicalNames) => {
+                                        logicalNames.forEach((name) => {
+                                            handleLoadEntityMetadata(name, "editor");
+                                        });
+                                    }}
                                     onChange={() => {
                                         if (activeTab?.kind !== "query") return;
                                         if (activeTab.isEditorDirty) return;

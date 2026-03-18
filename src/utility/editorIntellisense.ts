@@ -1,6 +1,7 @@
 import type { editor as MonacoEditor, Position, languages } from "monaco-editor";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { EntityAttribute } from "../binding/model/EntityAttribute";
+import { EntityRelationship } from "../binding/model/EntityRelationship";
 import { SqlParseContext } from "./sqlParser";
 
 /**
@@ -48,6 +49,99 @@ const getAttributesForIntellisense = (
     }
 
     return merged;
+};
+
+const toDisplayIdentifier = (value: string | null | undefined) => value?.trim() ?? "";
+
+const getTableReferenceName = (table: SqlParseContext["tables"][number]) =>
+    table.aliases[0] ?? table.raw;
+
+type JoinRelationshipSuggestion = {
+    entityName: string;
+    insertText: string;
+    onClause: string;
+    detail: string;
+    documentation: string;
+    sortText: string;
+};
+
+const buildJoinRelationshipSuggestions = (
+    joinPrefix: string,
+    parseContext: SqlParseContext | null | undefined,
+    entityRelationships?: Record<string, EntityRelationship[]>
+): JoinRelationshipSuggestion[] => {
+    if (!parseContext?.tables?.length || !entityRelationships) return [];
+
+    const normalizedPrefix = normalizeTableName(joinPrefix);
+    const seen = new Set<string>();
+    const suggestions: JoinRelationshipSuggestion[] = [];
+
+    for (const table of parseContext.tables) {
+        const sourceLogicalName = table.logicalName;
+        if (!sourceLogicalName) continue;
+
+        const sourceReference = getTableReferenceName(table);
+        const relationships = entityRelationships[sourceLogicalName] ?? [];
+
+        for (const relationship of relationships) {
+            const referencingEntity = toDisplayIdentifier(relationship.ReferencingEntity);
+            const referencedEntity = toDisplayIdentifier(relationship.ReferencedEntity);
+            const referencingAttribute = toDisplayIdentifier(
+                relationship.ReferencingAttribute
+            );
+            const referencedAttribute = toDisplayIdentifier(
+                relationship.ReferencedAttribute
+            );
+
+            if (
+                !referencingEntity ||
+                !referencedEntity ||
+                !referencingAttribute ||
+                !referencedAttribute
+            ) {
+                continue;
+            }
+
+            let targetEntity = "";
+            let onClause = "";
+            if (normalizeTableName(sourceLogicalName) === normalizeTableName(referencingEntity)) {
+                targetEntity = referencedEntity;
+                onClause = `${sourceReference}.${referencingAttribute} = ${targetEntity}.${referencedAttribute}`;
+            } else if (
+                normalizeTableName(sourceLogicalName) === normalizeTableName(referencedEntity)
+            ) {
+                targetEntity = referencingEntity;
+                onClause = `${sourceReference}.${referencedAttribute} = ${targetEntity}.${referencingAttribute}`;
+            } else {
+                continue;
+            }
+
+            if (
+                normalizedPrefix &&
+                !normalizeTableName(targetEntity).startsWith(normalizedPrefix)
+            ) {
+                continue;
+            }
+
+            const key = `${sourceLogicalName}|${targetEntity}|${onClause}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+
+            const relationshipLabel = relationship.SchemaName || relationship.RelationshipType;
+            suggestions.push({
+                entityName: targetEntity,
+                insertText: `${targetEntity} ON ${onClause}`,
+                onClause,
+                detail: `${sourceLogicalName} -> ${targetEntity}`,
+                documentation: relationshipLabel
+                    ? `${relationshipLabel}: ${onClause}`
+                    : onClause,
+                sortText: `0-${targetEntity}-${onClause}`,
+            });
+        }
+    }
+
+    return suggestions;
 };
 
 /**
@@ -298,6 +392,7 @@ type SqlCompletionContext = {
     position: Position;
     entityDefinitions: EntityDefinition[];
     entityAttributes?: Record<string, EntityAttribute[]>;
+    entityRelationships?: Record<string, EntityRelationship[]>;
     tableNames?: string[];
     parseContext?: SqlParseContext | null;
 };
@@ -315,6 +410,12 @@ const getAliasContext = (textUpToCursor: string) => {
     return { alias: match[1], columnPrefix: match[2] ?? "" };
 };
 
+const JOIN_TARGET_PATTERN =
+    /(?:^|\s)(?:(?:inner|left|right|full|cross)(?:\s+outer)?\s+|outer\s+)?join\s+([A-Za-z0-9_\[\]\"]*)$/i;
+
+export const isInJoinTargetContext = (textUpToCursor: string) =>
+    JOIN_TARGET_PATTERN.test(textUpToCursor);
+
 /**
  * Build completion items for SQL based on cursor position and parse context.
  * @param params Completion context inputs.
@@ -326,6 +427,7 @@ export const getSqlCompletionItems = ({
     position,
     entityDefinitions,
     entityAttributes,
+    entityRelationships,
     tableNames,
     parseContext,
 }: SqlCompletionContext): languages.CompletionItem[] => {
@@ -342,9 +444,7 @@ export const getSqlCompletionItems = ({
 
     // Table name suggestions after FROM/JOIN/UPDATE/DELETE targets.
     const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
-    const joinMatch = textUpToCursor.match(
-        /(?:^|\s)(?:inner|left|right|full|outer)?\s*join\s+([A-Za-z0-9_\[\]\"]*)$/i
-    );
+    const joinMatch = textUpToCursor.match(JOIN_TARGET_PATTERN);
     const updateMatch = prefix.match(/\bupdate\s+([A-Za-z0-9_\[\]\"]*)$/i);
     const deleteMatch = prefix.match(
         /\bdelete\s+(?:from\s+)?([A-Za-z0-9_\[\]\"]*)$/i
@@ -364,6 +464,28 @@ export const getSqlCompletionItems = ({
             position.column
         );
 
+        if (joinMatch) {
+            suggestions.push(
+                ...buildJoinRelationshipSuggestions(
+                    current,
+                    parseContext,
+                    entityRelationships
+                ).map((suggestion) => ({
+                    label: {
+                        label: suggestion.entityName,
+                        detail: ` ON ${suggestion.onClause}`,
+                        description: suggestion.detail,
+                    },
+                    kind: monaco.languages.CompletionItemKind.Reference,
+                    insertText: suggestion.insertText,
+                    detail: suggestion.detail,
+                    documentation: suggestion.documentation,
+                    sortText: suggestion.sortText,
+                    range,
+                }))
+            );
+        }
+
         suggestions.push(
             ...names
                 .filter((name) => name.toLowerCase().startsWith(current.toLowerCase()))
@@ -371,6 +493,7 @@ export const getSqlCompletionItems = ({
                     label: name,
                     kind: monaco.languages.CompletionItemKind.Class,
                     insertText: name,
+                    sortText: `1-${name}`,
                     range,
                 }))
         );

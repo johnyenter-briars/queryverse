@@ -1,6 +1,12 @@
 import { makeStyles } from "@fluentui/react-components";
 
 export const useCustomEditorStyles = makeStyles({
+    root: {
+        minHeight: 0,
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+    },
     statusBar: {
         height: "24px",
         backgroundColor: "#1e1e1e",
