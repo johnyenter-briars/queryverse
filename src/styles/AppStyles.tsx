@@ -132,7 +132,11 @@ export const useAppStyles = makeStyles({
         backgroundColor: webDarkTheme.colorNeutralBackground3,
         border: `1px solid ${tokens.colorNeutralStroke2}`,
         borderRadius: tokens.borderRadiusMedium,
-        padding: tokens.spacingHorizontalM,
+        position: "relative",
+        paddingTop: tokens.spacingVerticalS,
+        paddingRight: "44px",
+        paddingBottom: tokens.spacingVerticalS,
+        paddingLeft: tokens.spacingHorizontalM,
         fontFamily: "Consolas, monospace",
         whiteSpace: "pre-wrap",
         wordBreak: "break-word",
@@ -140,6 +144,12 @@ export const useAppStyles = makeStyles({
     deviceCodeRow: {
         display: "grid",
         gap: tokens.spacingVerticalXXS,
+    },
+    deviceCodeCopyButton: {
+        position: "absolute",
+        top: "50%",
+        right: tokens.spacingHorizontalXS,
+        transform: "translateY(-50%)",
     },
     connectionPickerItem: {
         justifyContent: "flex-start",

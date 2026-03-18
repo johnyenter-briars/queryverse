@@ -7,7 +7,7 @@ import {
     Button,
     Text,
 } from "@fluentui/react-components";
-import { Add24Regular, Link24Filled } from "@fluentui/react-icons";
+import { Add24Regular, Copy24Regular, Link24Filled } from "@fluentui/react-icons";
 import { listen } from "@tauri-apps/api/event";
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor, type CustomEditorHandle } from "./components/CustomEditor";
@@ -808,6 +808,18 @@ export default function App() {
         }
     };
 
+    const handleCopyDeviceCodeValue = async (value: string | null | undefined) => {
+        if (!value) return;
+
+        try {
+            await navigator.clipboard.writeText(value);
+            notifySuccess("Copied to clipboard");
+        } catch (error) {
+            logError("Failed to copy device code value", error, "queryverse::frontend::app");
+            notifyError("Could not copy to clipboard.");
+        }
+    };
+
     const handleOpenSqlFile = async () => {
         try {
             const response = await openSqlFile();
@@ -1222,12 +1234,37 @@ export default function App() {
                             <div className={styles.deviceCodeBlock}>
                                 {deviceCodeModal.verificationUriComplete ??
                                     deviceCodeModal.verificationUri}
+                                <Button
+                                    appearance="subtle"
+                                    size="small"
+                                    icon={<Copy24Regular />}
+                                    className={styles.deviceCodeCopyButton}
+                                    onClick={() =>
+                                        void handleCopyDeviceCodeValue(
+                                            deviceCodeModal.verificationUriComplete ??
+                                                deviceCodeModal.verificationUri
+                                        )
+                                    }
+                                    aria-label="Copy URL"
+                                    title="Copy URL"
+                                />
                             </div>
                         </div>
                         <div className={styles.deviceCodeRow}>
                             <Text weight="semibold">Enter this code</Text>
                             <div className={styles.deviceCodeBlock}>
                                 {deviceCodeModal.userCode}
+                                <Button
+                                    appearance="subtle"
+                                    size="small"
+                                    icon={<Copy24Regular />}
+                                    className={styles.deviceCodeCopyButton}
+                                    onClick={() =>
+                                        void handleCopyDeviceCodeValue(deviceCodeModal.userCode)
+                                    }
+                                    aria-label="Copy code"
+                                    title="Copy code"
+                                />
                             </div>
                         </div>
                         <Text>
