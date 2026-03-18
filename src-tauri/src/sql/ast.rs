@@ -8,6 +8,7 @@ pub struct SelectStmt {
     pub distinct: bool,
     pub filter: Option<Expr>,
     pub group_by: Vec<String>,
+    pub having: Option<Expr>,
     pub order_by: Vec<OrderBy>,
 }
 
@@ -71,7 +72,7 @@ pub enum SelectItemKind {
     Aggregate(AggregateExpr),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregateExpr {
     pub function: AggregateFunction,
     pub target: AggregateTarget,
@@ -86,7 +87,7 @@ pub enum AggregateFunction {
     Avg,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggregateTarget {
     Star,
     Column(String),
@@ -108,35 +109,41 @@ pub enum Expr {
 #[derive(Debug, Clone)]
 pub enum Predicate {
     Compare {
-        column: String,
+        left: PredicateTarget,
         op: CompareOp,
         value: Literal,
     },
     ColumnCompare {
-        left: String,
+        left: PredicateTarget,
         op: CompareOp,
-        right: String,
+        right: PredicateTarget,
     },
     In {
-        column: String,
+        left: PredicateTarget,
         values: Vec<Literal>,
         negated: bool,
     },
     Between {
-        column: String,
+        left: PredicateTarget,
         low: Literal,
         high: Literal,
         negated: bool,
     },
     IsNull {
-        column: String,
+        left: PredicateTarget,
         negated: bool,
     },
     Like {
-        column: String,
+        left: PredicateTarget,
         pattern: String,
         negated: bool,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PredicateTarget {
+    Column(String),
+    Aggregate(AggregateExpr),
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -5,8 +5,8 @@ use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
 
 use crate::binding::model::resultrow::ResultRow;
 use crate::sql::{
-    AggregateFunction, AggregateTarget, OrderBy, SelectColumns, SelectItem, SelectItemKind,
-    SelectStmt,
+    AggregateExpr, AggregateFunction, AggregateTarget, CompareOp, Expr, Literal, OrderBy,
+    Predicate, PredicateTarget, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
 };
 
 pub fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultRow {
@@ -621,6 +621,24 @@ fn push_candidate(candidates: &mut Vec<String>, value: &str) {
     }
 }
 
+pub fn apply_having(
+    rows: Vec<ResultRow>,
+    stmt: &SelectStmt,
+) -> Result<Vec<ResultRow>, String> {
+    let Some(expr) = &stmt.having else {
+        return Ok(rows);
+    };
+
+    let mut filtered = Vec::with_capacity(rows.len());
+    for row in rows {
+        if evaluate_expr(&row, expr, stmt)? {
+            filtered.push(row);
+        }
+    }
+
+    Ok(filtered)
+}
+
 fn lookup_base_attribute(key: &str) -> Option<String> {
     if !key.starts_with('_') || !key.ends_with("_value") {
         return None;
@@ -692,9 +710,12 @@ fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
 mod tests {
     use super::{
         AggregateTarget, OrderBy, SelectColumns, aggregate_fallback_plan, aggregate_rows,
-        sort_rows_by_order,
+        apply_having, sort_rows_by_order,
     };
-    use crate::sql::{AggregateExpr, AggregateFunction, SelectItem, SelectItemKind, SelectStmt};
+    use crate::sql::{
+        AggregateExpr, AggregateFunction, CompareOp, Expr, Literal, Predicate, PredicateTarget,
+        SelectItem, SelectItemKind, SelectStmt,
+    };
     use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
     use uuid::Uuid;
 
@@ -732,6 +753,7 @@ mod tests {
             distinct: false,
             filter: None,
             group_by: vec!["address1_stateorprovince".to_string()],
+            having: None,
             order_by: Vec::new(),
         };
 
@@ -823,6 +845,7 @@ mod tests {
             distinct: false,
             filter: None,
             group_by: vec!["address1_stateorprovince".to_string()],
+            having: None,
             order_by: Vec::new(),
         };
 
@@ -848,5 +871,305 @@ mod tests {
 
         let first = rows.first().expect("row");
         assert!(matches!(first.attributes.get("count"), Some(Value::Int(2))));
+    }
+
+    #[test]
+    fn having_filters_by_grouped_column_is_null() {
+        let stmt = SelectStmt {
+            columns: SelectColumns::Columns(vec![
+                SelectItem {
+                    kind: SelectItemKind::Aggregate(AggregateExpr {
+                        function: AggregateFunction::Count,
+                        target: AggregateTarget::Star,
+                    }),
+                    alias: None,
+                },
+                SelectItem {
+                    kind: SelectItemKind::Attribute("address1_stateorprovince".to_string()),
+                    alias: None,
+                },
+            ]),
+            entity: "account".to_string(),
+            entity_alias: None,
+            joins: Vec::new(),
+            top: None,
+            distinct: false,
+            filter: None,
+            group_by: vec!["address1_stateorprovince".to_string()],
+            having: Some(Expr::Predicate(Predicate::IsNull {
+                left: PredicateTarget::Column("address1_stateorprovince".to_string()),
+                negated: false,
+            })),
+            order_by: Vec::new(),
+        };
+
+        let plan = aggregate_fallback_plan(&stmt).expect("aggregate plan");
+        let entities = vec![make_entity(Some("CA")), make_entity(None), make_entity(None)];
+        let rows = aggregate_rows(
+            entities,
+            &plan,
+            &["count".to_string(), "address1_stateorprovince".to_string()],
+        );
+        let rows = apply_having(rows, &stmt).expect("having");
+
+        assert_eq!(rows.len(), 1);
+        assert!(matches!(rows[0].attributes.get("count"), Some(Value::Int(2))));
+        assert!(matches!(
+            rows[0].attributes.get("address1_stateorprovince"),
+            Some(Value::Null)
+        ));
+    }
+
+    #[test]
+    fn having_filters_by_count_star() {
+        let stmt = SelectStmt {
+            columns: SelectColumns::Columns(vec![
+                SelectItem {
+                    kind: SelectItemKind::Aggregate(AggregateExpr {
+                        function: AggregateFunction::Count,
+                        target: AggregateTarget::Star,
+                    }),
+                    alias: None,
+                },
+                SelectItem {
+                    kind: SelectItemKind::Attribute("address1_stateorprovince".to_string()),
+                    alias: None,
+                },
+            ]),
+            entity: "account".to_string(),
+            entity_alias: None,
+            joins: Vec::new(),
+            top: None,
+            distinct: false,
+            filter: None,
+            group_by: vec!["address1_stateorprovince".to_string()],
+            having: Some(Expr::Predicate(Predicate::Compare {
+                left: PredicateTarget::Aggregate(AggregateExpr {
+                    function: AggregateFunction::Count,
+                    target: AggregateTarget::Star,
+                }),
+                op: CompareOp::Gt,
+                value: Literal::Number(1),
+            })),
+            order_by: Vec::new(),
+        };
+
+        let plan = aggregate_fallback_plan(&stmt).expect("aggregate plan");
+        let entities = vec![
+            make_entity(Some("CA")),
+            make_entity(Some("CA")),
+            make_entity(Some("WA")),
+        ];
+        let rows = aggregate_rows(
+            entities,
+            &plan,
+            &["count".to_string(), "address1_stateorprovince".to_string()],
+        );
+        let rows = apply_having(rows, &stmt).expect("having");
+
+        assert_eq!(rows.len(), 1);
+        assert!(matches!(
+            rows[0].attributes.get("address1_stateorprovince"),
+            Some(Value::String(value)) if value == "CA"
+        ));
+        assert!(matches!(rows[0].attributes.get("count"), Some(Value::Int(2))));
+    }
+}
+
+fn evaluate_expr(row: &ResultRow, expr: &Expr, stmt: &SelectStmt) -> Result<bool, String> {
+    match expr {
+        Expr::And(left, right) => {
+            Ok(evaluate_expr(row, left, stmt)? && evaluate_expr(row, right, stmt)?)
+        }
+        Expr::Or(left, right) => {
+            Ok(evaluate_expr(row, left, stmt)? || evaluate_expr(row, right, stmt)?)
+        }
+        Expr::Predicate(predicate) => evaluate_predicate(row, predicate, stmt),
+    }
+}
+
+fn evaluate_predicate(
+    row: &ResultRow,
+    predicate: &Predicate,
+    stmt: &SelectStmt,
+) -> Result<bool, String> {
+    match predicate {
+        Predicate::Compare { left, op, value } => {
+            let left_value = resolve_target_value(row, left, stmt)?;
+            if matches!(value, Literal::Null) {
+                return Err("Use IS NULL instead of comparing to NULL in HAVING".to_string());
+            }
+            let right_value = literal_to_value(value);
+            Ok(compare_by_op(&left_value, &right_value, *op))
+        }
+        Predicate::ColumnCompare { left, op, right } => {
+            let left_value = resolve_target_value(row, left, stmt)?;
+            let right_value = resolve_target_value(row, right, stmt)?;
+            Ok(compare_by_op(&left_value, &right_value, *op))
+        }
+        Predicate::In {
+            left,
+            values,
+            negated,
+        } => {
+            let left_value = resolve_target_value(row, left, stmt)?;
+            let matches = values
+                .iter()
+                .map(literal_to_value)
+                .any(|candidate| compare_values(&left_value, &candidate).is_eq());
+            Ok(if *negated { !matches } else { matches })
+        }
+        Predicate::Between {
+            left,
+            low,
+            high,
+            negated,
+        } => {
+            let left_value = resolve_target_value(row, left, stmt)?;
+            let low_value = literal_to_value(low);
+            let high_value = literal_to_value(high);
+            let matches = compare_values(&left_value, &low_value).is_ge()
+                && compare_values(&left_value, &high_value).is_le();
+            Ok(if *negated { !matches } else { matches })
+        }
+        Predicate::IsNull { left, negated } => {
+            let left_value = resolve_target_value(row, left, stmt)?;
+            let matches = matches!(left_value, Value::Null);
+            Ok(if *negated { !matches } else { matches })
+        }
+        Predicate::Like {
+            left,
+            pattern,
+            negated,
+        } => {
+            let left_value = resolve_target_value(row, left, stmt)?;
+            let matches = scalar_value_to_string(&left_value)
+                .is_some_and(|value| like_match(&value, pattern));
+            Ok(if *negated { !matches } else { matches })
+        }
+    }
+}
+
+fn resolve_target_value(
+    row: &ResultRow,
+    target: &PredicateTarget,
+    stmt: &SelectStmt,
+) -> Result<Value, String> {
+    let output_name = resolve_target_output_name(target, stmt);
+    Ok(row
+        .attributes
+        .get(&output_name)
+        .cloned()
+        .unwrap_or(Value::Null))
+}
+
+fn resolve_target_output_name(target: &PredicateTarget, stmt: &SelectStmt) -> String {
+    match target {
+        PredicateTarget::Column(name) => {
+            if let SelectColumns::Columns(items) = &stmt.columns {
+                for item in items {
+                    if let SelectItemKind::Attribute(attribute) = &item.kind
+                        && (attribute.eq_ignore_ascii_case(name)
+                            || item
+                                .alias
+                                .as_ref()
+                                .is_some_and(|alias| alias.eq_ignore_ascii_case(name)))
+                    {
+                        return item.alias.clone().unwrap_or_else(|| attribute.clone());
+                    }
+                }
+            }
+            name.clone()
+        }
+        PredicateTarget::Aggregate(aggregate) => {
+            if let SelectColumns::Columns(items) = &stmt.columns {
+                for item in items {
+                    if let SelectItemKind::Aggregate(candidate) = &item.kind
+                        && candidate == aggregate
+                    {
+                        return aggregate_output_name(item);
+                    }
+                }
+            }
+            aggregate_default_output_name(aggregate)
+        }
+    }
+}
+
+fn aggregate_default_output_name(aggregate: &AggregateExpr) -> String {
+    let function = match aggregate.function {
+        AggregateFunction::Min => "min",
+        AggregateFunction::Max => "max",
+        AggregateFunction::Count => "count",
+        AggregateFunction::Sum => "sum",
+        AggregateFunction::Avg => "avg",
+    };
+
+    match &aggregate.target {
+        AggregateTarget::Star => function.to_string(),
+        AggregateTarget::Column(column) => format!("{}_{}", function, column),
+    }
+}
+
+fn literal_to_value(literal: &Literal) -> Value {
+    match literal {
+        Literal::String(value) => Value::String(value.clone()),
+        Literal::Number(value) => Value::Int(*value),
+        Literal::Boolean(value) => Value::Boolean(*value),
+        Literal::Null => Value::Null,
+    }
+}
+
+fn scalar_value_to_string(value: &Value) -> Option<String> {
+    match value {
+        Value::String(value) => Some(value.clone()),
+        Value::Int(value) => Some(value.to_string()),
+        Value::Float(value) => Some(value.to_string()),
+        Value::Boolean(value) => Some(value.to_string()),
+        Value::EntityReference(reference) => Some(reference.id.to_string()),
+        Value::Null => None,
+    }
+}
+
+fn compare_by_op(left: &Value, right: &Value, op: CompareOp) -> bool {
+    match op {
+        CompareOp::Eq => compare_values(left, right).is_eq(),
+        CompareOp::Ne => !compare_values(left, right).is_eq(),
+        CompareOp::Lt => compare_values(left, right).is_lt(),
+        CompareOp::Lte => {
+            let cmp = compare_values(left, right);
+            cmp.is_lt() || cmp.is_eq()
+        }
+        CompareOp::Gt => compare_values(left, right).is_gt(),
+        CompareOp::Gte => {
+            let cmp = compare_values(left, right);
+            cmp.is_gt() || cmp.is_eq()
+        }
+    }
+}
+
+fn like_match(value: &str, pattern: &str) -> bool {
+    like_match_impl(
+        &value.chars().collect::<Vec<_>>(),
+        &pattern.chars().collect::<Vec<_>>(),
+    )
+}
+
+fn like_match_impl(value: &[char], pattern: &[char]) -> bool {
+    if pattern.is_empty() {
+        return value.is_empty();
+    }
+
+    match pattern[0] {
+        '%' => {
+            if like_match_impl(value, &pattern[1..]) {
+                return true;
+            }
+            !value.is_empty() && like_match_impl(&value[1..], pattern)
+        }
+        '_' => !value.is_empty() && like_match_impl(&value[1..], &pattern[1..]),
+        literal => {
+            !value.is_empty() && value[0] == literal && like_match_impl(&value[1..], &pattern[1..])
+        }
     }
 }

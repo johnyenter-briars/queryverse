@@ -7,8 +7,9 @@ mod parser;
 pub mod util;
 
 pub use ast::{
-    AggregateExpr, AggregateFunction, AggregateTarget, DeleteStmt, Expr, Literal, OrderBy,
-    SelectColumns, SelectItem, SelectItemKind, SelectStmt, UpdateAssignment, UpdateStmt,
+    AggregateExpr, AggregateFunction, AggregateTarget, CompareOp, DeleteStmt, Expr, Literal,
+    OrderBy, Predicate, PredicateTarget, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
+    UpdateAssignment, UpdateStmt,
 };
 pub use errors::{ParseError, SqlError, TranslationError};
 
@@ -69,6 +70,7 @@ pub fn update_to_fetchxml(
         distinct: false,
         filter: stmt.filter.clone(),
         group_by: Vec::new(),
+        having: None,
         order_by: Vec::new(),
     };
 
@@ -91,6 +93,7 @@ pub fn delete_to_fetchxml(
         distinct: false,
         filter: stmt.filter.clone(),
         group_by: Vec::new(),
+        having: None,
         order_by: Vec::new(),
     };
 
@@ -330,6 +333,17 @@ mod tests {
                 .fetchxml
                 .contains("<order alias=\"count\" descending=\"true\"")
         );
+    }
+
+    #[test]
+    fn parses_group_by_having_queries() {
+        let sql = "select count(*), regardingobjectid, activityid from email group by regardingobjectid, activityid having count(*) > 1 order by count(*) asc";
+        let stmt = parse(sql).expect("parse");
+        assert!(stmt.having.is_some());
+
+        let result = to_fetchxml(&stmt).expect("fetchxml");
+        assert!(result.fetchxml.contains("<fetch aggregate=\"true\""));
+        assert!(result.fetchxml.contains("attribute name=\"emailid\" alias=\"count\" aggregate=\"count\""));
     }
 
     #[test]

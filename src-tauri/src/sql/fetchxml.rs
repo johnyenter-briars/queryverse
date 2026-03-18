@@ -1,6 +1,7 @@
 use crate::sql::ast::{
     AggregateExpr, AggregateFunction, AggregateTarget, CompareOp, Expr, JoinClause, JoinType,
-    Literal, OrderBy, Predicate, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
+    Literal, OrderBy, Predicate, PredicateTarget, SelectColumns, SelectItem, SelectItemKind,
+    SelectStmt,
 };
 use crate::sql::errors::TranslationError;
 
@@ -240,8 +241,9 @@ fn write_filter_item(expr: &Expr, out: &mut String) -> Result<(), TranslationErr
 
 fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), TranslationError> {
     match predicate {
-        Predicate::Compare { column, op, value } => {
-            if split_qualified(column)
+        Predicate::Compare { left, op, value } => {
+            let column = require_plain_column(left, "WHERE")?;
+            if split_qualified(&column)
                 .and_then(|(table, _)| table)
                 .is_some()
             {
@@ -255,7 +257,7 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
                 ));
             }
             out.push_str("<condition attribute=\"");
-            out.push_str(&escape_xml(column));
+            out.push_str(&escape_xml(&column));
             out.push_str("\" operator=\"");
             out.push_str(compare_op_to_fetchxml(*op));
             out.push_str("\" value=\"");
@@ -263,11 +265,12 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             out.push_str("\" />");
         }
         Predicate::In {
-            column,
+            left,
             values,
             negated,
         } => {
-            if split_qualified(column)
+            let column = require_plain_column(left, "WHERE")?;
+            if split_qualified(&column)
                 .and_then(|(table, _)| table)
                 .is_some()
             {
@@ -280,7 +283,7 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             }
 
             out.push_str("<condition attribute=\"");
-            out.push_str(&escape_xml(column));
+            out.push_str(&escape_xml(&column));
             out.push_str("\" operator=\"");
             out.push_str(if *negated { "not-in" } else { "in" });
             out.push_str("\">");
@@ -294,12 +297,13 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             out.push_str("</condition>");
         }
         Predicate::Between {
-            column,
+            left,
             low,
             high,
             negated,
         } => {
-            if split_qualified(column)
+            let column = require_plain_column(left, "WHERE")?;
+            if split_qualified(&column)
                 .and_then(|(table, _)| table)
                 .is_some()
             {
@@ -312,7 +316,7 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             }
 
             out.push_str("<condition attribute=\"");
-            out.push_str(&escape_xml(column));
+            out.push_str(&escape_xml(&column));
             out.push_str("\" operator=\"");
             out.push_str(if *negated { "not-between" } else { "between" });
             out.push_str("\">");
@@ -325,8 +329,9 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
             out.push_str("</value>");
             out.push_str("</condition>");
         }
-        Predicate::IsNull { column, negated } => {
-            if split_qualified(column)
+        Predicate::IsNull { left, negated } => {
+            let column = require_plain_column(left, "WHERE")?;
+            if split_qualified(&column)
                 .and_then(|(table, _)| table)
                 .is_some()
             {
@@ -335,17 +340,18 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
                 ));
             }
             out.push_str("<condition attribute=\"");
-            out.push_str(&escape_xml(column));
+            out.push_str(&escape_xml(&column));
             out.push_str("\" operator=\"");
             out.push_str(if *negated { "not-null" } else { "null" });
             out.push_str("\" />");
         }
         Predicate::Like {
-            column,
+            left,
             pattern,
             negated,
         } => {
-            if split_qualified(column)
+            let column = require_plain_column(left, "WHERE")?;
+            if split_qualified(&column)
                 .and_then(|(table, _)| table)
                 .is_some()
             {
@@ -354,7 +360,7 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
                 ));
             }
             out.push_str("<condition attribute=\"");
-            out.push_str(&escape_xml(column));
+            out.push_str(&escape_xml(&column));
             out.push_str("\" operator=\"");
             out.push_str(if *negated { "not-like" } else { "like" });
             out.push_str("\" value=\"");
@@ -369,6 +375,16 @@ fn write_condition(predicate: &Predicate, out: &mut String) -> Result<(), Transl
     }
 
     Ok(())
+}
+
+fn require_plain_column(target: &PredicateTarget, clause: &str) -> Result<String, TranslationError> {
+    match target {
+        PredicateTarget::Column(column) => Ok(column.clone()),
+        PredicateTarget::Aggregate(_) => Err(TranslationError::new(format!(
+            "Aggregate expressions in {} are not supported in FetchXML translation",
+            clause
+        ))),
+    }
 }
 
 fn compare_op_to_fetchxml(op: CompareOp) -> &'static str {
