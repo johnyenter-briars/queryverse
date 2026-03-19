@@ -37,6 +37,14 @@ const getAttributesForIntellisense = (
             if (seen.has(key)) continue;
             seen.add(key);
             merged.push(attribute);
+
+            const nameAttribute = createNameIntellisenseAttribute(attribute);
+            if (!nameAttribute) continue;
+
+            const nameKey = `${nameAttribute.LogicalName.toLowerCase()}::${nameAttribute.SchemaName.toLowerCase()}`;
+            if (seen.has(nameKey)) continue;
+            seen.add(nameKey);
+            merged.push(nameAttribute);
         }
     };
 
@@ -49,6 +57,40 @@ const getAttributesForIntellisense = (
     }
 
     return merged;
+};
+
+const createNameIntellisenseAttribute = (
+    attribute: EntityAttribute
+): EntityAttribute | undefined => {
+    if (!supportsNameCompanionAttribute(attribute.AttributeType)) {
+        return undefined;
+    }
+
+    return {
+        ...attribute,
+        LogicalName: `${attribute.LogicalName}name`,
+        SchemaName: `${attribute.SchemaName}Name`,
+        AttributeType: `${attribute.AttributeType} Name`,
+    };
+};
+
+const supportsNameCompanionAttribute = (attributeType?: string) =>
+    matchesAttributeType(attributeType, [
+        "Customer",
+        "Lookup",
+        "Owner",
+        "Picklist",
+        "State",
+        "Status",
+    ]);
+
+const matchesAttributeType = (attributeType: string | undefined, values: string[]) => {
+    if (!attributeType) return false;
+    const normalized = attributeType.toLowerCase();
+    return values.some((value) => {
+        const key = value.toLowerCase();
+        return normalized === key || normalized === `${key}type`;
+    });
 };
 
 const toDisplayIdentifier = (value: string | null | undefined) => value?.trim() ?? "";

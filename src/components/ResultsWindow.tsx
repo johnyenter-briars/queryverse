@@ -78,7 +78,7 @@ function isOptionSetValueCollection(value: Value): value is OptionSetValueCollec
 function formatValue(value: Value): string {
     if (value === null || value === undefined) return "NULL";
     if (isEntityReference(value)) {
-        return value.name?.trim() || value.id;
+        return value.id;
     }
     if (isOptionSetValueCollection(value)) {
         return value.values.join(", ");
