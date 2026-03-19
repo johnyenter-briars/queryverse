@@ -38,13 +38,12 @@ const getAttributesForIntellisense = (
             seen.add(key);
             merged.push(attribute);
 
-            const nameAttribute = createNameIntellisenseAttribute(attribute);
-            if (!nameAttribute) continue;
-
-            const nameKey = `${nameAttribute.LogicalName.toLowerCase()}::${nameAttribute.SchemaName.toLowerCase()}`;
-            if (seen.has(nameKey)) continue;
-            seen.add(nameKey);
-            merged.push(nameAttribute);
+            for (const companionAttribute of createCompanionIntellisenseAttributes(attribute)) {
+                const companionKey = `${companionAttribute.LogicalName.toLowerCase()}::${companionAttribute.SchemaName.toLowerCase()}`;
+                if (seen.has(companionKey)) continue;
+                seen.add(companionKey);
+                merged.push(companionAttribute);
+            }
         }
     };
 
@@ -59,19 +58,28 @@ const getAttributesForIntellisense = (
     return merged;
 };
 
-const createNameIntellisenseAttribute = (
-    attribute: EntityAttribute
-): EntityAttribute | undefined => {
-    if (!supportsNameCompanionAttribute(attribute.AttributeType)) {
-        return undefined;
+const createCompanionIntellisenseAttributes = (attribute: EntityAttribute): EntityAttribute[] => {
+    const attributes: EntityAttribute[] = [];
+
+    if (supportsNameCompanionAttribute(attribute.AttributeType)) {
+        attributes.push({
+            ...attribute,
+            LogicalName: `${attribute.LogicalName}name`,
+            SchemaName: `${attribute.SchemaName}Name`,
+            AttributeType: `${attribute.AttributeType} Name`,
+        });
     }
 
-    return {
-        ...attribute,
-        LogicalName: `${attribute.LogicalName}name`,
-        SchemaName: `${attribute.SchemaName}Name`,
-        AttributeType: `${attribute.AttributeType} Name`,
-    };
+    if (supportsTypeCompanionAttribute(attribute.AttributeType)) {
+        attributes.push({
+            ...attribute,
+            LogicalName: `${attribute.LogicalName}type`,
+            SchemaName: `${attribute.SchemaName}Type`,
+            AttributeType: `${attribute.AttributeType} Type`,
+        });
+    }
+
+    return attributes;
 };
 
 const supportsNameCompanionAttribute = (attributeType?: string) =>
@@ -83,6 +91,9 @@ const supportsNameCompanionAttribute = (attributeType?: string) =>
         "State",
         "Status",
     ]);
+
+const supportsTypeCompanionAttribute = (attributeType?: string) =>
+    matchesAttributeType(attributeType, ["Customer", "Lookup", "Owner"]);
 
 const matchesAttributeType = (attributeType: string | undefined, values: string[]) => {
     if (!attributeType) return false;

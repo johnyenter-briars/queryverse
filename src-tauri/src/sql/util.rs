@@ -15,10 +15,10 @@ pub fn assign_row_numbers(rows: &mut [ResultRow]) {
 
 pub fn fill_entity_reference_names(rows: &mut [ResultRow], columns_order: &[String]) {
     for row in rows.iter_mut() {
-        let name_columns = resolve_name_columns(&row.attributes, columns_order);
-        for (name_column, base_column) in name_columns {
+        let companion_columns = resolve_companion_columns(&row.attributes, columns_order);
+        for (companion_column, base_column, kind) in companion_columns {
             let should_fill =
-                matches!(row.attributes.get(&name_column), None | Some(Value::Null));
+                matches!(row.attributes.get(&companion_column), None | Some(Value::Null));
             if !should_fill {
                 continue;
             }
@@ -27,30 +27,49 @@ pub fn fill_entity_reference_names(rows: &mut [ResultRow], columns_order: &[Stri
                 continue;
             };
 
-            if let Some(name) = value_name(base_value) {
-                row.attributes.insert(name_column, Value::String(name));
+            if let Some(value) = companion_value(base_value, kind) {
+                row.attributes.insert(companion_column, Value::String(value));
             }
         }
     }
 }
 
-fn resolve_name_columns(
+#[derive(Clone, Copy)]
+enum CompanionKind {
+    Name,
+    Type,
+}
+
+fn resolve_companion_columns(
     attributes: &std::collections::HashMap<String, Value>,
     columns_order: &[String],
-) -> Vec<(String, String)> {
+) -> Vec<(String, String, CompanionKind)> {
     if columns_order.is_empty() {
         return attributes
             .iter()
             .filter_map(|(column, value)| {
-                if column.eq_ignore_ascii_case("name") || value_name(value).is_none() {
+                if column.eq_ignore_ascii_case("name") {
                     return None;
                 }
-                Some((format!("{column}name"), column.clone()))
+
+                let mut columns = Vec::new();
+                if companion_value(value, CompanionKind::Name).is_some() {
+                    columns.push((format!("{column}name"), column.clone(), CompanionKind::Name));
+                }
+                if companion_value(value, CompanionKind::Type).is_some() {
+                    columns.push((format!("{column}type"), column.clone(), CompanionKind::Type));
+                }
+                if columns.is_empty() {
+                    None
+                } else {
+                    Some(columns)
+                }
             })
+            .flatten()
             .collect();
     }
 
-    let mut name_columns: Vec<(String, String)> = Vec::new();
+    let mut companion_columns: Vec<(String, String, CompanionKind)> = Vec::new();
     for column in columns_order {
         if column.eq_ignore_ascii_case("name") {
             continue;
@@ -59,16 +78,26 @@ fn resolve_name_columns(
             if base.is_empty() {
                 continue;
             }
-            name_columns.push((column.clone(), base.to_string()));
+            companion_columns.push((column.clone(), base.to_string(), CompanionKind::Name));
+            continue;
+        }
+        if let Some(base) = column.strip_suffix("type") {
+            if base.is_empty() {
+                continue;
+            }
+            companion_columns.push((column.clone(), base.to_string(), CompanionKind::Type));
         }
     }
-    name_columns
+    companion_columns
 }
 
-fn value_name(value: &Value) -> Option<String> {
-    match value {
-        Value::EntityReference(reference) => reference.name.clone(),
-        Value::OptionSetValue(value) => value.name.clone(),
+fn companion_value(value: &Value, kind: CompanionKind) -> Option<String> {
+    match (value, kind) {
+        (Value::EntityReference(reference), CompanionKind::Name) => reference.name.clone(),
+        (Value::EntityReference(reference), CompanionKind::Type) => {
+            Some(reference.logical_name.clone())
+        }
+        (Value::OptionSetValue(value), CompanionKind::Name) => value.name.clone(),
         _ => None,
     }
 }
@@ -149,6 +178,27 @@ mod tests {
         assert!(matches!(
             rows[0].attributes.get("accountclassificationcodename"),
             Some(Value::String(value)) if value == "Preferred Customer"
+        ));
+    }
+
+    #[test]
+    fn fills_entity_reference_type_columns() {
+        let mut attributes = HashMap::new();
+        attributes.insert(
+            "ownerid".to_string(),
+            Value::EntityReference(EntityReference {
+                id: Uuid::nil(),
+                logical_name: "systemuser".to_string(),
+                name: Some("Jane Doe".to_string()),
+            }),
+        );
+        let mut rows = vec![ResultRow { attributes }];
+
+        fill_entity_reference_names(&mut rows, &[]);
+
+        assert!(matches!(
+            rows[0].attributes.get("owneridtype"),
+            Some(Value::String(value)) if value == "systemuser"
         ));
     }
 }
