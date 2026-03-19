@@ -69,8 +69,8 @@ pub fn to_fetchxml(
                     if column.alias.is_none() {
                         let (_, raw_attribute_name) =
                             split_qualified(name).unwrap_or((None, name.as_str()));
-                        let attribute_name =
-                            lookup_name_attribute(raw_attribute_name).unwrap_or(raw_attribute_name);
+                        let attribute_name = lookup_companion_base_attribute(raw_attribute_name)
+                            .unwrap_or(raw_attribute_name);
                         if !written_attributes.insert(attribute_name.to_string()) {
                             continue;
                         }
@@ -131,7 +131,7 @@ fn write_attribute(
         SelectItemKind::Attribute(name) => {
             let (_, raw_attribute_name) = split_qualified(name).unwrap_or((None, name.as_str()));
             let attribute_name =
-                lookup_name_attribute(raw_attribute_name).unwrap_or(raw_attribute_name);
+                lookup_companion_base_attribute(raw_attribute_name).unwrap_or(raw_attribute_name);
             if aggregate_mode
                 && (group_by.is_empty() || !group_by_matches_item(item, group_by))
             {
@@ -750,13 +750,19 @@ fn escape_xml(value: &str) -> String {
     escaped
 }
 
-fn lookup_name_attribute(attribute: &str) -> Option<&str> {
+fn lookup_companion_base_attribute(attribute: &str) -> Option<&str> {
     let lowered = attribute.to_ascii_lowercase();
-    if lowered == "name" || !lowered.ends_with("name") {
+    let suffix = if lowered == "name" {
         return None;
-    }
+    } else if lowered.ends_with("name") {
+        "name"
+    } else if lowered.ends_with("type") {
+        "type"
+    } else {
+        return None;
+    };
 
-    let base = &attribute[..attribute.len().saturating_sub(4)];
+    let base = &attribute[..attribute.len().saturating_sub(suffix.len())];
     if base.is_empty() {
         return None;
     }
