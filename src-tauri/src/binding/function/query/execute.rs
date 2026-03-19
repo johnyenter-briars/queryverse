@@ -137,17 +137,18 @@ pub async fn execute_sql_with_client(
                 .await;
 
             match server {
-                Ok(entities) => (
-                    aggregate::apply_having(
-                        entities
+                Ok(entities) => {
+                    let mut rows: Vec<ResultRow> = entities
                         .into_iter()
                         .map(|entity| aggregate::entity_to_result_row(entity, &columns_order))
-                        .collect(),
-                        &stmt,
-                    )?,
-                    "Multiple results found".to_string(),
-                    true,
-                ),
+                        .collect();
+                    fill_entity_reference_names(&mut rows, &columns_order);
+                    (
+                        aggregate::apply_having(rows, &stmt)?,
+                        "Multiple results found".to_string(),
+                        true,
+                    )
+                }
                 Err(error) => {
                     if error.contains("0x8004e023") {
                         let demoted_fetchxml =
@@ -160,11 +161,9 @@ pub async fn execute_sql_with_client(
                                 error
                             })?;
 
-                        let mut rows = aggregate::apply_having(
-                            aggregate::aggregate_rows(entities, &plan, &columns_order),
-                            &stmt,
-                        )?;
+                        let mut rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
                         fill_entity_reference_names(&mut rows, &columns_order);
+                        let mut rows = aggregate::apply_having(rows, &stmt)?;
                         aggregate::sort_rows_by_order(&mut rows, &stmt.order_by);
                         assign_row_numbers(&mut rows);
                         (rows, "Multiple results found".to_string(), true)
@@ -207,11 +206,9 @@ pub async fn execute_sql_with_client(
                     error
                 })?;
 
-            let mut rows = aggregate::apply_having(
-                aggregate::aggregate_rows(entities, &plan, &columns_order),
-                &stmt,
-            )?;
+            let mut rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
             fill_entity_reference_names(&mut rows, &columns_order);
+            let mut rows = aggregate::apply_having(rows, &stmt)?;
             aggregate::sort_rows_by_order(&mut rows, &stmt.order_by);
             assign_row_numbers(&mut rows);
             (rows, "Multiple results found".to_string(), true)
