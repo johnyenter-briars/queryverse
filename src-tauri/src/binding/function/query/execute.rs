@@ -123,10 +123,13 @@ pub async fn execute_sql_with_client(
 
             match server {
                 Ok(entities) => (
-                    entities
+                    aggregate::apply_having(
+                        entities
                         .into_iter()
                         .map(|entity| aggregate::entity_to_result_row(entity, &columns_order))
                         .collect(),
+                        &stmt,
+                    )?,
                     "Multiple results found".to_string(),
                     true,
                 ),
@@ -142,7 +145,10 @@ pub async fn execute_sql_with_client(
                                 error
                             })?;
 
-                        let mut rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
+                        let mut rows = aggregate::apply_having(
+                            aggregate::aggregate_rows(entities, &plan, &columns_order),
+                            &stmt,
+                        )?;
                         fill_entity_reference_names(&mut rows, &columns_order);
                         aggregate::sort_rows_by_order(&mut rows, &stmt.order_by);
                         assign_row_numbers(&mut rows);
@@ -172,7 +178,7 @@ pub async fn execute_sql_with_client(
 
             aggregate::ensure_columns(&mut attributes, &columns_order);
 
-            let mut rows = vec![ResultRow { attributes }];
+            let mut rows = aggregate::apply_having(vec![ResultRow { attributes }], &stmt)?;
             fill_entity_reference_names(&mut rows, &columns_order);
             assign_row_numbers(&mut rows);
             (rows, "Count retrieved.".to_string(), true)
@@ -186,7 +192,10 @@ pub async fn execute_sql_with_client(
                     error
                 })?;
 
-            let mut rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
+            let mut rows = aggregate::apply_having(
+                aggregate::aggregate_rows(entities, &plan, &columns_order),
+                &stmt,
+            )?;
             fill_entity_reference_names(&mut rows, &columns_order);
             aggregate::sort_rows_by_order(&mut rows, &stmt.order_by);
             assign_row_numbers(&mut rows);

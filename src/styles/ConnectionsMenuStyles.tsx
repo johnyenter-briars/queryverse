@@ -1,6 +1,6 @@
 import { makeStyles, shorthands, tokens, webDarkTheme } from "@fluentui/react-components";
 
-const DRAWER_WIDTH = "300px";
+const DRAWER_WIDTH = "420px";
 
 export const useConnectionsMenuStyles = makeStyles({
     // BASE Flyout Style (ALWAYS applied - handles hidden state/transition)

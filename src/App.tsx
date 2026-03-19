@@ -7,7 +7,7 @@ import {
     Button,
     Text,
 } from "@fluentui/react-components";
-import { Add24Regular, Link24Filled } from "@fluentui/react-icons";
+import { Add24Regular, Copy24Regular, Link24Filled } from "@fluentui/react-icons";
 import { listen } from "@tauri-apps/api/event";
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor, type CustomEditorHandle } from "./components/CustomEditor";
@@ -22,6 +22,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { TabSwitcher } from "./components/TabSwitcher";
 import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
+import { SchemaEntityView } from "./components/SchemaEntityView";
 import { SchemaExplorerMenu } from "./components/SchemaExplorerMenu";
 import { combineClasses } from "./utility/class";
 import { ResultRow } from "./binding/model/ResultRow";
@@ -36,8 +37,9 @@ import {
     getSettings,
     getLaunchContext,
     listConnections,
-    listEntityDefinitions,
     listEntityAttributes,
+    listEntityDefinitions,
+    listEntityRelationships,
     openSqlFile,
     openSqlFilePath,
     previewFetchXml,
@@ -52,6 +54,7 @@ import { ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
 import { EntityDefinition } from "./binding/model/EntityDefinition";
 import { EntityAttribute } from "./binding/model/EntityAttribute";
+import { EntityRelationship } from "./binding/model/EntityRelationship";
 import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 import { DEFAULT_SETTINGS, Settings } from "./binding/model/Settings";
 import { logError } from "./utility/logging";
@@ -61,7 +64,7 @@ const DEFAULT_QUERY = "select top 20 *\nfrom account";
 const isUpdateQuery = (sql: string) => /^\s*update\b/i.test(sql);
 const isDeleteQuery = (sql: string) => /^\s*delete\b/i.test(sql);
 type EditorTab = {
-    kind: "query" | "fetchxml";
+    kind: "query" | "fetchxml" | "schema";
     id: number;
     title: string;
     query: string;
@@ -76,6 +79,8 @@ type EditorTab = {
     executeError: string | null;
     isExecuting: boolean;
     queryMetadata: SqlQueryMetadata | null;
+    schemaLogicalName?: string | null;
+    schemaDisplayName?: string | null;
 };
 
 type DeviceCodeAuthModalState = {
@@ -128,6 +133,32 @@ const createFetchXmlTab = (
     queryMetadata: null,
 });
 
+const createSchemaTab = (
+    id: number,
+    title: string,
+    logicalName: string,
+    displayName: string,
+    connectionId: string | null
+): EditorTab => ({
+    kind: "schema",
+    id,
+    title,
+    query: "",
+    filePath: null,
+    fileName: null,
+    lastSavedQuery: "",
+    isEditorDirty: false,
+    results: [],
+    connectionId,
+    fetchPreview: null,
+    previewError: null,
+    executeError: null,
+    isExecuting: false,
+    queryMetadata: null,
+    schemaLogicalName: logicalName,
+    schemaDisplayName: displayName,
+});
+
 export default function App() {
     const [connectionsEnabled, setIsMenuOpen] = useState(true);
     const [schemaEnabled, setSchemaEnabled] = useState(false);
@@ -175,6 +206,9 @@ export default function App() {
     const [entityAttributesByLogical, setEntityAttributesByLogical] = useState<
         Record<string, EntityAttribute[]>
     >({});
+    const [entityRelationshipsByLogical, setEntityRelationshipsByLogical] = useState<
+        Record<string, EntityRelationship[]>
+    >({});
     const [entityAttributesLoading, setEntityAttributesLoading] = useState<
         Record<string, boolean>
     >({});
@@ -203,6 +237,18 @@ export default function App() {
     const editorFontSize = settings.fontSize;
 
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    const getEntityDisplayName = (entity: EntityDefinition): string =>
+        ((entity.DisplayName as { UserLocalizedLabel?: { Label?: string } } | undefined)
+            ?.UserLocalizedLabel?.Label ??
+            (entity.DisplayName as { LocalizedLabels?: Array<{ Label?: string }> } | undefined)
+                ?.LocalizedLabels?.[0]?.Label ??
+            entity.SchemaName ??
+            entity.LogicalName);
+    const getEntityDefinition = (logicalName: string): EntityDefinition | undefined =>
+        entityDefinitions.find(
+            (definition) =>
+                definition.LogicalName.toLowerCase() === logicalName.toLowerCase()
+        );
 
     useEffect(() => {
         let cancelled = false;
@@ -484,6 +530,7 @@ export default function App() {
                                 if (response.success) {
                                     setEntityDefinitions(response.value);
                                     setEntityAttributesByLogical({});
+                                    setEntityRelationshipsByLogical({});
                                     setEntityAttributesLoading({});
                                     setEntityAttributesError({});
                                 }
@@ -761,6 +808,18 @@ export default function App() {
         }
     };
 
+    const handleCopyDeviceCodeValue = async (value: string | null | undefined) => {
+        if (!value) return;
+
+        try {
+            await navigator.clipboard.writeText(value);
+            notifySuccess("Copied to clipboard");
+        } catch (error) {
+            logError("Failed to copy device code value", error, "queryverse::frontend::app");
+            notifyError("Could not copy to clipboard.");
+        }
+    };
+
     const handleOpenSqlFile = async () => {
         try {
             const response = await openSqlFile();
@@ -866,6 +925,7 @@ export default function App() {
                 if (response.success) {
                     setEntityDefinitions(response.value);
                     setEntityAttributesByLogical({});
+                    setEntityRelationshipsByLogical({});
                     setEntityAttributesLoading({});
                     setEntityAttributesError({});
                 }
@@ -879,38 +939,151 @@ export default function App() {
         }
     };
 
-    const handleLoadEntityAttributes = async (logicalName: string) => {
+    const handleLoadEntityMetadata = async (
+        logicalName: string,
+        source: "editor" | "schema" = "schema"
+    ) => {
         if (!logicalName) return;
-        if (entityAttributesByLogical[logicalName]) return;
+        const definition = getEntityDefinition(logicalName);
+        const shouldAlsoLoadActivityPointer =
+            Boolean(definition?.IsActivity) &&
+            logicalName.toLowerCase() !== "activitypointer";
+
+        const isEntityLoaded =
+            entityAttributesByLogical[logicalName] &&
+            entityRelationshipsByLogical[logicalName];
+        const isActivityPointerLoaded =
+            !shouldAlsoLoadActivityPointer ||
+            (entityAttributesByLogical.activitypointer &&
+                entityRelationshipsByLogical.activitypointer);
+
+        if (isEntityLoaded && isActivityPointerLoaded) {
+            return;
+        }
         if (entityAttributesLoading[logicalName]) return;
+        if (shouldAlsoLoadActivityPointer && entityAttributesLoading.activitypointer) return;
 
         setEntityAttributesLoading((prev) => ({ ...prev, [logicalName]: true }));
+        if (shouldAlsoLoadActivityPointer) {
+            setEntityAttributesLoading((prev) => ({ ...prev, activitypointer: true }));
+        }
         setEntityAttributesError((prev) => ({ ...prev, [logicalName]: null }));
+        if (shouldAlsoLoadActivityPointer) {
+            setEntityAttributesError((prev) => ({ ...prev, activitypointer: null }));
+        }
 
         try {
-            const response = await listEntityAttributes(logicalName);
-            if (response.success) {
+            const requests: Promise<any>[] = [
+                listEntityAttributes(logicalName),
+                listEntityRelationships(logicalName),
+            ];
+            if (shouldAlsoLoadActivityPointer) {
+                requests.push(
+                    listEntityAttributes("activitypointer"),
+                    listEntityRelationships("activitypointer")
+                );
+            }
+
+            const responses = await Promise.all(requests);
+            const [attributesResponse, relationshipsResponse, activityAttributesResponse, activityRelationshipsResponse] =
+                responses;
+            if (
+                attributesResponse.success &&
+                relationshipsResponse.success &&
+                (!shouldAlsoLoadActivityPointer ||
+                    (activityAttributesResponse.success && activityRelationshipsResponse.success))
+            ) {
                 setEntityAttributesByLogical((prev) => ({
                     ...prev,
-                    [logicalName]: response.value,
+                    [logicalName]: attributesResponse.value,
+                    ...(shouldAlsoLoadActivityPointer
+                        ? { activitypointer: activityAttributesResponse.value }
+                        : {}),
+                }));
+                setEntityRelationshipsByLogical((prev) => ({
+                    ...prev,
+                    [logicalName]: relationshipsResponse.value,
+                    ...(shouldAlsoLoadActivityPointer
+                        ? { activitypointer: activityRelationshipsResponse.value }
+                        : {}),
+                }));
+            } else {
+                const message =
+                    attributesResponse.message ||
+                    relationshipsResponse.message ||
+                    activityAttributesResponse?.message ||
+                    activityRelationshipsResponse?.message ||
+                    "Failed to load entity metadata.";
+                if (source === "editor" && activeTab?.kind === "query") {
+                    updateTab(activeTab.id, (tab) => ({
+                        ...tab,
+                        executeError: message,
+                    }));
+                } else {
+                    setEntityAttributesError((prev) => ({
+                        ...prev,
+                        [logicalName]: message,
+                    }));
+                }
+            }
+        } catch (error) {
+            const message = getErrorMessage(error);
+            if (source === "editor" && activeTab?.kind === "query") {
+                updateTab(activeTab.id, (tab) => ({
+                    ...tab,
+                    executeError: message,
                 }));
             } else {
                 setEntityAttributesError((prev) => ({
                     ...prev,
-                    [logicalName]: response.message || "Failed to load attributes.",
+                    [logicalName]: message,
                 }));
             }
-        } catch (error) {
-            setEntityAttributesError((prev) => ({
-                ...prev,
-                [logicalName]: getErrorMessage(error),
-            }));
+            if (shouldAlsoLoadActivityPointer) {
+                if (source !== "editor") {
+                    setEntityAttributesError((prev) => ({
+                        ...prev,
+                        activitypointer: message,
+                    }));
+                }
+            }
         } finally {
             setEntityAttributesLoading((prev) => ({
                 ...prev,
                 [logicalName]: false,
+                ...(shouldAlsoLoadActivityPointer ? { activitypointer: false } : {}),
             }));
         }
+    };
+
+    const handleOpenSchemaEntity = async (entity: EntityDefinition) => {
+        const logicalName = entity.LogicalName;
+        if (!logicalName) return;
+
+        await handleLoadEntityMetadata(logicalName);
+
+        const existingTab = tabs.find(
+            (tab) => tab.kind === "schema" && tab.schemaLogicalName === logicalName
+        );
+        if (existingTab) {
+            setActiveTabId(existingTab.id);
+            setSchemaEnabled(false);
+            return;
+        }
+
+        const displayName = getEntityDisplayName(entity);
+        const newId = nextTabId.current++;
+        const newTab = createSchemaTab(
+            newId,
+            `Schema - ${displayName}`,
+            logicalName,
+            displayName,
+            selectedConnection?.id ?? null
+        );
+
+        setTabs((prev) => [...prev, newTab]);
+        setActiveTabId(newId);
+        setSchemaEnabled(false);
     };
 
     const handleConfirmDataChange = async () => {
@@ -1061,12 +1234,37 @@ export default function App() {
                             <div className={styles.deviceCodeBlock}>
                                 {deviceCodeModal.verificationUriComplete ??
                                     deviceCodeModal.verificationUri}
+                                <Button
+                                    appearance="subtle"
+                                    size="small"
+                                    icon={<Copy24Regular />}
+                                    className={styles.deviceCodeCopyButton}
+                                    onClick={() =>
+                                        void handleCopyDeviceCodeValue(
+                                            deviceCodeModal.verificationUriComplete ??
+                                                deviceCodeModal.verificationUri
+                                        )
+                                    }
+                                    aria-label="Copy URL"
+                                    title="Copy URL"
+                                />
                             </div>
                         </div>
                         <div className={styles.deviceCodeRow}>
                             <Text weight="semibold">Enter this code</Text>
                             <div className={styles.deviceCodeBlock}>
                                 {deviceCodeModal.userCode}
+                                <Button
+                                    appearance="subtle"
+                                    size="small"
+                                    icon={<Copy24Regular />}
+                                    className={styles.deviceCodeCopyButton}
+                                    onClick={() =>
+                                        void handleCopyDeviceCodeValue(deviceCodeModal.userCode)
+                                    }
+                                    aria-label="Copy code"
+                                    title="Copy code"
+                                />
                             </div>
                         </div>
                         <Text>
@@ -1144,6 +1342,7 @@ export default function App() {
                             //TODO: handle failure here
                             setEntityDefinitions(response.value);
                             setEntityAttributesByLogical({});
+                            setEntityRelationshipsByLogical({});
                             setEntityAttributesLoading({});
                             setEntityAttributesError({});
 
@@ -1153,10 +1352,7 @@ export default function App() {
                     <SchemaExplorerMenu
                         isOpen={schemaEnabled}
                         entityDefinitions={entityDefinitions}
-                        entityAttributes={entityAttributesByLogical}
-                        attributesLoading={entityAttributesLoading}
-                        attributesError={entityAttributesError}
-                        onLoadAttributes={handleLoadEntityAttributes}
+                        onOpenEntity={handleOpenSchemaEntity}
                     />
 
                     <div className={contentClasses}>
@@ -1216,27 +1412,66 @@ export default function App() {
                                     title="New Tab"
                                 />
                             </div>
-                            {activeTab ? (
+                            {activeTab && activeTab.kind === "schema" ? (
+                                <SchemaEntityView
+                                    title={
+                                        activeTab.schemaDisplayName ??
+                                        activeTab.schemaLogicalName ??
+                                        activeTab.title
+                                    }
+                                    logicalName={activeTab.schemaLogicalName ?? ""}
+                                    attributes={
+                                        activeTab.schemaLogicalName
+                                            ? entityAttributesByLogical[
+                                                  activeTab.schemaLogicalName
+                                              ]
+                                            : undefined
+                                    }
+                                    relationships={
+                                        activeTab.schemaLogicalName
+                                            ? entityRelationshipsByLogical[
+                                                  activeTab.schemaLogicalName
+                                              ]
+                                            : undefined
+                                    }
+                                    isLoading={Boolean(
+                                        activeTab.schemaLogicalName &&
+                                            entityAttributesLoading[
+                                                activeTab.schemaLogicalName
+                                            ]
+                                    )}
+                                    error={
+                                        activeTab.schemaLogicalName
+                                            ? entityAttributesError[
+                                                  activeTab.schemaLogicalName
+                                              ]
+                                            : null
+                                    }
+                                />
+                            ) : (
                                 <CustomEditor
                                     ref={editorRef}
-                                    key={`${activeTab.kind}-${activeTab.id}`}
-                                    vimEnabled={vimEnabled && activeTab.kind === "query"}
-                                    value={activeTab.query}
-                                    language={activeTab.kind === "fetchxml" ? "xml" : "sql"}
-                                    readOnly={activeTab.kind === "fetchxml"}
+                                    key={`${activeTab?.kind}-${activeTab?.id}`}
+                                    vimEnabled={vimEnabled && activeTab?.kind === "query"}
+                                    value={activeTab?.query ?? ""}
+                                    language={activeTab?.kind === "fetchxml" ? "xml" : "sql"}
+                                    readOnly={activeTab?.kind === "fetchxml"}
                                     fontSize={editorFontSize}
                                     entityDefinitions={
-                                        activeTab.kind === "query" ? entityDefinitions : []
+                                        activeTab?.kind === "query" ? entityDefinitions : []
                                     }
                                     entityAttributes={entityAttributesByLogical}
-                                    onEntitySelected={handleLoadEntityAttributes}
+                                    entityRelationships={entityRelationshipsByLogical}
+                                    onEntitySelected={(logicalName) => {
+                                        handleLoadEntityMetadata(logicalName, "editor");
+                                    }}
                                     onEntitiesSelected={(logicalNames) => {
                                         logicalNames.forEach((name) => {
-                                            handleLoadEntityAttributes(name);
+                                            handleLoadEntityMetadata(name, "editor");
                                         });
                                     }}
                                     onChange={() => {
-                                        if (activeTab.kind !== "query") return;
+                                        if (activeTab?.kind !== "query") return;
                                         if (activeTab.isEditorDirty) return;
                                         updateTab(activeTab.id, (tab) =>
                                             tab.isEditorDirty
@@ -1245,23 +1480,21 @@ export default function App() {
                                         );
                                     }}
                                 />
-                            ) : null}
+                            )}
                         </div>
 
-                        <div className={styles.bottom}>
-                            {activeTab && activeTab.kind === "query" ? (
-                                <>
-                                    <ResultsWindow
-                                        data={activeTab.results}
-                                        entityDefinitions={entityDefinitions}
-                                        query={activeTab.query}
-                                        queryMetadata={activeTab.queryMetadata}
-                                        isLoading={activeTab.isExecuting}
-                                        errorMessage={activeTab.executeError}
-                                    />
-                                </>
-                            ) : null}
-                        </div>
+                        {activeTab && activeTab.kind === "query" ? (
+                            <div className={styles.bottom}>
+                                <ResultsWindow
+                                    data={activeTab.results}
+                                    entityDefinitions={entityDefinitions}
+                                    query={activeTab.query}
+                                    queryMetadata={activeTab.queryMetadata}
+                                    isLoading={activeTab.isExecuting}
+                                    errorMessage={activeTab.executeError}
+                                />
+                            </div>
+                        ) : null}
                     </div>
                 </div>
                 {tabContextMenu.open && tabContextMenu.tabId !== null ? (

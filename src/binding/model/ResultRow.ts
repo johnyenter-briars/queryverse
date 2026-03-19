@@ -4,7 +4,27 @@ export type EntityReference = {
     name?: string | null;
 };
 
-export type Value = number | string | boolean | null | EntityReference;//TODO: i think this needs to support float as well
+export type MoneyValue = {
+    value: string | number;
+};
+
+export type OptionSetValue = {
+    value: number;
+};
+
+export type OptionSetValueCollection = {
+    values: number[];
+};
+
+export type Value =
+    | number
+    | string
+    | boolean
+    | null
+    | EntityReference
+    | MoneyValue
+    | OptionSetValue
+    | OptionSetValueCollection;
 
 export type Attribute = string;
 

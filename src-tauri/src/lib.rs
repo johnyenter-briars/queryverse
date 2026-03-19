@@ -1,14 +1,13 @@
 pub mod auth;
 pub mod binding;
+mod database;
 mod logging;
 pub mod sql;
 
-use serde_json::Value as JsonValue;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use tauri::async_runtime::Mutex as AsyncMutex;
+extern crate tauri;
+extern crate tauri_plugin_opener;
+
 use tauri::Manager;
-use uuid::Uuid;
 
 use crate::binding::function::{
     connection::{create_connection, get_default_connection, list_connections, set_connection, update_connection},
@@ -17,64 +16,25 @@ use crate::binding::function::{
     logging::log_frontend,
     query::{
         discard_delete_sql, discard_update_sql, execute_delete_sql, execute_sql,
-        execute_update_sql, list_entity_attributes, list_entity_definitions, parse_sql_to_fetchxml,
-        prepare_delete_sql, prepare_update_sql,
+        execute_update_sql, list_entity_attributes, list_entity_definitions,
+        list_entity_relationships, parse_sql_to_fetchxml, prepare_delete_sql, prepare_update_sql,
     },
     settings::{get_settings, save_settings},
 };
+pub use crate::database::{Database, DeleteSet, UpdateSet};
 pub use powerplatform_dataverse_client::LogLevel;
-use powerplatform_dataverse_client::dataverse::{
-    entityattribute::EntityAttribute, entitydefinition::EntityDefinition, serviceclient::ServiceClient,
-};
-
-pub struct Database {
-    pub selected_connection_id: Mutex<Option<Uuid>>,
-    pub service_clients: AsyncMutex<HashMap<Uuid, Arc<ServiceClient>>>,
-    pub entity_definitions_cache: Mutex<HashMap<Uuid, Vec<EntityDefinition>>>,
-    pub entity_attributes_cache: Mutex<HashMap<(Uuid, String), Vec<EntityAttribute>>>,
-    pub update_batches: Mutex<HashMap<String, UpdateBatch>>,
-    pub delete_batches: Mutex<HashMap<String, DeleteBatch>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct UpdateBatch {
-    pub connection_id: Uuid,
-    pub entity_set: String,
-    pub entity_logical: String,
-    pub primary_id_attribute: String,
-    pub ids: Vec<String>,
-    pub updates: HashMap<String, JsonValue>,
-}
-
-#[derive(Debug, Clone)]
-pub struct DeleteBatch {
-    pub connection_id: Uuid,
-    pub entity_set: String,
-    pub entity_logical: String,
-    pub primary_id_attribute: String,
-    pub ids: Vec<String>,
-}
 
 #[derive(Default, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchContext {
+    // Optional SQL file to load immediately after the app starts.
     pub sql_file_path: Option<String>,
+    // Optional saved connection name to select on launch.
     pub connection_name: Option<String>,
+    // Controls backend logging before the frontend is initialized.
     pub log_level: LogLevel,
+    // Opens the Tauri devtools on startup for debugging local runs.
     pub open_webview_console: bool,
-}
-
-impl Default for Database {
-    fn default() -> Self {
-        Self {
-            selected_connection_id: Mutex::new(None),
-            service_clients: AsyncMutex::new(HashMap::new()),
-            entity_definitions_cache: Mutex::new(HashMap::new()),
-            entity_attributes_cache: Mutex::new(HashMap::new()),
-            update_batches: Mutex::new(HashMap::new()),
-            delete_batches: Mutex::new(HashMap::new()),
-        }
-    }
 }
 
 fn parse_cli_args() -> LaunchContext {
@@ -85,6 +45,7 @@ fn parse_cli_args() -> LaunchContext {
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
+        // Support both "--flag value" and "--flag=value" forms for launch integration.
         if arg == "--sql-file" {
             if let Some(value) = args.next() {
                 sql_file_path = Some(value);
@@ -138,6 +99,7 @@ fn parse_cli_args() -> LaunchContext {
 }
 
 fn parse_log_level(value: &str) -> Option<LogLevel> {
+    // Accept a few human-friendly aliases from shortcuts or manual CLI invocation.
     match value.trim().to_ascii_lowercase().as_str() {
         "error" => Some(LogLevel::Error),
         "warn" | "warning" => Some(LogLevel::Warn),
@@ -156,6 +118,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Share startup context and backend state with all Tauri commands.
         .manage(launch_context.clone())
         .manage(Database::default())
         .invoke_handler(tauri::generate_handler![
@@ -167,6 +130,7 @@ pub fn run() {
             execute_sql,
             list_entity_attributes,
             list_entity_definitions,
+            list_entity_relationships,
             parse_sql_to_fetchxml,
             prepare_update_sql,
             execute_update_sql,
@@ -187,6 +151,7 @@ pub fn run() {
             let windows = app.webview_windows();
             let window = windows.get("QueryVerse").unwrap();
             if launch_context.open_webview_console {
+                // Tauri only exposes opening devtools directly, so close it immediately to avoid focus theft.
                 window.open_devtools();
                 window.close_devtools(); // Dev tools starts open but not steal focus
             }

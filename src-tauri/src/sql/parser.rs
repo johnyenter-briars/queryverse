@@ -1,7 +1,7 @@
 use crate::sql::ast::{
     AggregateExpr, AggregateFunction, AggregateTarget, CompareOp, DeleteStmt, Expr, JoinClause,
-    JoinOn, JoinType, Literal, OrderBy, Predicate, SelectColumns, SelectItem, SelectItemKind,
-    SelectStmt, UpdateAssignment, UpdateStmt,
+    JoinOn, JoinType, Literal, OrderBy, Predicate, PredicateTarget, SelectColumns, SelectItem,
+    SelectItemKind, SelectStmt, UpdateAssignment, UpdateStmt,
 };
 use crate::sql::errors::ParseError;
 use crate::sql::lexer::{Keyword, Lexer, Token, TokenKind};
@@ -82,6 +82,12 @@ impl Parser {
             Vec::new()
         };
 
+        let having = if self.consume_keyword(Keyword::Having) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
         let order_by = if self.consume_keyword(Keyword::Order) {
             self.expect_keyword(Keyword::By)?;
             self.parse_order_by()?
@@ -104,6 +110,7 @@ impl Parser {
             distinct,
             filter,
             group_by,
+            having,
             order_by,
         };
 
@@ -341,9 +348,16 @@ impl Parser {
     }
 
     fn apply_group_by_rules(&self, stmt: &mut SelectStmt) -> Result<(), ParseError> {
-        if stmt.group_by.is_empty() {
+        if stmt.group_by.is_empty() && stmt.having.is_none() {
             return Ok(());
         }
+
+        if !select_has_aggregates_or_grouping(stmt) {
+            return Err(self.error_at_current(
+                "HAVING requires GROUP BY or aggregate expressions in SELECT",
+            ));
+        }
+
         Ok(())
     }
 
@@ -380,19 +394,19 @@ impl Parser {
     }
 
     fn parse_predicate(&mut self) -> Result<Predicate, ParseError> {
-        let column = self.parse_identifier()?;
+        let left = self.parse_predicate_target()?;
 
         if self.consume_keyword(Keyword::Is) {
             let negated = self.consume_keyword(Keyword::Not);
             self.expect_keyword(Keyword::Null)?;
-            return Ok(Predicate::IsNull { column, negated });
+            return Ok(Predicate::IsNull { left, negated });
         }
 
         if self.consume_keyword(Keyword::Not) {
             if self.consume_keyword(Keyword::In) {
                 let values = self.parse_literal_list()?;
                 return Ok(Predicate::In {
-                    column,
+                    left,
                     values,
                     negated: true,
                 });
@@ -401,7 +415,7 @@ impl Parser {
             if self.consume_keyword(Keyword::Like) {
                 let pattern = self.expect_string()?;
                 return Ok(Predicate::Like {
-                    column,
+                    left,
                     pattern,
                     negated: true,
                 });
@@ -410,7 +424,7 @@ impl Parser {
             if self.consume_keyword(Keyword::Between) {
                 let (low, high) = self.parse_between_bounds()?;
                 return Ok(Predicate::Between {
-                    column,
+                    left,
                     low,
                     high,
                     negated: true,
@@ -423,7 +437,7 @@ impl Parser {
         if self.consume_keyword(Keyword::In) {
             let values = self.parse_literal_list()?;
             return Ok(Predicate::In {
-                column,
+                left,
                 values,
                 negated: false,
             });
@@ -432,7 +446,7 @@ impl Parser {
         if self.consume_keyword(Keyword::Like) {
             let pattern = self.expect_string()?;
             return Ok(Predicate::Like {
-                column,
+                left,
                 pattern,
                 negated: false,
             });
@@ -441,7 +455,7 @@ impl Parser {
         if self.consume_keyword(Keyword::Between) {
             let (low, high) = self.parse_between_bounds()?;
             return Ok(Predicate::Between {
-                column,
+                left,
                 low,
                 high,
                 negated: false,
@@ -476,17 +490,33 @@ impl Parser {
             _ => return Err(self.error_at_current("Expected a comparison operator in predicate")),
         };
 
-        if self.is_identifier() {
-            let right = self.parse_identifier()?;
+        if self.is_predicate_target_start() {
+            let right = self.parse_predicate_target()?;
             return Ok(Predicate::ColumnCompare {
-                left: column,
+                left,
                 op,
                 right,
             });
         }
 
         let value = self.parse_literal()?;
-        Ok(Predicate::Compare { column, op, value })
+        Ok(Predicate::Compare { left, op, value })
+    }
+
+    fn parse_predicate_target(&mut self) -> Result<PredicateTarget, ParseError> {
+        let ident = self.parse_identifier()?;
+        if self.consume_kind(TokenKind::LParen) {
+            let function = self.parse_aggregate_function(&ident)?;
+            let target = if self.consume_kind(TokenKind::Star) {
+                AggregateTarget::Star
+            } else {
+                AggregateTarget::Column(self.parse_identifier()?)
+            };
+            self.expect_kind(TokenKind::RParen)?;
+            Ok(PredicateTarget::Aggregate(AggregateExpr { function, target }))
+        } else {
+            Ok(PredicateTarget::Column(ident))
+        }
     }
 
     fn parse_between_bounds(&mut self) -> Result<(Literal, Literal), ParseError> {
@@ -662,6 +692,10 @@ impl Parser {
         matches!(self.current().kind, TokenKind::Identifier(_))
     }
 
+    fn is_predicate_target_start(&self) -> bool {
+        self.is_identifier()
+    }
+
     fn expect_end(&mut self) -> Result<(), ParseError> {
         match self.current().kind {
             TokenKind::Eof => Ok(()),
@@ -696,5 +730,18 @@ fn aggregate_default_alias(function: AggregateFunction, target: &AggregateTarget
     match target {
         AggregateTarget::Star => function_name.to_string(),
         AggregateTarget::Column(column) => format!("{}_{}", function_name, column),
+    }
+}
+
+fn select_has_aggregates_or_grouping(stmt: &SelectStmt) -> bool {
+    if !stmt.group_by.is_empty() {
+        return true;
+    }
+
+    match &stmt.columns {
+        SelectColumns::Columns(items) => items
+            .iter()
+            .any(|item| matches!(item.kind, SelectItemKind::Aggregate(_))),
+        SelectColumns::All => false,
     }
 }

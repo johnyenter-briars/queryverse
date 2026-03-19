@@ -8,6 +8,7 @@ type MonacoApi = typeof import("monaco-editor");
 import { useCustomEditorStyles } from "../styles/CustomEditorStyles";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { EntityAttribute } from "../binding/model/EntityAttribute";
+import { EntityRelationship } from "../binding/model/EntityRelationship";
 import {
     findSelectedEntity,
     findDeleteEntity,
@@ -33,6 +34,7 @@ interface ICustomEditor {
     debounceMs?: number;
     entityDefinitions?: EntityDefinition[];
     entityAttributes?: Record<string, EntityAttribute[]>;
+    entityRelationships?: Record<string, EntityRelationship[]>;
 }
 
 export type CustomEditorHandle = {
@@ -50,6 +52,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     readOnly,
     entityDefinitions,
     entityAttributes,
+    entityRelationships,
 }: ICustomEditor, ref) => {
     const styles = useCustomEditorStyles();
     const uncontrolledCompletelyAttributes = getTabsterAttribute({
@@ -204,6 +207,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                     position,
                     entityDefinitions,
                     entityAttributes,
+                    entityRelationships,
                     tableNames,
                     parseContext: parseContextRef.current,
                 });
@@ -211,7 +215,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                 return { suggestions };
             },
         });
-    }, [entityAttributes, entityDefinitions, language, monacoReady]);
+    }, [entityAttributes, entityDefinitions, entityRelationships, language, monacoReady]);
 
     useEffect(() => {
         if ((language ?? "sql") !== "sql") return;
@@ -267,7 +271,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
             {...uncontrolledCompletelyAttributes}
             // Monaco needs full control of Tab handling. The weaker uncontrolled
             // mode still allows Tabster to move focus out of the editor.
-            style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
+            className={styles.root}
         >
             <Editor
                 height="100%"

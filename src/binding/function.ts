@@ -8,6 +8,7 @@ import { ListConnectionsResponse } from "./model/ListConnectionsResponse";
 import { ExecuteSqlRequest } from "./model/ExecuteSqlRequest";
 import { EntityDefinition } from "./model/EntityDefinition";
 import { EntityAttribute } from "./model/EntityAttribute";
+import { EntityRelationship } from "./model/EntityRelationship";
 import { SetConnectionRequest } from "./model/SetConnectionRequest";
 import { ExecuteSqlResponse } from "./model/ExecuteSqlResponse";
 import { MultipleResponse } from "./model/MultipleResponse";
@@ -145,6 +146,19 @@ export const listEntityAttributes = async (
     );
 
     logBindingResponse("list_entity_attributes", response);
+
+    return response;
+};
+
+export const listEntityRelationships = async (
+    logicalName: string
+): Promise<MultipleResponse<EntityRelationship>> => {
+    const response: MultipleResponse<EntityRelationship> = await invoke(
+        "list_entity_relationships",
+        { logicalName }
+    );
+
+    logBindingResponse("list_entity_relationships", response);
 
     return response;
 };

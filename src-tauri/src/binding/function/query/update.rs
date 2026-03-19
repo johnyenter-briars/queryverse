@@ -3,6 +3,7 @@ use powerplatform_dataverse_client::dataverse::requestparameters::RequestParamet
 use uuid::Uuid;
 
 use crate::{
+    UpdateSet,
     Database,
     auth::{
         connection::load_connections, serviceclient::get_or_create_service_client,
@@ -120,7 +121,7 @@ pub async fn prepare_update_sql(
     )?;
 
     let token = Uuid::new_v4().to_string();
-    let batch = crate::UpdateBatch {
+    let batch = UpdateSet {
         connection_id,
         entity_set,
         entity_logical,

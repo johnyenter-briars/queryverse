@@ -6,10 +6,20 @@ export const useSchemaExplorerMenuStyles = makeStyles({
         flexDirection: "column",
         gap: tokens.spacingVerticalS,
     },
+    filterInput: {
+        width: "100%",
+    },
     tableList: {
         display: "flex",
         flexDirection: "column",
         gap: tokens.spacingVerticalXS,
+    },
+    entityButton: {
+        justifyContent: "flex-start",
+        alignItems: "flex-start",
+        textAlign: "left",
+        width: "100%",
+        ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalS),
     },
     tableRow: {
         display: "flex",
@@ -40,11 +50,34 @@ export const useSchemaExplorerMenuStyles = makeStyles({
     attributeList: {
         display: "flex",
         flexDirection: "column",
-        gap: tokens.spacingVerticalXXS,
+        gap: tokens.spacingVerticalM,
         marginLeft: tokens.spacingHorizontalXXL,
         width: "100%",
     },
+    metadataPanel: {
+        display: "flex",
+        flexDirection: "column",
+        gap: tokens.spacingVerticalM,
+        marginLeft: tokens.spacingHorizontalXXL,
+        width: "100%",
+    },
+    metadataSection: {
+        display: "flex",
+        flexDirection: "column",
+        gap: tokens.spacingVerticalXXS,
+        paddingTop: tokens.spacingVerticalXS,
+    },
+    sectionLabel: {
+        color: tokens.colorNeutralForeground2,
+        textTransform: "uppercase",
+        letterSpacing: "0.04em",
+    },
     attributeRow: {
+        display: "flex",
+        flexDirection: "column",
+        gap: tokens.spacingVerticalXXS,
+    },
+    relationshipRow: {
         display: "flex",
         flexDirection: "column",
         gap: tokens.spacingVerticalXXS,
@@ -54,5 +87,9 @@ export const useSchemaExplorerMenuStyles = makeStyles({
     },
     errorText: {
         color: tokens.colorPaletteRedForeground1,
+    },
+    emptyState: {
+        color: tokens.colorNeutralForeground3,
+        ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalS),
     },
 });

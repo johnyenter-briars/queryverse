@@ -1,41 +1,31 @@
-import { useState } from "react";
 import {
     Button,
     Divider,
+    Input,
     Text,
     Title3,
 } from "@fluentui/react-components";
-import {
-    ChevronDown24Regular,
-    ChevronRight24Regular,
-    Table24Filled,
-} from "@fluentui/react-icons";
+import { useMemo, useState } from "react";
+import { Table24Filled } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
 import { useConnectionsMenuStyles } from "../styles/ConnectionsMenuStyles";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
-import { EntityAttribute } from "../binding/model/EntityAttribute";
 import { useSchemaExplorerMenuStyles } from "../styles/SchemaExplorerMenuStyles";
 
 export interface ISchemaExplorerMenuProps {
     isOpen: boolean;
     entityDefinitions: EntityDefinition[];
-    entityAttributes: Record<string, EntityAttribute[]>;
-    attributesLoading: Record<string, boolean>;
-    attributesError: Record<string, string | null>;
-    onLoadAttributes: (logicalName: string) => void;
+    onOpenEntity: (entity: EntityDefinition) => void;
 }
 
 export function SchemaExplorerMenu({
     isOpen,
     entityDefinitions,
-    entityAttributes,
-    attributesLoading,
-    attributesError,
-    onLoadAttributes,
+    onOpenEntity,
 }: ISchemaExplorerMenuProps) {
     const styles = useConnectionsMenuStyles();
     const localStyles = useSchemaExplorerMenuStyles();
-    const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
+    const [filterText, setFilterText] = useState("");
     const flyoutClasses = combineClasses(
         styles.flyoutBase,
         isOpen && styles.flyoutOpen
@@ -53,21 +43,26 @@ export function SchemaExplorerMenu({
         return label ?? null;
     };
 
-    const toggleTable = (logicalName: string) => {
-        if (!logicalName) return;
-        setExpandedTables((prev) => {
-            const next = new Set(prev);
-            if (next.has(logicalName)) {
-                next.delete(logicalName);
-            } else {
-                next.add(logicalName);
-                if (!entityAttributes[logicalName]) {
-                    onLoadAttributes(logicalName);
-                }
-            }
-            return next;
+    const filteredEntities = useMemo(() => {
+        const normalizedFilter = filterText.trim().toLowerCase();
+        if (!normalizedFilter) return entityDefinitions;
+
+        return entityDefinitions.filter((entity) => {
+            const displayName =
+                getDisplayName(entity.DisplayName) ??
+                entity.SchemaName ??
+                entity.LogicalName;
+
+            return [
+                displayName,
+                entity.LogicalName,
+                entity.SchemaName,
+                entity.EntitySetName,
+            ]
+                .filter(Boolean)
+                .some((value) => value!.toLowerCase().includes(normalizedFilter));
         });
-    };
+    }, [entityDefinitions, filterText]);
 
     return (
         <div
@@ -79,13 +74,21 @@ export function SchemaExplorerMenu({
                     <div className={styles.sectionHeader}>
                         <div className={styles.sectionTitle}>
                             <Title3>Schema Explorer</Title3>
+                            <Text size={200} className={styles.sectionSubtitle}>
+                                Select an entity to open its schema in a tab.
+                            </Text>
                         </div>
                     </div>
                     <Divider className={styles.sectionDivider} />
                     <div className={localStyles.body}>
-
+                        <Input
+                            value={filterText}
+                            onChange={(_, data) => setFilterText(data.value)}
+                            placeholder="Filter entities"
+                            className={localStyles.filterInput}
+                        />
                         <div className={localStyles.tableList}>
-                            {entityDefinitions.map((table, index) => {
+                            {filteredEntities.map((table, index) => {
                                 const displayName =
                                     getDisplayName(table.DisplayName) ??
                                     table.SchemaName ??
@@ -95,80 +98,32 @@ export function SchemaExplorerMenu({
                                     table.SchemaName ??
                                     table.EntitySetName ??
                                     `table-${index}`;
-                                const isExpanded = table.LogicalName
-                                    ? expandedTables.has(table.LogicalName)
-                                    : false;
-                                const logicalName = table.LogicalName;
-                                const attributes = logicalName
-                                    ? entityAttributes[logicalName]
-                                    : undefined;
-                                const isLoading = logicalName
-                                    ? attributesLoading[logicalName]
-                                    : false;
-                                const error = logicalName
-                                    ? attributesError[logicalName]
-                                    : null;
+
                                 return (
-                                    <div
+                                    <Button
                                         key={tableKey}
-                                        className={localStyles.tableRow}
+                                        appearance="subtle"
+                                        className={localStyles.entityButton}
+                                        icon={<Table24Filled />}
+                                        onClick={() => onOpenEntity(table)}
                                     >
-                                        <div className={localStyles.tableHeader}>
-                                            <Button
-                                                className={localStyles.toggleButton}
-                                                appearance="subtle"
-                                                icon={
-                                                    isExpanded
-                                                        ? <ChevronDown24Regular />
-                                                        : <ChevronRight24Regular />
-                                                }
-                                                onClick={() => toggleTable(logicalName)}
-                                            />
-                                            <Table24Filled />
-                                            <div className={localStyles.tableText}>
-                                                <Text>{displayName}</Text>
-                                                <Text
-                                                    size={200}
-                                                    className={localStyles.tableMeta}
-                                                >
-                                                    {table.LogicalName} • {table.EntitySetName}
-                                                </Text>
-                                            </div>
+                                        <div className={localStyles.tableText}>
+                                            <Text>{displayName}</Text>
+                                            <Text
+                                                size={200}
+                                                className={localStyles.tableMeta}
+                                            >
+                                                {table.LogicalName} • {table.EntitySetName}
+                                            </Text>
                                         </div>
-                                        {isExpanded ? (
-                                            <div className={localStyles.attributeList}>
-                                                {isLoading ? (
-                                                    <Text size={200}>Loading attributes...</Text>
-                                                ) : error ? (
-                                                    <Text size={200} className={localStyles.errorText}>
-                                                        {error}
-                                                    </Text>
-                                                ) : attributes?.length ? (
-                                                    attributes.map((attribute) => (
-                                                        <div
-                                                            key={attribute.LogicalName}
-                                                            className={localStyles.attributeRow}
-                                                        >
-                                                            <Text>{attribute.SchemaName}</Text>
-                                                            <Text
-                                                                size={200}
-                                                                className={localStyles.attributeMeta}
-                                                            >
-                                                                {attribute.LogicalName}
-                                                                {attribute.AttributeType
-                                                                    ? ` • ${attribute.AttributeType}`
-                                                                    : ""}
-                                                            </Text>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <Text size={200}>No readable attributes.</Text>
-                                                )}
-                                            </div>
-                                        ) : null}
-                                    </div>
+                                    </Button>
                                 );
                             })}
+                            {!filteredEntities.length ? (
+                                <Text size={200} className={localStyles.emptyState}>
+                                    No entities match the current filter.
+                                </Text>
+                            ) : null}
                         </div>
                     </div>
                 </div>
