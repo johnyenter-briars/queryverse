@@ -112,7 +112,13 @@ pub(crate) fn value_to_string(value: &Value) -> Option<String> {
         Value::String(value) => Some(value.clone()),
         Value::Int(value) => Some(value.to_string()),
         Value::Float(value) => Some(value.to_string()),
+        Value::Decimal(value) => Some(value.to_string()),
         Value::Boolean(value) => Some(value.to_string()),
+        Value::DateTime(value) => Some(value.to_rfc3339()),
+        Value::Guid(value) => Some(value.to_string()),
+        Value::Money(value) => Some(value.value.to_string()),
+        Value::OptionSetValue(value) => Some(value.value.to_string()),
+        Value::OptionSetValueCollection(value) => Some(format!("{:?}", value.values)),
         Value::EntityReference(reference) => Some(reference.id.to_string()),
         Value::Null => None,
     }

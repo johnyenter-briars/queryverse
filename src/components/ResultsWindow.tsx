@@ -19,7 +19,14 @@ import {
     useScrollbarWidth,
     TableCellLayout,
 } from "@fluentui/react-components";
-import { ResultRow, Value, type EntityReference } from "../binding/model/ResultRow";
+import {
+    ResultRow,
+    Value,
+    type EntityReference,
+    type MoneyValue,
+    type OptionSetValue,
+    type OptionSetValueCollection,
+} from "../binding/model/ResultRow";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { SqlQueryMetadata } from "../binding/model/SqlQueryMetadata";
 import {
@@ -46,20 +53,48 @@ function isEntityReference(value: Value): value is EntityReference {
     );
 }
 
-function renderValue(value: Value): React.ReactNode {
+function isMoneyValue(value: Value): value is MoneyValue {
+    return value !== null && typeof value === "object" && "value" in value;
+}
+
+function isOptionSetValue(value: Value): value is OptionSetValue {
+    return (
+        value !== null &&
+        typeof value === "object" &&
+        "value" in value &&
+        typeof value.value === "number"
+    );
+}
+
+function isOptionSetValueCollection(value: Value): value is OptionSetValueCollection {
+    return (
+        value !== null &&
+        typeof value === "object" &&
+        "values" in value &&
+        Array.isArray(value.values)
+    );
+}
+
+function formatValue(value: Value): string {
     if (value === null || value === undefined) return "NULL";
     if (isEntityReference(value)) {
-        return value.id;
+        return value.name?.trim() || value.id;
+    }
+    if (isOptionSetValueCollection(value)) {
+        return value.values.join(", ");
+    }
+    if (isOptionSetValue(value) || isMoneyValue(value)) {
+        return String(value.value);
     }
     return String(value);
 }
 
+function renderValue(value: Value): React.ReactNode {
+    return formatValue(value);
+}
+
 function valueToClipboardText(value: Value): string {
-    if (value === null || value === undefined) return "NULL";
-    if (isEntityReference(value)) {
-        return value.id;
-    }
-    return String(value);
+    return formatValue(value);
 }
 
 export interface IResultsWindowProps {
@@ -86,6 +121,12 @@ function getRowId(row: ResultRow, primaryIdAttribute?: string): string {
     }
     if (isEntityReference(value)) {
         return value.id;
+    }
+    if (isOptionSetValueCollection(value)) {
+        return value.values.join(",");
+    }
+    if (isOptionSetValue(value) || isMoneyValue(value)) {
+        return String(value.value);
     }
     return String(value);
 }

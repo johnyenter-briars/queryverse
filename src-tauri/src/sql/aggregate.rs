@@ -675,6 +675,9 @@ fn numeric_value(value: &Value) -> Option<(f64, bool)> {
     match value {
         Value::Int(i) => Some((*i as f64, true)),
         Value::Float(f) => Some((*f, false)),
+        Value::Decimal(value) => decimal_to_f64(value).map(|value| (value, false)),
+        Value::Money(value) => decimal_to_f64(&value.value).map(|value| (value, false)),
+        Value::OptionSetValue(value) => Some((value.value as f64, true)),
         _ => None,
     }
 }
@@ -683,8 +686,14 @@ fn value_key(value: &Value) -> String {
     match value {
         Value::Int(i) => i.to_string(),
         Value::Float(f) => f.to_string(),
+        Value::Decimal(value) => value.to_string(),
         Value::String(s) => s.clone(),
         Value::Boolean(b) => b.to_string(),
+        Value::DateTime(value) => value.to_rfc3339(),
+        Value::Guid(value) => value.to_string(),
+        Value::Money(value) => value.value.to_string(),
+        Value::OptionSetValue(value) => value.value.to_string(),
+        Value::OptionSetValueCollection(value) => format!("{:?}", value.values),
         Value::EntityReference(reference) => reference.id.to_string(),
         Value::Null => "null".to_string(),
     }
@@ -696,12 +705,35 @@ fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
         (Value::Int(a), Value::Float(b)) => (*a as f64)
             .partial_cmp(b)
             .unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Int(a), Value::Decimal(b)) => (*a as f64)
+            .partial_cmp(&decimal_to_f64(b).unwrap_or_default())
+            .unwrap_or(std::cmp::Ordering::Equal),
         (Value::Float(a), Value::Int(b)) => a
             .partial_cmp(&(*b as f64))
             .unwrap_or(std::cmp::Ordering::Equal),
         (Value::Float(a), Value::Float(b)) => a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Float(a), Value::Decimal(b)) => a
+            .partial_cmp(&decimal_to_f64(b).unwrap_or_default())
+            .unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Decimal(a), Value::Int(b)) => a
+            .to_string()
+            .parse::<f64>()
+            .unwrap_or_default()
+            .partial_cmp(&(*b as f64))
+            .unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Decimal(a), Value::Float(b)) => a
+            .to_string()
+            .parse::<f64>()
+            .unwrap_or_default()
+            .partial_cmp(b)
+            .unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Decimal(a), Value::Decimal(b)) => a.cmp(b),
         (Value::String(a), Value::String(b)) => a.cmp(b),
         (Value::Boolean(a), Value::Boolean(b)) => a.cmp(b),
+        (Value::DateTime(a), Value::DateTime(b)) => a.cmp(b),
+        (Value::Guid(a), Value::Guid(b)) => a.cmp(b),
+        (Value::Money(a), Value::Money(b)) => a.value.cmp(&b.value),
+        (Value::OptionSetValue(a), Value::OptionSetValue(b)) => a.value.cmp(&b.value),
         _ => value_key(left).cmp(&value_key(right)),
     }
 }
@@ -1125,7 +1157,13 @@ fn scalar_value_to_string(value: &Value) -> Option<String> {
         Value::String(value) => Some(value.clone()),
         Value::Int(value) => Some(value.to_string()),
         Value::Float(value) => Some(value.to_string()),
+        Value::Decimal(value) => Some(value.to_string()),
         Value::Boolean(value) => Some(value.to_string()),
+        Value::DateTime(value) => Some(value.to_rfc3339()),
+        Value::Guid(value) => Some(value.to_string()),
+        Value::Money(value) => Some(value.value.to_string()),
+        Value::OptionSetValue(value) => Some(value.value.to_string()),
+        Value::OptionSetValueCollection(value) => Some(format!("{:?}", value.values)),
         Value::EntityReference(reference) => Some(reference.id.to_string()),
         Value::Null => None,
     }
@@ -1153,6 +1191,10 @@ fn like_match(value: &str, pattern: &str) -> bool {
         &value.chars().collect::<Vec<_>>(),
         &pattern.chars().collect::<Vec<_>>(),
     )
+}
+
+fn decimal_to_f64<T: ToString>(value: &T) -> Option<f64> {
+    value.to_string().parse::<f64>().ok()
 }
 
 fn like_match_impl(value: &[char], pattern: &[char]) -> bool {
