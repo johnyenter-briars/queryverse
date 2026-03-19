@@ -639,6 +639,21 @@ pub fn apply_having(
     Ok(filtered)
 }
 
+pub fn apply_where(rows: Vec<ResultRow>, stmt: &SelectStmt) -> Result<Vec<ResultRow>, String> {
+    let Some(expr) = &stmt.filter else {
+        return Ok(rows);
+    };
+
+    let mut filtered = Vec::with_capacity(rows.len());
+    for row in rows {
+        if evaluate_expr(&row, expr, stmt)? {
+            filtered.push(row);
+        }
+    }
+
+    Ok(filtered)
+}
+
 fn lookup_base_attribute(key: &str) -> Option<String> {
     if !key.starts_with('_') || !key.ends_with("_value") {
         return None;
@@ -742,13 +757,13 @@ fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
 mod tests {
     use super::{
         AggregateTarget, OrderBy, SelectColumns, aggregate_fallback_plan, aggregate_rows,
-        apply_having, sort_rows_by_order,
+        apply_having, apply_where, sort_rows_by_order,
     };
     use crate::sql::{
         AggregateExpr, AggregateFunction, CompareOp, Expr, Literal, Predicate, PredicateTarget,
         SelectItem, SelectItemKind, SelectStmt,
     };
-    use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
+    use powerplatform_dataverse_client::dataverse::entity::{Entity, EntityReference, Value};
     use uuid::Uuid;
 
     fn make_entity(group_value: Option<&str>) -> Entity {
@@ -1005,6 +1020,75 @@ mod tests {
             Some(Value::String(value)) if value == "CA"
         ));
         assert!(matches!(rows[0].attributes.get("count"), Some(Value::Int(2))));
+    }
+
+    #[test]
+    fn where_filters_by_lookup_type_companion_column() {
+        let stmt = SelectStmt {
+            columns: SelectColumns::Columns(vec![
+                SelectItem {
+                    kind: SelectItemKind::Attribute("ownerid".to_string()),
+                    alias: None,
+                },
+                SelectItem {
+                    kind: SelectItemKind::Attribute("owneridtype".to_string()),
+                    alias: None,
+                },
+            ]),
+            entity: "account".to_string(),
+            entity_alias: None,
+            joins: Vec::new(),
+            top: Some(20),
+            distinct: false,
+            filter: Some(Expr::Predicate(Predicate::Compare {
+                left: PredicateTarget::Column("owneridtype".to_string()),
+                op: CompareOp::Eq,
+                value: Literal::String("systemuser".to_string()),
+            })),
+            group_by: Vec::new(),
+            having: None,
+            order_by: Vec::new(),
+        };
+
+        let rows = vec![
+            ResultRow {
+                attributes: HashMap::from([
+                    (
+                        "ownerid".to_string(),
+                        Value::EntityReference(EntityReference {
+                            id: Uuid::nil(),
+                            logical_name: "systemuser".to_string(),
+                            name: Some("Jane Doe".to_string()),
+                        }),
+                    ),
+                    (
+                        "owneridtype".to_string(),
+                        Value::String("systemuser".to_string()),
+                    ),
+                ]),
+            },
+            ResultRow {
+                attributes: HashMap::from([
+                    (
+                        "ownerid".to_string(),
+                        Value::EntityReference(EntityReference {
+                            id: Uuid::nil(),
+                            logical_name: "team".to_string(),
+                            name: Some("Sales".to_string()),
+                        }),
+                    ),
+                    ("owneridtype".to_string(), Value::String("team".to_string())),
+                ]),
+            },
+        ];
+
+        let rows = apply_where(rows, &stmt).expect("where");
+
+        assert_eq!(rows.len(), 1);
+        assert!(matches!(
+            rows[0].attributes.get("owneridtype"),
+            Some(Value::String(value)) if value == "systemuser"
+        ));
     }
 }
 

@@ -15,7 +15,10 @@ use crate::{
     },
     sql::{
         self, aggregate,
-        util::{assign_row_numbers, fill_entity_reference_names},
+        util::{
+            assign_row_numbers, fill_entity_reference_names,
+            filter_requires_local_companion_evaluation, push_down_lookup_type_filters,
+        },
     },
 };
 use powerplatform_dataverse_client::{
@@ -102,7 +105,19 @@ pub async fn execute_sql_with_client(
     }
 
     let stmt = sql::parse(sql_text).map_err(|e| e.to_string())?;
-    let parsed = sql::to_fetchxml(&stmt).map_err(|e| e.to_string())?;
+    let mut execution_stmt = stmt.clone();
+    let _ = push_down_lookup_type_filters(&mut execution_stmt);
+    let requires_local_companion_filter =
+        filter_requires_local_companion_evaluation(execution_stmt.filter.as_ref());
+    let fetch_stmt = if requires_local_companion_filter {
+        let mut fetch_stmt = execution_stmt.clone();
+        fetch_stmt.filter = None;
+        fetch_stmt.top = None;
+        fetch_stmt
+    } else {
+        execution_stmt.clone()
+    };
+    let parsed = sql::to_fetchxml(&fetch_stmt).map_err(|e| e.to_string())?;
 
     let columns_order = parsed
         .column_outputs
@@ -215,6 +230,12 @@ pub async fn execute_sql_with_client(
             .map(|entity| aggregate::entity_to_result_row(entity, &columns_order))
             .collect();
         fill_entity_reference_names(&mut rows, &columns_order);
+        if requires_local_companion_filter {
+            rows = aggregate::apply_where(rows, &stmt)?;
+            if let Some(top) = stmt.top {
+                rows.truncate(top as usize);
+            }
+        }
         assign_row_numbers(&mut rows);
         (rows, "Multiple results found".to_string(), true)
     };
