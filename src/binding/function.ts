@@ -20,10 +20,11 @@ import { LaunchContext } from "./model/LaunchContext";
 import { Settings } from "./model/Settings";
 import { SettingsResponse } from "./model/SettingsResponse";
 import { UpdateSqlPreviewResponse } from "./model/UpdateSqlPreviewResponse";
-import { UpdateSqlExecuteResponse } from "./model/UpdateSqlExecuteResponse";
+import { UpdateSqlJobStartResponse } from "./model/UpdateSqlJobStartResponse";
 import { DeleteSqlPreviewResponse } from "./model/DeleteSqlPreviewResponse";
 import { DeleteSqlExecuteResponse } from "./model/DeleteSqlExecuteResponse";
 import { Connection } from "./model/Connection";
+import { BackgroundJobStatusResponse } from "./model/BackgroundJobStatusResponse";
 import { logDebug } from "../utility/logging";
 
 const summarizeResponse = (response: unknown): unknown => {
@@ -41,6 +42,10 @@ const summarizeResponse = (response: unknown): unknown => {
     if ("deleted" in raw) summary.deleted = raw.deleted;
     if ("failed" in raw) summary.failed = raw.failed;
     if ("token" in raw) summary.token = "[redacted]";
+    if ("jobId" in raw) summary.jobId = "[redacted]";
+    if ("state" in raw) summary.state = raw.state;
+    if ("processed" in raw) summary.processed = raw.processed;
+    if ("total" in raw) summary.total = raw.total;
 
     return Object.keys(summary).length === 0 ? "[object]" : summary;
 };
@@ -237,12 +242,24 @@ export const prepareUpdateSql = async (
 
 export const executeUpdateSql = async (
     token: string
-): Promise<UpdateSqlExecuteResponse> => {
-    const response: UpdateSqlExecuteResponse = await invoke("execute_update_sql", {
+): Promise<UpdateSqlJobStartResponse> => {
+    const response: UpdateSqlJobStartResponse = await invoke("execute_update_sql", {
         token,
     });
 
     logBindingResponse("execute_update_sql", response);
+
+    return response;
+};
+
+export const getBackgroundJobStatus = async (
+    jobId: string
+): Promise<BackgroundJobStatusResponse> => {
+    const response: BackgroundJobStatusResponse = await invoke("get_background_job_status", {
+        jobId,
+    });
+
+    logBindingResponse("get_background_job_status", response);
 
     return response;
 };

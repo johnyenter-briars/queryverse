@@ -16,15 +16,20 @@ pub(crate) fn clamp_batch_size(value: u32) -> usize {
     value.clamp(1, 1000) as usize
 }
 
-pub(crate) async fn execute_update_batches(
+pub(crate) async fn execute_update_batches_with_progress<F>(
     service_client: &ServiceClient,
     batch: &UpdateSet,
     request_parameters: &RequestParameters,
     batch_size: usize,
-) -> Result<(usize, usize, Vec<String>), String> {
+    mut on_progress: F,
+) -> Result<(usize, usize, Vec<String>), String>
+where
+    F: FnMut(usize, usize),
+{
     let mut updated = 0usize;
     let mut failed = 0usize;
     let mut errors = Vec::new();
+    let total = batch.ids.len();
 
     for ids in batch.ids.chunks(batch_size) {
         let mut requests = Vec::new();
@@ -76,6 +81,8 @@ pub(crate) async fn execute_update_batches(
                 errors.push(format!("{record_id}: {}", fault.message));
             }
         }
+
+        on_progress(updated + failed, total);
     }
 
     Ok((updated, failed, errors))

@@ -1,3 +1,5 @@
+pub mod backgroundjobstatus;
+pub mod backgroundjobstatusresponse;
 pub mod connection;
 pub mod createconnectionpayload;
 pub mod createconnectionrequest;
@@ -22,4 +24,5 @@ pub mod settingsresponse;
 pub mod updateconnectionrequest;
 pub mod updateconnectionresponse;
 pub mod updatesqlexecuteresponse;
+pub mod updatesqljobstartresponse;
 pub mod updatesqlpreviewresponse;

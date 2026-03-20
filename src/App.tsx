@@ -34,6 +34,7 @@ import {
     executeDeleteSql,
     executeSql,
     executeUpdateSql,
+    getBackgroundJobStatus,
     getSettings,
     getLaunchContext,
     listConnections,
@@ -59,6 +60,7 @@ import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 import { DEFAULT_SETTINGS, Settings } from "./binding/model/Settings";
 import { logError } from "./utility/logging";
 import { AppToaster, useAppToast } from "./utility/toast";
+import { BackgroundJobStatus } from "./binding/model/BackgroundJobStatus";
 
 const DEFAULT_QUERY = "select top 20 *\nfrom account";
 const isUpdateQuery = (sql: string) => /^\s*update\b/i.test(sql);
@@ -171,6 +173,7 @@ export default function App() {
     const cliInitRef = useRef(false);
     const tabContextMenuRef = useRef<HTMLDivElement | null>(null);
     const editorRef = useRef<CustomEditorHandle | null>(null);
+    const jobPollersRef = useRef<Map<string, number>>(new Map());
     const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
     const [debugEnabled, setDebugEnabled] = useState(false);
     const [tabContextMenu, setTabContextMenu] = useState<{
@@ -268,6 +271,15 @@ export default function App() {
 
         return () => {
             cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            for (const timeoutId of jobPollersRef.current.values()) {
+                window.clearTimeout(timeoutId);
+            }
+            jobPollersRef.current.clear();
         };
     }, []);
 
@@ -403,6 +415,98 @@ export default function App() {
             action: "update",
             requestParameterStatuses: [],
         });
+    };
+
+    const clearJobPoller = (jobId: string) => {
+        const timeoutId = jobPollersRef.current.get(jobId);
+        if (timeoutId !== undefined) {
+            window.clearTimeout(timeoutId);
+            jobPollersRef.current.delete(jobId);
+        }
+    };
+
+    const buildJobProgressRow = (status: BackgroundJobStatus): ResultRow => {
+        const progressPercent =
+            status.total > 0 ? Math.round((status.processed / status.total) * 100) : 0;
+
+        return {
+            attributes: {
+                status: status.state,
+                processed: status.processed,
+                total: status.total,
+                progressPercent,
+                message: status.message,
+            },
+        };
+    };
+
+    const startUpdateJobPolling = (jobId: string, tabId: number) => {
+        const poll = async () => {
+            try {
+                const response = await getBackgroundJobStatus(jobId);
+                if (!response.success) {
+                    throw new Error(response.message || "Failed to load background job status.");
+                }
+
+                const status = response.value;
+                const updateResult =
+                    status.result && "Update" in status.result ? status.result.Update : null;
+
+                if (status.state === "running") {
+                    updateTab(tabId, (tab) => ({
+                        ...tab,
+                        results: [buildJobProgressRow(status)],
+                        queryMetadata: null,
+                        executeError: null,
+                        isExecuting: true,
+                    }));
+
+                    const timeoutId = window.setTimeout(() => {
+                        void poll();
+                    }, 1000);
+                    jobPollersRef.current.set(jobId, timeoutId);
+                    return;
+                }
+
+                clearJobPoller(jobId);
+
+                if (updateResult) {
+                    const summaryAttributes: ResultRow["attributes"] = {
+                        updated: updateResult.updated,
+                        failed: updateResult.failed,
+                        message: updateResult.message,
+                    };
+
+                    if (updateResult.errors.length) {
+                        summaryAttributes.firstError = updateResult.errors[0];
+                    }
+
+                    updateTab(tabId, (tab) => ({
+                        ...tab,
+                        results: [{ attributes: summaryAttributes }],
+                        queryMetadata: null,
+                        executeError: null,
+                        isExecuting: false,
+                    }));
+                    return;
+                }
+
+                updateTab(tabId, (tab) => ({
+                    ...tab,
+                    executeError: status.message || "Background update job failed.",
+                    isExecuting: false,
+                }));
+            } catch (error) {
+                clearJobPoller(jobId);
+                updateTab(tabId, (tab) => ({
+                    ...tab,
+                    executeError: getErrorMessage(error),
+                    isExecuting: false,
+                }));
+            }
+        };
+
+        void poll();
     };
 
     const buildRequestParameterStatuses = (
@@ -1106,39 +1210,47 @@ export default function App() {
         }));
 
         try {
-            let summaryAttributes: ResultRow["attributes"];
-            let errors: string[] = [];
-
             if (dataChangeConfirm.action === "delete") {
                 const response = await executeDeleteSql(dataChangeConfirm.token);
-                summaryAttributes = {
+                const summaryAttributes: ResultRow["attributes"] = {
                     deleted: response.deleted,
                     failed: response.failed,
                     message: response.message,
                 };
-                errors = response.errors;
-            } else {
-                const response = await executeUpdateSql(dataChangeConfirm.token);
-                summaryAttributes = {
-                    updated: response.updated,
-                    failed: response.failed,
-                    message: response.message,
-                };
-                errors = response.errors;
+                if (response.errors.length) {
+                    summaryAttributes.firstError = response.errors[0];
+                }
+                const summaryRow: ResultRow = { attributes: summaryAttributes };
+
+                updateTab(dataChangeConfirm.tabId, (tab) => ({
+                    ...tab,
+                    results: [summaryRow],
+                    queryMetadata: null,
+                    executeError: null,
+                    isExecuting: false,
+                }));
+                return;
             }
 
-            if (errors.length) {
-                summaryAttributes.firstError = errors[0];
-            }
-            const summaryRow: ResultRow = { attributes: summaryAttributes };
-
+            const response = await executeUpdateSql(dataChangeConfirm.token);
             updateTab(dataChangeConfirm.tabId, (tab) => ({
                 ...tab,
-                results: [summaryRow],
+                results: [
+                    {
+                        attributes: {
+                            status: "queued",
+                            processed: 0,
+                            total: dataChangeConfirm.count,
+                            progressPercent: 0,
+                            message: response.message,
+                        },
+                    },
+                ],
                 queryMetadata: null,
                 executeError: null,
-                isExecuting: false,
+                isExecuting: true,
             }));
+            startUpdateJobPolling(response.jobId, dataChangeConfirm.tabId);
         } catch (error) {
             updateTab(dataChangeConfirm.tabId, (tab) => ({
                 ...tab,
