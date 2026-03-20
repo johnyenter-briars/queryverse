@@ -1,3 +1,4 @@
+pub mod backgroundjobresultresponse;
 pub mod backgroundjobstatus;
 pub mod backgroundjobstatusresponse;
 pub mod connection;

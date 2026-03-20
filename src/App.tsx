@@ -34,6 +34,7 @@ import {
     executeDeleteSql,
     executeSql,
     executeUpdateSql,
+    getBackgroundJobResult,
     getBackgroundJobStatus,
     getSettings,
     getLaunchContext,
@@ -58,7 +59,8 @@ import { EntityAttribute } from "./binding/model/EntityAttribute";
 import { EntityRelationship } from "./binding/model/EntityRelationship";
 import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 import { DEFAULT_SETTINGS, Settings } from "./binding/model/Settings";
-import { logError } from "./utility/logging";
+import { UpdateSqlExecuteResponse } from "./binding/model/UpdateSqlExecuteResponse";
+import { logDebug, logError } from "./utility/logging";
 import { AppToaster, useAppToast } from "./utility/toast";
 import { BackgroundJobStatus } from "./binding/model/BackgroundJobStatus";
 
@@ -440,6 +442,23 @@ export default function App() {
         };
     };
 
+    const buildUpdateSummaryRow = (response: UpdateSqlExecuteResponse): ResultRow => {
+        const attributes: ResultRow["attributes"] = {
+            success: response.success ? "true" : "false",
+            updated: response.updated,
+            failed: response.failed,
+            message: response.message,
+            errorCount: response.errors.length,
+            errors: response.errors.join("\n"),
+        };
+
+        if (response.errors.length > 0) {
+            attributes.firstError = response.errors[0];
+        }
+
+        return { attributes };
+    };
+
     const startUpdateJobPolling = (jobId: string, tabId: number) => {
         const poll = async () => {
             try {
@@ -449,8 +468,17 @@ export default function App() {
                 }
 
                 const status = response.value;
-                const updateResult =
-                    status.result && "Update" in status.result ? status.result.Update : null;
+
+                logDebug(
+                    "Update job poll status",
+                    {
+                        jobId,
+                        state: status.state,
+                        processed: status.processed,
+                        total: status.total,
+                    },
+                    "queryverse::frontend::jobs"
+                );
 
                 if (status.state === "running") {
                     updateTab(tabId, (tab) => ({
@@ -470,20 +498,31 @@ export default function App() {
 
                 clearJobPoller(jobId);
 
-                if (updateResult) {
-                    const summaryAttributes: ResultRow["attributes"] = {
-                        updated: updateResult.updated,
-                        failed: updateResult.failed,
-                        message: updateResult.message,
-                    };
+                if (status.state === "success" || status.state === "failed") {
+                    logDebug(
+                        "Fetching background job result",
+                        {
+                            jobId,
+                            state: status.state,
+                        },
+                        "queryverse::frontend::jobs"
+                    );
 
-                    if (updateResult.errors.length) {
-                        summaryAttributes.firstError = updateResult.errors[0];
-                    }
-
+                    const resultResponse = await getBackgroundJobResult(jobId);
+                    logDebug(
+                        "Fetched background job result",
+                        {
+                            jobId,
+                            success: resultResponse.success,
+                            updated: resultResponse.value.updated,
+                            failed: resultResponse.value.failed,
+                            message: resultResponse.message,
+                        },
+                        "queryverse::frontend::jobs"
+                    );
                     updateTab(tabId, (tab) => ({
                         ...tab,
-                        results: [{ attributes: summaryAttributes }],
+                        results: [buildUpdateSummaryRow(resultResponse.value)],
                         queryMetadata: null,
                         executeError: null,
                         isExecuting: false,
@@ -1213,9 +1252,12 @@ export default function App() {
             if (dataChangeConfirm.action === "delete") {
                 const response = await executeDeleteSql(dataChangeConfirm.token);
                 const summaryAttributes: ResultRow["attributes"] = {
+                    success: response.success ? "true" : "false",
                     deleted: response.deleted,
                     failed: response.failed,
                     message: response.message,
+                    errorCount: response.errors.length,
+                    errors: response.errors.join("\n"),
                 };
                 if (response.errors.length) {
                     summaryAttributes.firstError = response.errors[0];

@@ -13,7 +13,7 @@ use tauri::Manager;
 use crate::binding::function::{
     connection::{create_connection, get_default_connection, list_connections, set_connection, update_connection},
     file::{open_sql_file, open_sql_file_path, save_sql_file, save_sql_file_as},
-    job::get_background_job_status,
+    job::{get_background_job_result, get_background_job_status},
     launch::get_launch_context,
     logging::log_frontend,
     query::{
@@ -148,6 +148,7 @@ pub fn run() {
             get_settings,
             save_settings,
             get_background_job_status,
+            get_background_job_result,
             log_frontend
         ])
         .setup(move |app| {

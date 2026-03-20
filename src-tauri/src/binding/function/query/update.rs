@@ -15,7 +15,7 @@ use crate::{
         updatesqljobstartresponse::UpdateSqlJobStartResponse,
         updatesqlpreviewresponse::UpdateSqlPreviewResponse,
     },
-    jobs::{complete_update_job, fail_job, insert_job, update_job_progress},
+    jobs::{complete_update_job, fail_job, insert_job, store_job_result_rows, update_job_progress},
     sql,
 };
 
@@ -217,6 +217,7 @@ pub async fn execute_update_sql(
     .await;
 
     let job_store = database.background_jobs.clone();
+    let job_result_store = database.background_job_results.clone();
     let batch_size = clamp_batch_size(settings.dataverse_default_batch_size);
     let queued_job_id = job_id.clone();
     tauri::async_runtime::spawn(async move {
@@ -261,17 +262,20 @@ pub async fn execute_update_sql(
                 } else {
                     format!("Updated {} record(s) with {} error(s).", updated, failed)
                 };
+                let response = UpdateSqlExecuteResponse {
+                    success,
+                    message,
+                    updated,
+                    failed,
+                    errors,
+                };
+
+                store_job_result_rows(&job_result_store, &queued_job_id, response.clone()).await;
 
                 complete_update_job(
                     &job_store,
                     &queued_job_id,
-                    UpdateSqlExecuteResponse {
-                        success,
-                        message,
-                        updated,
-                        failed,
-                        errors,
-                    },
+                    response,
                 )
                 .await;
             }

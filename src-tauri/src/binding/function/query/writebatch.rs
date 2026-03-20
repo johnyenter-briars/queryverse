@@ -168,7 +168,7 @@ fn json_attributes_to_dataverse_values(
         .collect()
 }
 
-fn json_to_dataverse_value(value: &JsonValue) -> Result<Value, String> {
+pub(crate) fn json_to_dataverse_value(value: &JsonValue) -> Result<Value, String> {
     match value {
         JsonValue::Null => Ok(Value::Null),
         JsonValue::Bool(value) => Ok(Value::Boolean(*value)),

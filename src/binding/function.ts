@@ -25,6 +25,7 @@ import { DeleteSqlPreviewResponse } from "./model/DeleteSqlPreviewResponse";
 import { DeleteSqlExecuteResponse } from "./model/DeleteSqlExecuteResponse";
 import { Connection } from "./model/Connection";
 import { BackgroundJobStatusResponse } from "./model/BackgroundJobStatusResponse";
+import { BackgroundJobResultResponse } from "./model/BackgroundJobResultResponse";
 import { logDebug } from "../utility/logging";
 
 const summarizeResponse = (response: unknown): unknown => {
@@ -41,11 +42,19 @@ const summarizeResponse = (response: unknown): unknown => {
     if ("updated" in raw) summary.updated = raw.updated;
     if ("deleted" in raw) summary.deleted = raw.deleted;
     if ("failed" in raw) summary.failed = raw.failed;
-    if ("token" in raw) summary.token = "[redacted]";
-    if ("jobId" in raw) summary.jobId = "[redacted]";
+    if ("token" in raw) summary.token = raw.token;
+    if ("jobId" in raw) summary.jobId = raw.jobId;
     if ("state" in raw) summary.state = raw.state;
     if ("processed" in raw) summary.processed = raw.processed;
     if ("total" in raw) summary.total = raw.total;
+    if ("value" in raw && raw.value && typeof raw.value === "object") {
+        const value = raw.value as Record<string, unknown>;
+        if ("jobId" in value) summary.valueJobId = value.jobId;
+        if ("state" in value) summary.valueState = value.state;
+        if ("processed" in value) summary.valueProcessed = value.processed;
+        if ("total" in value) summary.valueTotal = value.total;
+        if (Array.isArray(raw.value)) summary.valueCount = raw.value.length;
+    }
 
     return Object.keys(summary).length === 0 ? "[object]" : summary;
 };
@@ -260,6 +269,19 @@ export const getBackgroundJobStatus = async (
     });
 
     logBindingResponse("get_background_job_status", response);
+
+    return response;
+};
+
+export const getBackgroundJobResult = async (
+    jobId: string
+): Promise<BackgroundJobResultResponse> => {
+    const response: BackgroundJobResultResponse = await invoke(
+        "get_background_job_result",
+        { jobId }
+    );
+
+    logBindingResponse("get_background_job_result", response);
 
     return response;
 };

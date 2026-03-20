@@ -4,7 +4,7 @@ export type BackgroundJobState = "running" | "failed" | "success";
 
 export type BackgroundJobResult =
     | {
-          Update: UpdateSqlExecuteResponse;
+          update: UpdateSqlExecuteResponse;
       };
 
 export type BackgroundJobStatus = {

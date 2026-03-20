@@ -8,8 +8,13 @@ use crate::binding::model::{
 };
 
 pub type JobStore = Arc<AsyncMutex<HashMap<String, BackgroundJobStatus>>>;
+pub type JobResultStore = Arc<AsyncMutex<HashMap<String, UpdateSqlExecuteResponse>>>;
 
 pub fn create_job_store() -> JobStore {
+    Arc::new(AsyncMutex::new(HashMap::new()))
+}
+
+pub fn create_job_result_store() -> JobResultStore {
     Arc::new(AsyncMutex::new(HashMap::new()))
 }
 
@@ -19,6 +24,24 @@ pub async fn insert_job(job_store: &JobStore, job: BackgroundJobStatus) {
 
 pub async fn get_job(job_store: &JobStore, job_id: &str) -> Option<BackgroundJobStatus> {
     job_store.lock().await.get(job_id).cloned()
+}
+
+pub async fn store_job_result_rows(
+    job_result_store: &JobResultStore,
+    job_id: &str,
+    result: UpdateSqlExecuteResponse,
+) {
+    job_result_store
+        .lock()
+        .await
+        .insert(job_id.to_string(), result);
+}
+
+pub async fn get_job_result(
+    job_result_store: &JobResultStore,
+    job_id: &str,
+) -> Option<UpdateSqlExecuteResponse> {
+    job_result_store.lock().await.get(job_id).cloned()
 }
 
 pub async fn update_job_progress(
