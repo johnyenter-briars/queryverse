@@ -3,7 +3,8 @@ use powerplatform_dataverse_client::dataverse::entity::Value;
 use crate::binding::model::resultrow::ResultRow;
 use crate::sql::ast::{JoinClause, JoinOn, JoinType};
 use crate::sql::{
-    CompareOp, Expr, Literal, Predicate, PredicateTarget, SelectStmt,
+    CompareOp, Expr, Literal, Predicate, PredicateTarget, SelectColumns, SelectItemKind,
+    SelectStmt,
 };
 
 pub const ROW_NUMBER_ATTRIBUTE: &str = "__rownum";
@@ -51,9 +52,15 @@ pub fn push_down_lookup_type_filters(stmt: &mut SelectStmt) -> bool {
         .entity_alias
         .clone()
         .unwrap_or_else(|| stmt.entity.clone());
+    let projected_attributes = collect_projected_attribute_names(stmt);
     let mut alias_counter = stmt.joins.len();
     let (filter, joins, changed) =
-        extract_lookup_type_joins(&filter, &base_reference, &mut alias_counter);
+        extract_lookup_type_joins(
+            &filter,
+            &base_reference,
+            &projected_attributes,
+            &mut alias_counter,
+        );
 
     if !changed {
         return false;
@@ -77,14 +84,20 @@ fn expr_requires_local_companion_evaluation(expr: &Expr) -> bool {
 fn extract_lookup_type_joins(
     expr: &Expr,
     base_reference: &str,
+    projected_attributes: &std::collections::HashSet<String>,
     alias_counter: &mut usize,
 ) -> (Option<Expr>, Vec<JoinClause>, bool) {
     match expr {
         Expr::And(left, right) => {
             let (left_expr, mut left_joins, left_changed) =
-                extract_lookup_type_joins(left, base_reference, alias_counter);
+                extract_lookup_type_joins(left, base_reference, projected_attributes, alias_counter);
             let (right_expr, right_joins, right_changed) =
-                extract_lookup_type_joins(right, base_reference, alias_counter);
+                extract_lookup_type_joins(
+                    right,
+                    base_reference,
+                    projected_attributes,
+                    alias_counter,
+                );
             left_joins.extend(right_joins);
 
             let expr = match (left_expr, right_expr) {
@@ -98,8 +111,12 @@ fn extract_lookup_type_joins(
         }
         Expr::Or(_, _) => (Some(expr.clone()), Vec::new(), false),
         Expr::Predicate(predicate) => {
-            if let Some(join) = lookup_type_join_from_predicate(predicate, base_reference, alias_counter)
-            {
+            if let Some(join) = lookup_type_join_from_predicate(
+                predicate,
+                base_reference,
+                projected_attributes,
+                alias_counter,
+            ) {
                 (None, vec![join], true)
             } else {
                 (Some(expr.clone()), Vec::new(), false)
@@ -111,6 +128,7 @@ fn extract_lookup_type_joins(
 fn lookup_type_join_from_predicate(
     predicate: &Predicate,
     base_reference: &str,
+    projected_attributes: &std::collections::HashSet<String>,
     alias_counter: &mut usize,
 ) -> Option<JoinClause> {
     let Predicate::Compare { left, op, value } = predicate else {
@@ -129,7 +147,7 @@ fn lookup_type_join_from_predicate(
         return None;
     };
 
-    let base_column = lookup_type_base_column(column)?;
+    let base_column = lookup_type_base_column(column, projected_attributes)?;
     // TODO: Compare this rewrite strategy with Sql4Cds and align if Mark handles
     // companion lookup type filters more efficiently or more correctly for
     // polymorphic lookups and complex boolean expressions.
@@ -153,20 +171,53 @@ fn lookup_type_join_from_predicate(
     })
 }
 
-fn lookup_type_base_column(column: &str) -> Option<String> {
+fn lookup_type_base_column(
+    column: &str,
+    projected_attributes: &std::collections::HashSet<String>,
+) -> Option<String> {
     if let Some((table, raw)) = column.rsplit_once('.') {
         let base = raw.strip_suffix("type")?;
-        if base.is_empty() || (!base.ends_with("id") && !base.ends_with("by")) {
+        if base.is_empty() {
+            return None;
+        }
+        let base_lower = base.to_ascii_lowercase();
+        if !base_lower.ends_with("id")
+            && !base_lower.ends_with("by")
+            && !projected_attributes.contains(&base_lower)
+            && !projected_attributes.contains(&format!("{table}.{}", base_lower))
+        {
             return None;
         }
         return Some(format!("{table}.{base}").rsplit_once('.').map(|(_, col)| col.to_string()).unwrap_or_else(|| base.to_string()));
     }
 
     let base = column.strip_suffix("type")?;
-    if base.is_empty() || (!base.ends_with("id") && !base.ends_with("by")) {
+    if base.is_empty() {
+        return None;
+    }
+    let base_lower = base.to_ascii_lowercase();
+    if !base_lower.ends_with("id")
+        && !base_lower.ends_with("by")
+        && !projected_attributes.contains(&base_lower)
+    {
         return None;
     }
     Some(base.to_string())
+}
+
+fn collect_projected_attribute_names(stmt: &SelectStmt) -> std::collections::HashSet<String> {
+    let mut names = std::collections::HashSet::new();
+    if let SelectColumns::Columns(columns) = &stmt.columns {
+        for column in columns {
+            if let SelectItemKind::Attribute(name) = &column.kind {
+                names.insert(name.to_ascii_lowercase());
+                if let Some((_, raw)) = name.rsplit_once('.') {
+                    names.insert(raw.to_ascii_lowercase());
+                }
+            }
+        }
+    }
+    names
 }
 
 fn sanitize_alias_fragment(value: &str) -> String {
