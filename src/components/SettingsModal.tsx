@@ -45,7 +45,8 @@ export function SettingsModal({
                 settings.bypassBusinessLogicExecutionCustomAsync ||
             draft.bypassCustomPluginExecution !== settings.bypassCustomPluginExecution ||
             draft.suppressCallbackRegistrationExpanderJob !==
-                settings.suppressCallbackRegistrationExpanderJob,
+                settings.suppressCallbackRegistrationExpanderJob ||
+            draft.dataverseDefaultBatchSize !== settings.dataverseDefaultBatchSize,
         [draft, settings]
     );
 
@@ -150,6 +151,29 @@ export function SettingsModal({
                                 <Text className={styles.description}>
                                     When enabled, the preview uses single-quoted attributes for
                                     easier copying.
+                                </Text>
+                            </div>
+
+                            <div className={styles.section}>
+                                <Text weight="semibold">Default Dataverse batch size</Text>
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    max={1000}
+                                    value={String(draft.dataverseDefaultBatchSize)}
+                                    onChange={(_, data) => {
+                                        const next = Number.parseInt(data.value ?? "", 10);
+                                        if (Number.isNaN(next)) return;
+                                        const clamped = Math.min(1000, Math.max(1, next));
+                                        setDraft((prev) => ({
+                                            ...prev,
+                                            dataverseDefaultBatchSize: clamped,
+                                        }));
+                                    }}
+                                />
+                                <Text className={styles.description}>
+                                    Used for batched Dataverse update and delete operations.
+                                    Maximum supported value is 1000.
                                 </Text>
                             </div>
 

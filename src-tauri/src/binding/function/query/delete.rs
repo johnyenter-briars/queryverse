@@ -18,6 +18,7 @@ use crate::{
 
 use super::helpers::{resolve_primary_id_attribute, value_to_string};
 use super::metadata::get_entity_definitions_cached;
+use super::writebatch::{clamp_batch_size, execute_delete_batches};
 
 #[tauri::command]
 pub async fn prepare_delete_sql(
@@ -156,22 +157,13 @@ pub async fn execute_delete_sql(
             .suppress_callback_registration_expander_job,
     };
 
-    let mut deleted = 0usize;
-    let mut failed = 0usize;
-    let mut errors: Vec<String> = Vec::new();
-
-    for id in &batch.ids {
-        let result = service_client
-            .delete_entity_with_options(&batch.entity_set, id, &request_parameters)
-            .await;
-        match result {
-            Ok(_) => deleted += 1,
-            Err(error) => {
-                failed += 1;
-                errors.push(error);
-            }
-        }
-    }
+    let (deleted, failed, errors) = execute_delete_batches(
+        &service_client,
+        &batch,
+        &request_parameters,
+        clamp_batch_size(settings.dataverse_default_batch_size),
+    )
+    .await?;
 
     let success = failed == 0;
     let message = if success {

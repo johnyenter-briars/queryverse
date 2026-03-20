@@ -7,6 +7,7 @@ export interface Settings {
     bypassBusinessLogicExecutionCustomAsync: boolean;
     bypassCustomPluginExecution: boolean;
     suppressCallbackRegistrationExpanderJob: boolean;
+    dataverseDefaultBatchSize: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -18,5 +19,6 @@ export const DEFAULT_SETTINGS: Settings = {
     bypassBusinessLogicExecutionCustomAsync: false,
     bypassCustomPluginExecution: false,
     suppressCallbackRegistrationExpanderJob: false,
+    dataverseDefaultBatchSize: 200,
 };
 

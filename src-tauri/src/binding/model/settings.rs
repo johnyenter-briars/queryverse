@@ -17,6 +17,8 @@ pub struct Settings {
     pub bypass_custom_plugin_execution: bool,
     #[serde(default)]
     pub suppress_callback_registration_expander_job: bool,
+    #[serde(default = "default_dataverse_default_batch_size")]
+    pub dataverse_default_batch_size: u32,
 }
 
 fn default_font_size() -> u32 {
@@ -25,6 +27,10 @@ fn default_font_size() -> u32 {
 
 fn default_fetchxml_single_quotes() -> bool {
     true
+}
+
+fn default_dataverse_default_batch_size() -> u32 {
+    200
 }
 
 impl Default for Settings {
@@ -38,6 +44,7 @@ impl Default for Settings {
             bypass_business_logic_execution_custom_async: false,
             bypass_custom_plugin_execution: false,
             suppress_callback_registration_expander_job: false,
+            dataverse_default_batch_size: default_dataverse_default_batch_size(),
         }
     }
 }

@@ -21,6 +21,7 @@ use super::helpers::{
     validate_update_attributes, value_to_string,
 };
 use super::metadata::{get_entity_attributes_cached, get_entity_definitions_cached};
+use super::writebatch::{clamp_batch_size, execute_update_batches};
 
 #[tauri::command]
 pub async fn prepare_update_sql(
@@ -196,22 +197,13 @@ pub async fn execute_update_sql(
             .suppress_callback_registration_expander_job,
     };
 
-    let mut updated = 0usize;
-    let mut failed = 0usize;
-    let mut errors: Vec<String> = Vec::new();
-
-    for id in &batch.ids {
-        let result = service_client
-            .update_entity_with_options(&batch.entity_set, id, &batch.updates, &request_parameters)
-            .await;
-        match result {
-            Ok(_) => updated += 1,
-            Err(error) => {
-                failed += 1;
-                errors.push(error);
-            }
-        }
-    }
+    let (updated, failed, errors) = execute_update_batches(
+        &service_client,
+        &batch,
+        &request_parameters,
+        clamp_batch_size(settings.dataverse_default_batch_size),
+    )
+    .await?;
 
     let success = failed == 0;
     let message = if success {
