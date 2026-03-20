@@ -59,6 +59,7 @@ import { EntityAttribute } from "./binding/model/EntityAttribute";
 import { EntityRelationship } from "./binding/model/EntityRelationship";
 import { SqlQueryMetadata } from "./binding/model/SqlQueryMetadata";
 import { DEFAULT_SETTINGS, Settings } from "./binding/model/Settings";
+import { DeleteSqlExecuteResponse } from "./binding/model/DeleteSqlExecuteResponse";
 import { UpdateSqlExecuteResponse } from "./binding/model/UpdateSqlExecuteResponse";
 import { logDebug, logError } from "./utility/logging";
 import { AppToaster, useAppToast } from "./utility/toast";
@@ -459,7 +460,28 @@ export default function App() {
         return { attributes };
     };
 
-    const startUpdateJobPolling = (jobId: string, tabId: number) => {
+    const buildDeleteSummaryRow = (response: DeleteSqlExecuteResponse): ResultRow => {
+        const attributes: ResultRow["attributes"] = {
+            success: response.success ? "true" : "false",
+            deleted: response.deleted,
+            failed: response.failed,
+            message: response.message,
+            errorCount: response.errors.length,
+            errors: response.errors.join("\n"),
+        };
+
+        if (response.errors.length > 0) {
+            attributes.firstError = response.errors[0];
+        }
+
+        return { attributes };
+    };
+
+    const startBackgroundJobPolling = (
+        action: DataChangeAction,
+        jobId: string,
+        tabId: number
+    ) => {
         const poll = async () => {
             try {
                 const response = await getBackgroundJobStatus(jobId);
@@ -470,9 +492,11 @@ export default function App() {
                 const status = response.value;
 
                 logDebug(
-                    "Update job poll status",
+                    "Background job poll status",
                     {
                         jobId,
+                        action,
+                        kind: status.kind,
                         state: status.state,
                         processed: status.processed,
                         total: status.total,
@@ -503,26 +527,29 @@ export default function App() {
                         "Fetching background job result",
                         {
                             jobId,
+                            action,
                             state: status.state,
                         },
                         "queryverse::frontend::jobs"
                     );
 
                     const resultResponse = await getBackgroundJobResult(jobId);
+                    const resultRow =
+                        "update" in resultResponse.value
+                            ? buildUpdateSummaryRow(resultResponse.value.update)
+                            : buildDeleteSummaryRow(resultResponse.value.delete);
                     logDebug(
                         "Fetched background job result",
                         {
                             jobId,
                             success: resultResponse.success,
-                            updated: resultResponse.value.updated,
-                            failed: resultResponse.value.failed,
                             message: resultResponse.message,
                         },
                         "queryverse::frontend::jobs"
                     );
                     updateTab(tabId, (tab) => ({
                         ...tab,
-                        results: [buildUpdateSummaryRow(resultResponse.value)],
+                        results: [resultRow],
                         queryMetadata: null,
                         executeError: null,
                         isExecuting: false,
@@ -1251,26 +1278,24 @@ export default function App() {
         try {
             if (dataChangeConfirm.action === "delete") {
                 const response = await executeDeleteSql(dataChangeConfirm.token);
-                const summaryAttributes: ResultRow["attributes"] = {
-                    success: response.success ? "true" : "false",
-                    deleted: response.deleted,
-                    failed: response.failed,
-                    message: response.message,
-                    errorCount: response.errors.length,
-                    errors: response.errors.join("\n"),
-                };
-                if (response.errors.length) {
-                    summaryAttributes.firstError = response.errors[0];
-                }
-                const summaryRow: ResultRow = { attributes: summaryAttributes };
-
                 updateTab(dataChangeConfirm.tabId, (tab) => ({
                     ...tab,
-                    results: [summaryRow],
+                    results: [
+                        {
+                            attributes: {
+                                status: "queued",
+                                processed: 0,
+                                total: dataChangeConfirm.count,
+                                progressPercent: 0,
+                                message: response.message,
+                            },
+                        },
+                    ],
                     queryMetadata: null,
                     executeError: null,
-                    isExecuting: false,
+                    isExecuting: true,
                 }));
+                startBackgroundJobPolling("delete", response.jobId, dataChangeConfirm.tabId);
                 return;
             }
 
@@ -1292,7 +1317,7 @@ export default function App() {
                 executeError: null,
                 isExecuting: true,
             }));
-            startUpdateJobPolling(response.jobId, dataChangeConfirm.tabId);
+            startBackgroundJobPolling("update", response.jobId, dataChangeConfirm.tabId);
         } catch (error) {
             updateTab(dataChangeConfirm.tabId, (tab) => ({
                 ...tab,

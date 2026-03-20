@@ -10,8 +10,13 @@ use crate::{
         settings::load_settings,
     },
     binding::model::{
+        backgroundjobstatus::{BackgroundJobState, BackgroundJobStatus},
         deletesqlexecuteresponse::DeleteSqlExecuteResponse,
+        deletesqljobstartresponse::DeleteSqlJobStartResponse,
         deletesqlpreviewresponse::DeleteSqlPreviewResponse,
+    },
+    jobs::{
+        complete_delete_job, fail_job, insert_job, store_job_result_rows, update_job_progress,
     },
     sql,
 };
@@ -114,7 +119,7 @@ pub async fn execute_delete_sql(
     token: String,
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
-) -> Result<DeleteSqlExecuteResponse, String> {
+) -> Result<DeleteSqlJobStartResponse, String> {
     let batch = {
         let mut batches = database
             .delete_batches
@@ -157,27 +162,84 @@ pub async fn execute_delete_sql(
             .suppress_callback_registration_expander_job,
     };
 
-    let (deleted, failed, errors) = execute_delete_batches(
-        &service_client,
-        &batch,
-        &request_parameters,
-        clamp_batch_size(settings.dataverse_default_batch_size),
+    let job_id = Uuid::new_v4().to_string();
+    let total = batch.ids.len();
+
+    insert_job(
+        &database.background_jobs,
+        BackgroundJobStatus {
+            job_id: job_id.clone(),
+            kind: "delete".to_string(),
+            state: BackgroundJobState::Running,
+            processed: 0,
+            total,
+            message: format!("Queued delete job for {total} record(s)."),
+            result: None,
+        },
     )
-    .await?;
+    .await;
 
-    let success = failed == 0;
-    let message = if success {
-        format!("Deleted {} record(s).", deleted)
-    } else {
-        format!("Deleted {} record(s) with {} error(s).", deleted, failed)
-    };
+    let job_store = database.background_jobs.clone();
+    let job_result_store = database.background_job_results.clone();
+    let batch_size = clamp_batch_size(settings.dataverse_default_batch_size);
+    let queued_job_id = job_id.clone();
+    tauri::async_runtime::spawn(async move {
+        update_job_progress(
+            &job_store,
+            &queued_job_id,
+            BackgroundJobState::Running,
+            0,
+            total,
+            format!("Running delete job for {total} record(s)."),
+        )
+        .await;
 
-    Ok(DeleteSqlExecuteResponse {
-        success,
-        message,
-        deleted,
-        failed,
-        errors,
+        let outcome = execute_delete_batches(
+            &service_client,
+            &batch,
+            &request_parameters,
+            batch_size,
+        )
+        .await;
+
+        match outcome {
+            Ok((deleted, failed, errors)) => {
+                let success = failed == 0;
+                let message = if success {
+                    format!("Deleted {} record(s).", deleted)
+                } else {
+                    format!("Deleted {} record(s) with {} error(s).", deleted, failed)
+                };
+
+                let response = DeleteSqlExecuteResponse {
+                    success,
+                    message,
+                    deleted,
+                    failed,
+                    errors,
+                };
+
+                store_job_result_rows(
+                    &job_result_store,
+                    &queued_job_id,
+                    crate::binding::model::backgroundjobstatus::BackgroundJobResult::Delete(
+                        response.clone(),
+                    ),
+                )
+                .await;
+
+                complete_delete_job(&job_store, &queued_job_id, response).await;
+            }
+            Err(error) => {
+                fail_job(&job_store, &queued_job_id, 0, total, error).await;
+            }
+        }
+    });
+
+    Ok(DeleteSqlJobStartResponse {
+        success: true,
+        message: "Delete job queued.".to_string(),
+        job_id,
     })
 }
 

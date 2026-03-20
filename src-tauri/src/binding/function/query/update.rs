@@ -270,7 +270,14 @@ pub async fn execute_update_sql(
                     errors,
                 };
 
-                store_job_result_rows(&job_result_store, &queued_job_id, response.clone()).await;
+                store_job_result_rows(
+                    &job_result_store,
+                    &queued_job_id,
+                    crate::binding::model::backgroundjobstatus::BackgroundJobResult::Update(
+                        response.clone(),
+                    ),
+                )
+                .await;
 
                 complete_update_job(
                     &job_store,

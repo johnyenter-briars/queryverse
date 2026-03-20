@@ -1,6 +1,9 @@
 use serde::Serialize;
 
-use super::updatesqlexecuteresponse::UpdateSqlExecuteResponse;
+use super::{
+    deletesqlexecuteresponse::DeleteSqlExecuteResponse,
+    updatesqlexecuteresponse::UpdateSqlExecuteResponse,
+};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -26,4 +29,5 @@ pub struct BackgroundJobStatus {
 #[serde(rename_all = "camelCase")]
 pub enum BackgroundJobResult {
     Update(UpdateSqlExecuteResponse),
+    Delete(DeleteSqlExecuteResponse),
 }

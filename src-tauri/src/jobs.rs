@@ -4,11 +4,12 @@ use tauri::async_runtime::Mutex as AsyncMutex;
 
 use crate::binding::model::{
     backgroundjobstatus::{BackgroundJobResult, BackgroundJobState, BackgroundJobStatus},
+    deletesqlexecuteresponse::DeleteSqlExecuteResponse,
     updatesqlexecuteresponse::UpdateSqlExecuteResponse,
 };
 
 pub type JobStore = Arc<AsyncMutex<HashMap<String, BackgroundJobStatus>>>;
-pub type JobResultStore = Arc<AsyncMutex<HashMap<String, UpdateSqlExecuteResponse>>>;
+pub type JobResultStore = Arc<AsyncMutex<HashMap<String, BackgroundJobResult>>>;
 
 pub fn create_job_store() -> JobStore {
     Arc::new(AsyncMutex::new(HashMap::new()))
@@ -29,7 +30,7 @@ pub async fn get_job(job_store: &JobStore, job_id: &str) -> Option<BackgroundJob
 pub async fn store_job_result_rows(
     job_result_store: &JobResultStore,
     job_id: &str,
-    result: UpdateSqlExecuteResponse,
+    result: BackgroundJobResult,
 ) {
     job_result_store
         .lock()
@@ -40,7 +41,7 @@ pub async fn store_job_result_rows(
 pub async fn get_job_result(
     job_result_store: &JobResultStore,
     job_id: &str,
-) -> Option<UpdateSqlExecuteResponse> {
+) -> Option<BackgroundJobResult> {
     job_result_store.lock().await.get(job_id).cloned()
 }
 
@@ -78,6 +79,24 @@ pub async fn complete_update_job(
         job.total = response.updated + response.failed;
         job.message = response.message.clone();
         job.result = Some(BackgroundJobResult::Update(response));
+    }
+}
+
+pub async fn complete_delete_job(
+    job_store: &JobStore,
+    job_id: &str,
+    response: DeleteSqlExecuteResponse,
+) {
+    if let Some(job) = job_store.lock().await.get_mut(job_id) {
+        job.state = if response.success {
+            BackgroundJobState::Success
+        } else {
+            BackgroundJobState::Failed
+        };
+        job.processed = response.deleted + response.failed;
+        job.total = response.deleted + response.failed;
+        job.message = response.message.clone();
+        job.result = Some(BackgroundJobResult::Delete(response));
     }
 }
 

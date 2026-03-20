@@ -1,3 +1,3 @@
-use crate::binding::model::{qvresponse::QVResponse, updatesqlexecuteresponse::UpdateSqlExecuteResponse};
+use crate::binding::model::{backgroundjobstatus::BackgroundJobResult, qvresponse::QVResponse};
 
-pub type BackgroundJobResultResponse = QVResponse<UpdateSqlExecuteResponse>;
+pub type BackgroundJobResultResponse = QVResponse<BackgroundJobResult>;

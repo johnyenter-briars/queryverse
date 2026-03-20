@@ -22,7 +22,7 @@ import { SettingsResponse } from "./model/SettingsResponse";
 import { UpdateSqlPreviewResponse } from "./model/UpdateSqlPreviewResponse";
 import { UpdateSqlJobStartResponse } from "./model/UpdateSqlJobStartResponse";
 import { DeleteSqlPreviewResponse } from "./model/DeleteSqlPreviewResponse";
-import { DeleteSqlExecuteResponse } from "./model/DeleteSqlExecuteResponse";
+import { DeleteSqlJobStartResponse } from "./model/DeleteSqlJobStartResponse";
 import { Connection } from "./model/Connection";
 import { BackgroundJobStatusResponse } from "./model/BackgroundJobStatusResponse";
 import { BackgroundJobResultResponse } from "./model/BackgroundJobResultResponse";
@@ -308,8 +308,8 @@ export const prepareDeleteSql = async (
 
 export const executeDeleteSql = async (
     token: string
-): Promise<DeleteSqlExecuteResponse> => {
-    const response: DeleteSqlExecuteResponse = await invoke("execute_delete_sql", {
+): Promise<DeleteSqlJobStartResponse> => {
+    const response: DeleteSqlJobStartResponse = await invoke("execute_delete_sql", {
         token,
     });
 

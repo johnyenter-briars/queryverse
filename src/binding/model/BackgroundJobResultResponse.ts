@@ -1,4 +1,4 @@
 import { QVResponse } from "./QVResponse";
-import { UpdateSqlExecuteResponse } from "./UpdateSqlExecuteResponse";
+import { BackgroundJobResult } from "./BackgroundJobStatus";
 
-export interface BackgroundJobResultResponse extends QVResponse<UpdateSqlExecuteResponse> {}
+export interface BackgroundJobResultResponse extends QVResponse<BackgroundJobResult> {}
