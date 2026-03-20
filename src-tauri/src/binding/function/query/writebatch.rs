@@ -59,6 +59,8 @@ where
             continue;
         }
 
+        on_progress(updated + failed, total, index + 1, total_batches);
+
         let response = service_client
             .execute_multiple(&ExecuteMultipleRequest {
                 settings: ExecuteMultipleSettings {
@@ -132,6 +134,8 @@ where
         if requests.is_empty() {
             continue;
         }
+
+        on_progress(deleted + failed, total, index + 1, total_batches);
 
         let response = service_client
             .execute_multiple(&ExecuteMultipleRequest {
