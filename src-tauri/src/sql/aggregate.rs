@@ -69,12 +69,15 @@ impl AggregatePlan {
         None
     }
 
-    fn required_columns(&self) -> Vec<String> {
+    fn required_columns(
+        &self,
+        lookup_bases: Option<&std::collections::HashSet<String>>,
+    ) -> Vec<String> {
         let mut columns: Vec<String> = self
             .group_columns
             .iter()
             .map(|column| {
-                lookup_companion_base_attribute(&column.source)
+                lookup_companion_base_attribute(&column.source, lookup_bases)
                     .unwrap_or_else(|| column.source.as_str())
                     .to_string()
             })
@@ -83,13 +86,13 @@ impl AggregatePlan {
         for aggregate in &self.aggregates {
             if let Some(target) = &aggregate.target
                 && !columns.contains(
-                    &lookup_companion_base_attribute(target)
+                    &lookup_companion_base_attribute(target, lookup_bases)
                         .unwrap_or_else(|| target.as_str())
                         .to_string(),
                 )
             {
                 columns.push(
-                    lookup_companion_base_attribute(target)
+                    lookup_companion_base_attribute(target, lookup_bases)
                         .unwrap_or_else(|| target.as_str())
                         .to_string(),
                 );
@@ -181,11 +184,15 @@ pub fn demote_count_fetchxml(fetchxml: &str) -> Result<String, String> {
     strip_order_clauses(&updated)
 }
 
-pub fn demote_aggregate_fetchxml(fetchxml: &str, plan: &AggregatePlan) -> Result<String, String> {
+pub fn demote_aggregate_fetchxml(
+    fetchxml: &str,
+    plan: &AggregatePlan,
+    lookup_bases: Option<&std::collections::HashSet<String>>,
+) -> Result<String, String> {
     let mut updated = fetchxml.replace(" aggregate=\"true\"", "");
     updated = updated.replace(" groupby=\"true\"", "");
     updated = strip_aggregate_attributes(&updated)?;
-    let updated = ensure_attributes(&updated, &plan.required_columns())?;
+    let updated = ensure_attributes(&updated, &plan.required_columns(lookup_bases), lookup_bases)?;
     strip_order_clauses(&updated)
 }
 
@@ -270,7 +277,11 @@ fn strip_order_clauses(fetchxml: &str) -> Result<String, String> {
     Ok(output)
 }
 
-fn ensure_attributes(fetchxml: &str, columns: &[String]) -> Result<String, String> {
+fn ensure_attributes(
+    fetchxml: &str,
+    columns: &[String],
+    lookup_bases: Option<&std::collections::HashSet<String>>,
+) -> Result<String, String> {
     if columns.is_empty() {
         return Ok(fetchxml.to_string());
     }
@@ -278,10 +289,11 @@ fn ensure_attributes(fetchxml: &str, columns: &[String]) -> Result<String, Strin
     let mut missing: Vec<String> = Vec::new();
     for column in columns {
         let requested_column =
-            lookup_companion_base_attribute(column).unwrap_or_else(|| column.as_str());
+            lookup_companion_base_attribute(column, lookup_bases).unwrap_or_else(|| column.as_str());
         if let Some((table, attr)) = split_qualified_column(column) {
             let requested_attr =
-                lookup_companion_base_attribute(&attr).unwrap_or_else(|| attr.as_str());
+                lookup_companion_base_attribute(&attr, lookup_bases)
+                    .unwrap_or_else(|| attr.as_str());
             if has_link_entity_attribute(fetchxml, &table, requested_attr) {
                 continue;
             }
@@ -684,7 +696,10 @@ fn split_companion_column(value: &str) -> Option<(String, &'static str)> {
     None
 }
 
-fn lookup_companion_base_attribute(attribute: &str) -> Option<&str> {
+fn lookup_companion_base_attribute<'a>(
+    attribute: &'a str,
+    lookup_bases: Option<&std::collections::HashSet<String>>,
+) -> Option<&'a str> {
     let lowered = attribute.to_ascii_lowercase();
     let suffix = if lowered == "name" {
         return None;
@@ -702,6 +717,16 @@ fn lookup_companion_base_attribute(attribute: &str) -> Option<&str> {
     }
 
     let base_lower = base.to_ascii_lowercase();
+    if let Some(lookup_bases) = lookup_bases
+        && !lookup_bases.contains(&base_lower)
+    {
+        return None;
+    }
+
+    if suffix == "type" {
+        return Some(base);
+    }
+
     if !base_lower.ends_with("id") && !base_lower.ends_with("by") {
         return None;
     }

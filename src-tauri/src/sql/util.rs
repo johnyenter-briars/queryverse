@@ -1,10 +1,10 @@
 use powerplatform_dataverse_client::dataverse::entity::Value;
+use powerplatform_dataverse_client::dataverse::entityattribute::EntityAttribute;
 
 use crate::binding::model::resultrow::ResultRow;
 use crate::sql::ast::{JoinClause, JoinOn, JoinType};
 use crate::sql::{
-    CompareOp, Expr, Literal, Predicate, PredicateTarget, SelectColumns, SelectItemKind,
-    SelectStmt,
+    CompareOp, Expr, Literal, Predicate, PredicateTarget, SelectStmt,
 };
 
 pub const ROW_NUMBER_ATTRIBUTE: &str = "__rownum";
@@ -39,11 +39,25 @@ pub fn fill_entity_reference_names(rows: &mut [ResultRow], columns_order: &[Stri
     }
 }
 
-pub fn filter_requires_local_companion_evaluation(expr: Option<&Expr>) -> bool {
-    expr.is_some_and(expr_requires_local_companion_evaluation)
+pub fn lookup_attribute_set(attributes: &[EntityAttribute]) -> std::collections::HashSet<String> {
+    attributes
+        .iter()
+        .filter(|attribute| is_lookup_attribute_type(attribute))
+        .map(|attribute| attribute.logical_name.to_ascii_lowercase())
+        .collect()
 }
 
-pub fn push_down_lookup_type_filters(stmt: &mut SelectStmt) -> bool {
+pub fn filter_requires_local_companion_evaluation(
+    expr: Option<&Expr>,
+    lookup_attributes: &std::collections::HashSet<String>,
+) -> bool {
+    expr.is_some_and(|expr| expr_requires_local_companion_evaluation(expr, lookup_attributes))
+}
+
+pub fn push_down_lookup_type_filters(
+    stmt: &mut SelectStmt,
+    lookup_attributes: &std::collections::HashSet<String>,
+) -> bool {
     let Some(filter) = stmt.filter.clone() else {
         return false;
     };
@@ -52,13 +66,12 @@ pub fn push_down_lookup_type_filters(stmt: &mut SelectStmt) -> bool {
         .entity_alias
         .clone()
         .unwrap_or_else(|| stmt.entity.clone());
-    let projected_attributes = collect_projected_attribute_names(stmt);
     let mut alias_counter = stmt.joins.len();
     let (filter, joins, changed) =
         extract_lookup_type_joins(
             &filter,
             &base_reference,
-            &projected_attributes,
+            lookup_attributes,
             &mut alias_counter,
         );
 
@@ -71,31 +84,36 @@ pub fn push_down_lookup_type_filters(stmt: &mut SelectStmt) -> bool {
     true
 }
 
-fn expr_requires_local_companion_evaluation(expr: &Expr) -> bool {
+fn expr_requires_local_companion_evaluation(
+    expr: &Expr,
+    lookup_attributes: &std::collections::HashSet<String>,
+) -> bool {
     match expr {
         Expr::And(left, right) | Expr::Or(left, right) => {
-            expr_requires_local_companion_evaluation(left)
-                || expr_requires_local_companion_evaluation(right)
+            expr_requires_local_companion_evaluation(left, lookup_attributes)
+                || expr_requires_local_companion_evaluation(right, lookup_attributes)
         }
-        Expr::Predicate(predicate) => predicate_requires_local_companion_evaluation(predicate),
+        Expr::Predicate(predicate) => {
+            predicate_requires_local_companion_evaluation(predicate, lookup_attributes)
+        }
     }
 }
 
 fn extract_lookup_type_joins(
     expr: &Expr,
     base_reference: &str,
-    projected_attributes: &std::collections::HashSet<String>,
+    lookup_attributes: &std::collections::HashSet<String>,
     alias_counter: &mut usize,
 ) -> (Option<Expr>, Vec<JoinClause>, bool) {
     match expr {
         Expr::And(left, right) => {
             let (left_expr, mut left_joins, left_changed) =
-                extract_lookup_type_joins(left, base_reference, projected_attributes, alias_counter);
+                extract_lookup_type_joins(left, base_reference, lookup_attributes, alias_counter);
             let (right_expr, right_joins, right_changed) =
                 extract_lookup_type_joins(
                     right,
                     base_reference,
-                    projected_attributes,
+                    lookup_attributes,
                     alias_counter,
                 );
             left_joins.extend(right_joins);
@@ -114,7 +132,7 @@ fn extract_lookup_type_joins(
             if let Some(join) = lookup_type_join_from_predicate(
                 predicate,
                 base_reference,
-                projected_attributes,
+                lookup_attributes,
                 alias_counter,
             ) {
                 (None, vec![join], true)
@@ -128,7 +146,7 @@ fn extract_lookup_type_joins(
 fn lookup_type_join_from_predicate(
     predicate: &Predicate,
     base_reference: &str,
-    projected_attributes: &std::collections::HashSet<String>,
+    lookup_attributes: &std::collections::HashSet<String>,
     alias_counter: &mut usize,
 ) -> Option<JoinClause> {
     let Predicate::Compare { left, op, value } = predicate else {
@@ -147,7 +165,7 @@ fn lookup_type_join_from_predicate(
         return None;
     };
 
-    let base_column = lookup_type_base_column(column, projected_attributes)?;
+    let base_column = lookup_type_base_column(column, lookup_attributes)?;
     // TODO: Compare this rewrite strategy with Sql4Cds and align if Mark handles
     // companion lookup type filters more efficiently or more correctly for
     // polymorphic lookups and complex boolean expressions.
@@ -173,7 +191,7 @@ fn lookup_type_join_from_predicate(
 
 fn lookup_type_base_column(
     column: &str,
-    projected_attributes: &std::collections::HashSet<String>,
+    lookup_attributes: &std::collections::HashSet<String>,
 ) -> Option<String> {
     if let Some((table, raw)) = column.rsplit_once('.') {
         let base = raw.strip_suffix("type")?;
@@ -181,11 +199,7 @@ fn lookup_type_base_column(
             return None;
         }
         let base_lower = base.to_ascii_lowercase();
-        if !base_lower.ends_with("id")
-            && !base_lower.ends_with("by")
-            && !projected_attributes.contains(&base_lower)
-            && !projected_attributes.contains(&format!("{table}.{}", base_lower))
-        {
+        if !lookup_attributes.contains(&base_lower) {
             return None;
         }
         return Some(format!("{table}.{base}").rsplit_once('.').map(|(_, col)| col.to_string()).unwrap_or_else(|| base.to_string()));
@@ -196,28 +210,10 @@ fn lookup_type_base_column(
         return None;
     }
     let base_lower = base.to_ascii_lowercase();
-    if !base_lower.ends_with("id")
-        && !base_lower.ends_with("by")
-        && !projected_attributes.contains(&base_lower)
-    {
+    if !lookup_attributes.contains(&base_lower) {
         return None;
     }
     Some(base.to_string())
-}
-
-fn collect_projected_attribute_names(stmt: &SelectStmt) -> std::collections::HashSet<String> {
-    let mut names = std::collections::HashSet::new();
-    if let SelectColumns::Columns(columns) = &stmt.columns {
-        for column in columns {
-            if let SelectItemKind::Attribute(name) = &column.kind {
-                names.insert(name.to_ascii_lowercase());
-                if let Some((_, raw)) = name.rsplit_once('.') {
-                    names.insert(raw.to_ascii_lowercase());
-                }
-            }
-        }
-    }
-    names
 }
 
 fn sanitize_alias_fragment(value: &str) -> String {
@@ -233,28 +229,39 @@ fn sanitize_alias_fragment(value: &str) -> String {
         .collect()
 }
 
-fn predicate_requires_local_companion_evaluation(predicate: &Predicate) -> bool {
+fn predicate_requires_local_companion_evaluation(
+    predicate: &Predicate,
+    lookup_attributes: &std::collections::HashSet<String>,
+) -> bool {
     match predicate {
         Predicate::Compare { left, .. }
         | Predicate::In { left, .. }
         | Predicate::Between { left, .. }
         | Predicate::IsNull { left, .. }
-        | Predicate::Like { left, .. } => target_requires_local_companion_evaluation(left),
+        | Predicate::Like { left, .. } => {
+            target_requires_local_companion_evaluation(left, lookup_attributes)
+        }
         Predicate::ColumnCompare { left, right, .. } => {
-            target_requires_local_companion_evaluation(left)
-                || target_requires_local_companion_evaluation(right)
+            target_requires_local_companion_evaluation(left, lookup_attributes)
+                || target_requires_local_companion_evaluation(right, lookup_attributes)
         }
     }
 }
 
-fn target_requires_local_companion_evaluation(target: &PredicateTarget) -> bool {
+fn target_requires_local_companion_evaluation(
+    target: &PredicateTarget,
+    lookup_attributes: &std::collections::HashSet<String>,
+) -> bool {
     match target {
-        PredicateTarget::Column(name) => is_lookup_companion_column(name),
+        PredicateTarget::Column(name) => is_lookup_companion_column(name, lookup_attributes),
         PredicateTarget::Aggregate(_) => false,
     }
 }
 
-fn is_lookup_companion_column(name: &str) -> bool {
+fn is_lookup_companion_column(
+    name: &str,
+    lookup_attributes: &std::collections::HashSet<String>,
+) -> bool {
     let lower = name.to_ascii_lowercase();
     let suffix = if lower == "name" {
         return false;
@@ -267,7 +274,19 @@ fn is_lookup_companion_column(name: &str) -> bool {
     };
 
     let base = &lower[..lower.len().saturating_sub(suffix.len())];
-    !base.is_empty() && (base.ends_with("id") || base.ends_with("by"))
+    !base.is_empty() && lookup_attributes.contains(base)
+}
+
+fn is_lookup_attribute_type(attribute: &EntityAttribute) -> bool {
+    let value = attribute
+        .attribute_type_name
+        .as_ref()
+        .and_then(|value| value.value.as_deref())
+        .or(attribute.attribute_type.as_deref())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    matches!(value.as_str(), "lookup" | "lookuptype" | "customer" | "customertype" | "owner" | "ownertype")
 }
 
 #[derive(Clone, Copy)]

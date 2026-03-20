@@ -38,8 +38,15 @@ pub fn parse_delete(sql: &str) -> Result<DeleteStmt, ParseError> {
 }
 
 pub fn to_fetchxml(stmt: &SelectStmt) -> Result<FetchXmlQuery, TranslationError> {
+    to_fetchxml_with_lookup_bases(stmt, None)
+}
+
+pub fn to_fetchxml_with_lookup_bases(
+    stmt: &SelectStmt,
+    lookup_bases: Option<&std::collections::HashSet<String>>,
+) -> Result<FetchXmlQuery, TranslationError> {
     let entity_names = entity_names(&stmt.entity);
-    let translation = fetchxml::to_fetchxml(stmt, &entity_names.entity_logical)?;
+    let translation = fetchxml::to_fetchxml(stmt, &entity_names.entity_logical, lookup_bases)?;
     Ok(FetchXmlQuery {
         entity_set: entity_names.entity_set,
         entity_logical: entity_names.entity_logical,

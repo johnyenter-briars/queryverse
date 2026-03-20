@@ -17,7 +17,8 @@ use crate::{
         self, aggregate,
         util::{
             assign_row_numbers, fill_entity_reference_names,
-            filter_requires_local_companion_evaluation, push_down_lookup_type_filters,
+            filter_requires_local_companion_evaluation, lookup_attribute_set,
+            push_down_lookup_type_filters,
         },
     },
 };
@@ -81,34 +82,46 @@ pub async fn execute_sql(
         get_or_create_service_client(&connection, &database, context.log_level, Some(&window))
             .await?;
     let stmt = sql::parse(&request.sql).map_err(|e| e.to_string())?;
-    let parsed = sql::to_fetchxml(&stmt).map_err(|e| e.to_string())?;
+    let (_, entity_logical) = sql::resolve_entity_names(&stmt.entity);
     let _ = get_entity_definitions_cached(&service_client, &database, connection_id).await;
-    let _ = get_entity_attributes_cached(
+    let entity_attributes = get_entity_attributes_cached(
         &service_client,
         &database,
         connection_id,
-        &parsed.entity_logical,
+        &entity_logical,
         context.log_level,
     )
-    .await;
+    .await?;
 
-    execute_sql_with_client(&service_client, &request.sql, context.log_level).await
+    execute_sql_with_client(
+        &service_client,
+        &request.sql,
+        context.log_level,
+        Some(&entity_attributes),
+    )
+    .await
 }
 
 pub async fn execute_sql_with_client(
     service_client: &ServiceClient,
     sql_text: &str,
     log_level: LogLevel,
+    entity_attributes: Option<&[powerplatform_dataverse_client::dataverse::entityattribute::EntityAttribute]>,
 ) -> Result<ExecuteSqlResponse, String> {
     if matches!(log_level, LogLevel::Debug) {
         debug!("SQL: {}", sql_text);
     }
 
     let stmt = sql::parse(sql_text).map_err(|e| e.to_string())?;
+    let lookup_bases = entity_attributes.map(lookup_attribute_set);
     let mut execution_stmt = stmt.clone();
-    let _ = push_down_lookup_type_filters(&mut execution_stmt);
+    if let Some(lookup_bases) = &lookup_bases {
+        let _ = push_down_lookup_type_filters(&mut execution_stmt, lookup_bases);
+    }
     let requires_local_companion_filter =
-        filter_requires_local_companion_evaluation(execution_stmt.filter.as_ref());
+        lookup_bases.as_ref().is_some_and(|lookup_bases| {
+            filter_requires_local_companion_evaluation(execution_stmt.filter.as_ref(), lookup_bases)
+        });
     let fetch_stmt = if requires_local_companion_filter {
         let mut fetch_stmt = execution_stmt.clone();
         fetch_stmt.filter = None;
@@ -117,7 +130,8 @@ pub async fn execute_sql_with_client(
     } else {
         execution_stmt.clone()
     };
-    let parsed = sql::to_fetchxml(&fetch_stmt).map_err(|e| e.to_string())?;
+    let parsed = sql::to_fetchxml_with_lookup_bases(&fetch_stmt, lookup_bases.as_ref())
+        .map_err(|e| e.to_string())?;
 
     let columns_order = parsed
         .column_outputs
@@ -151,8 +165,11 @@ pub async fn execute_sql_with_client(
                 }
                 Err(error) => {
                     if error.contains("0x8004e023") {
-                        let demoted_fetchxml =
-                            aggregate::demote_aggregate_fetchxml(&parsed.fetchxml, &plan)?;
+                        let demoted_fetchxml = aggregate::demote_aggregate_fetchxml(
+                            &parsed.fetchxml,
+                            &plan,
+                            lookup_bases.as_ref(),
+                        )?;
                         let entities = service_client
                             .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
                             .await
@@ -197,7 +214,11 @@ pub async fn execute_sql_with_client(
             assign_row_numbers(&mut rows);
             (rows, "Count retrieved.".to_string(), true)
         } else {
-            let demoted_fetchxml = aggregate::demote_aggregate_fetchxml(&parsed.fetchxml, &plan)?;
+            let demoted_fetchxml = aggregate::demote_aggregate_fetchxml(
+                &parsed.fetchxml,
+                &plan,
+                lookup_bases.as_ref(),
+            )?;
             let entities = service_client
                 .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
                 .await
