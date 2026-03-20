@@ -71,6 +71,9 @@ QueryVerse is a [Dataverse](https://www.microsoft.com/en-us/power-platform/datav
 - Show query execution errors inline in the results area.
 - Keep per-tab query text, results, and execution state.
 
+## Known Issues
+- Companion lookup columns such as `owneridname`, `owneridtype`, or custom lookup `...name` / `...type` fields may require the base lookup column to also be present in the `SELECT` list. For example, `select ownerid, owneridname from account` is currently more reliable than `select owneridname from account`.
+
 ## Dev CLI Params
 When running the Tauri dev app, the following CLI params are supported:
 - `--sql-file <path>`: Open a SQL file on startup.

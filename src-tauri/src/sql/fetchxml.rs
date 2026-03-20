@@ -15,6 +15,7 @@ pub struct FetchXmlTranslation {
 pub fn to_fetchxml(
     stmt: &SelectStmt,
     entity_name: &str,
+    lookup_bases: Option<&std::collections::HashSet<String>>,
 ) -> Result<FetchXmlTranslation, TranslationError> {
     let mut out = String::new();
     let aggregate_mode = select_aggregate_mode(stmt);
@@ -41,6 +42,7 @@ pub fn to_fetchxml(
     out.push_str("\">");
 
     let join_map = build_join_map(stmt);
+    let projected_attributes = collect_projected_attribute_names(stmt);
     let mut join_attributes: std::collections::HashMap<String, Vec<SelectItem>> =
         std::collections::HashMap::new();
 
@@ -69,8 +71,12 @@ pub fn to_fetchxml(
                     if column.alias.is_none() {
                         let (_, raw_attribute_name) =
                             split_qualified(name).unwrap_or((None, name.as_str()));
-                        let attribute_name =
-                            lookup_name_attribute(raw_attribute_name).unwrap_or(raw_attribute_name);
+                        let attribute_name = lookup_companion_base_attribute(
+                            raw_attribute_name,
+                            lookup_bases,
+                            Some(&projected_attributes),
+                        )
+                        .unwrap_or(raw_attribute_name);
                         if !written_attributes.insert(attribute_name.to_string()) {
                             continue;
                         }
@@ -83,6 +89,8 @@ pub fn to_fetchxml(
                     stmt.entity_alias.as_deref(),
                     aggregate_mode,
                     &group_by,
+                    lookup_bases,
+                    Some(&projected_attributes),
                     &mut out,
                 )?;
             }
@@ -125,13 +133,19 @@ fn write_attribute(
     entity_alias: Option<&str>,
     aggregate_mode: bool,
     group_by: &std::collections::HashSet<String>,
+    lookup_bases: Option<&std::collections::HashSet<String>>,
+    projected_attributes: Option<&std::collections::HashSet<String>>,
     out: &mut String,
 ) -> Result<(), TranslationError> {
     match &item.kind {
         SelectItemKind::Attribute(name) => {
             let (_, raw_attribute_name) = split_qualified(name).unwrap_or((None, name.as_str()));
-            let attribute_name =
-                lookup_name_attribute(raw_attribute_name).unwrap_or(raw_attribute_name);
+            let attribute_name = lookup_companion_base_attribute(
+                raw_attribute_name,
+                lookup_bases,
+                projected_attributes,
+            )
+            .unwrap_or(raw_attribute_name);
             if aggregate_mode
                 && (group_by.is_empty() || !group_by_matches_item(item, group_by))
             {
@@ -521,7 +535,16 @@ fn write_join(
 
     if let Some(attrs) = attributes {
         for item in attrs {
-            write_attribute(&item, base_entity, None, aggregate_mode, group_by, out)?;
+            write_attribute(
+                &item,
+                base_entity,
+                None,
+                aggregate_mode,
+                group_by,
+                None,
+                None,
+                out,
+            )?;
         }
     }
 
@@ -750,20 +773,60 @@ fn escape_xml(value: &str) -> String {
     escaped
 }
 
-fn lookup_name_attribute(attribute: &str) -> Option<&str> {
-    let lowered = attribute.to_ascii_lowercase();
-    if lowered == "name" || !lowered.ends_with("name") {
-        return None;
+fn collect_projected_attribute_names(stmt: &SelectStmt) -> std::collections::HashSet<String> {
+    let mut names = std::collections::HashSet::new();
+    if let SelectColumns::Columns(columns) = &stmt.columns {
+        for column in columns {
+            if let SelectItemKind::Attribute(name) = &column.kind {
+                names.insert(name.to_ascii_lowercase());
+                if let Some((_, raw)) = split_qualified(name) {
+                    names.insert(raw.to_ascii_lowercase());
+                }
+            }
+        }
     }
+    names
+}
 
-    let base = &attribute[..attribute.len().saturating_sub(4)];
+fn lookup_companion_base_attribute<'a>(
+    attribute: &'a str,
+    lookup_bases: Option<&std::collections::HashSet<String>>,
+    projected_attributes: Option<&std::collections::HashSet<String>>,
+) -> Option<&'a str> {
+    let lowered = attribute.to_ascii_lowercase();
+    let suffix = if lowered == "name" {
+        return None;
+    } else if lowered.ends_with("name") {
+        "name"
+    } else if lowered.ends_with("type") {
+        "type"
+    } else {
+        return None;
+    };
+
+    let base = &attribute[..attribute.len().saturating_sub(suffix.len())];
     if base.is_empty() {
         return None;
     }
 
     let base_lower = base.to_ascii_lowercase();
-    if !base_lower.ends_with("id") && !base_lower.ends_with("by") {
+    if let Some(lookup_bases) = lookup_bases
+        && !lookup_bases.contains(&base_lower)
+    {
         return None;
+    }
+
+    if suffix == "type" {
+        return Some(base);
+    }
+
+    if !base_lower.ends_with("id") && !base_lower.ends_with("by") {
+        let Some(projected_attributes) = projected_attributes else {
+            return None;
+        };
+        if !projected_attributes.contains(&base_lower) {
+            return None;
+        }
     }
 
     Some(base)

@@ -69,18 +69,33 @@ impl AggregatePlan {
         None
     }
 
-    fn required_columns(&self) -> Vec<String> {
+    fn required_columns(
+        &self,
+        lookup_bases: Option<&std::collections::HashSet<String>>,
+    ) -> Vec<String> {
         let mut columns: Vec<String> = self
             .group_columns
             .iter()
-            .map(|column| column.source.clone())
+            .map(|column| {
+                lookup_companion_base_attribute(&column.source, lookup_bases)
+                    .unwrap_or_else(|| column.source.as_str())
+                    .to_string()
+            })
             .collect();
 
         for aggregate in &self.aggregates {
             if let Some(target) = &aggregate.target
-                && !columns.contains(target)
+                && !columns.contains(
+                    &lookup_companion_base_attribute(target, lookup_bases)
+                        .unwrap_or_else(|| target.as_str())
+                        .to_string(),
+                )
             {
-                columns.push(target.clone());
+                columns.push(
+                    lookup_companion_base_attribute(target, lookup_bases)
+                        .unwrap_or_else(|| target.as_str())
+                        .to_string(),
+                );
             }
         }
 
@@ -169,11 +184,15 @@ pub fn demote_count_fetchxml(fetchxml: &str) -> Result<String, String> {
     strip_order_clauses(&updated)
 }
 
-pub fn demote_aggregate_fetchxml(fetchxml: &str, plan: &AggregatePlan) -> Result<String, String> {
+pub fn demote_aggregate_fetchxml(
+    fetchxml: &str,
+    plan: &AggregatePlan,
+    lookup_bases: Option<&std::collections::HashSet<String>>,
+) -> Result<String, String> {
     let mut updated = fetchxml.replace(" aggregate=\"true\"", "");
     updated = updated.replace(" groupby=\"true\"", "");
     updated = strip_aggregate_attributes(&updated)?;
-    let updated = ensure_attributes(&updated, &plan.required_columns())?;
+    let updated = ensure_attributes(&updated, &plan.required_columns(lookup_bases), lookup_bases)?;
     strip_order_clauses(&updated)
 }
 
@@ -198,13 +217,39 @@ fn strip_aggregate_attributes(fetchxml: &str) -> Result<String, String> {
             + 2;
         let attr_block = &remaining[start..attr_end];
         if !attr_block.contains("aggregate=\"") {
-            output.push_str(attr_block);
+            output.push_str(&strip_demoted_attribute_modifiers(attr_block));
         }
 
         remaining = &remaining[attr_end..];
     }
 
     Ok(output)
+}
+
+fn strip_demoted_attribute_modifiers(attribute_tag: &str) -> String {
+    let mut stripped = attribute_tag
+        .replace(" groupby=\"true\"", "")
+        .replace(" groupby='true'", "");
+
+    while let Some(start) = stripped.find(" alias=\"") {
+        let value_start = start + " alias=\"".len();
+        let Some(end_rel) = stripped[value_start..].find('"') else {
+            break;
+        };
+        let end = value_start + end_rel + 1;
+        stripped.replace_range(start..end, "");
+    }
+
+    while let Some(start) = stripped.find(" alias='") {
+        let value_start = start + " alias='".len();
+        let Some(end_rel) = stripped[value_start..].find('\'') else {
+            break;
+        };
+        let end = value_start + end_rel + 1;
+        stripped.replace_range(start..end, "");
+    }
+
+    stripped
 }
 
 fn strip_order_clauses(fetchxml: &str) -> Result<String, String> {
@@ -232,24 +277,33 @@ fn strip_order_clauses(fetchxml: &str) -> Result<String, String> {
     Ok(output)
 }
 
-fn ensure_attributes(fetchxml: &str, columns: &[String]) -> Result<String, String> {
+fn ensure_attributes(
+    fetchxml: &str,
+    columns: &[String],
+    lookup_bases: Option<&std::collections::HashSet<String>>,
+) -> Result<String, String> {
     if columns.is_empty() {
         return Ok(fetchxml.to_string());
     }
 
     let mut missing: Vec<String> = Vec::new();
     for column in columns {
+        let requested_column =
+            lookup_companion_base_attribute(column, lookup_bases).unwrap_or_else(|| column.as_str());
         if let Some((table, attr)) = split_qualified_column(column) {
-            if has_link_entity_attribute(fetchxml, &table, &attr) {
+            let requested_attr =
+                lookup_companion_base_attribute(&attr, lookup_bases)
+                    .unwrap_or_else(|| attr.as_str());
+            if has_link_entity_attribute(fetchxml, &table, requested_attr) {
                 continue;
             }
-            missing.push(column.clone());
+            missing.push(format!("{table}.{requested_attr}"));
             continue;
         }
-        let needle_double = format!("name=\"{}\"", column);
-        let needle_single = format!("name='{}'", column);
+        let needle_double = format!("name=\"{}\"", requested_column);
+        let needle_single = format!("name='{}'", requested_column);
         if !fetchxml.contains(&needle_double) && !fetchxml.contains(&needle_single) {
-            missing.push(column.clone());
+            missing.push(requested_column.to_string());
         }
     }
 
@@ -383,7 +437,7 @@ pub fn aggregate_rows(
         let mut group_values: HashMap<String, Value> = HashMap::new();
 
         for column in &plan.group_columns {
-            let value = get_entity_value(&entity, &column.source, &column.output);
+            let value = get_group_column_value(&entity, &column.source, &column.output);
             key_parts.push(value_key(&value));
             group_values.entry(column.output.clone()).or_insert(value);
         }
@@ -583,7 +637,101 @@ fn get_entity_value(entity: &Entity, key: &str, alias: &str) -> Value {
             return value.clone();
         }
     }
+    if let Some(value) = companion_entity_value(entity, key, alias) {
+        return value;
+    }
     Value::Null
+}
+
+fn get_group_column_value(entity: &Entity, source: &str, output: &str) -> Value {
+    if let Some(value) = companion_entity_value(entity, source, output) {
+        return value;
+    }
+    get_entity_value(entity, source, output)
+}
+
+fn companion_entity_value(entity: &Entity, key: &str, alias: &str) -> Option<Value> {
+    for candidate in [key, alias] {
+        if let Some((base, suffix)) = split_companion_column(candidate) {
+            for base_candidate in value_candidates(&base, &base) {
+                let Some(value) = entity.attributes.get(&base_candidate) else {
+                    continue;
+                };
+
+                match (suffix, value) {
+                    ("name", Value::EntityReference(reference)) => {
+                        if let Some(name) = &reference.name {
+                            return Some(Value::String(name.clone()));
+                        }
+                    }
+                    ("type", Value::EntityReference(reference)) => {
+                        return Some(Value::String(reference.logical_name.clone()));
+                    }
+                    ("name", Value::OptionSetValue(value)) => {
+                        if let Some(name) = &value.name {
+                            return Some(Value::String(name.clone()));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn split_companion_column(value: &str) -> Option<(String, &'static str)> {
+    let (_, column) = value.rsplit_once('.').unwrap_or(("", value));
+    if let Some(base) = column.strip_suffix("name") {
+        if !base.is_empty() {
+            return Some((base.to_string(), "name"));
+        }
+    }
+    if let Some(base) = column.strip_suffix("type") {
+        if !base.is_empty() {
+            return Some((base.to_string(), "type"));
+        }
+    }
+    None
+}
+
+fn lookup_companion_base_attribute<'a>(
+    attribute: &'a str,
+    lookup_bases: Option<&std::collections::HashSet<String>>,
+) -> Option<&'a str> {
+    let lowered = attribute.to_ascii_lowercase();
+    let suffix = if lowered == "name" {
+        return None;
+    } else if lowered.ends_with("name") {
+        "name"
+    } else if lowered.ends_with("type") {
+        "type"
+    } else {
+        return None;
+    };
+
+    let base = &attribute[..attribute.len().saturating_sub(suffix.len())];
+    if base.is_empty() {
+        return None;
+    }
+
+    let base_lower = base.to_ascii_lowercase();
+    if let Some(lookup_bases) = lookup_bases
+        && !lookup_bases.contains(&base_lower)
+    {
+        return None;
+    }
+
+    if suffix == "type" {
+        return Some(base);
+    }
+
+    if !base_lower.ends_with("id") && !base_lower.ends_with("by") {
+        return None;
+    }
+
+    Some(base)
 }
 
 fn value_candidates(key: &str, alias: &str) -> Vec<String> {
@@ -626,6 +774,21 @@ pub fn apply_having(
     stmt: &SelectStmt,
 ) -> Result<Vec<ResultRow>, String> {
     let Some(expr) = &stmt.having else {
+        return Ok(rows);
+    };
+
+    let mut filtered = Vec::with_capacity(rows.len());
+    for row in rows {
+        if evaluate_expr(&row, expr, stmt)? {
+            filtered.push(row);
+        }
+    }
+
+    Ok(filtered)
+}
+
+pub fn apply_where(rows: Vec<ResultRow>, stmt: &SelectStmt) -> Result<Vec<ResultRow>, String> {
+    let Some(expr) = &stmt.filter else {
         return Ok(rows);
     };
 
@@ -742,13 +905,13 @@ fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
 mod tests {
     use super::{
         AggregateTarget, OrderBy, SelectColumns, aggregate_fallback_plan, aggregate_rows,
-        apply_having, sort_rows_by_order,
+        apply_having, apply_where, sort_rows_by_order,
     };
     use crate::sql::{
         AggregateExpr, AggregateFunction, CompareOp, Expr, Literal, Predicate, PredicateTarget,
         SelectItem, SelectItemKind, SelectStmt,
     };
-    use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
+    use powerplatform_dataverse_client::dataverse::entity::{Entity, EntityReference, Value};
     use uuid::Uuid;
 
     fn make_entity(group_value: Option<&str>) -> Entity {
@@ -759,6 +922,19 @@ mod tests {
                 Value::String(value.to_string()),
             );
         }
+        entity
+    }
+
+    fn make_email_with_regarding_type(logical_name: &str) -> Entity {
+        let mut entity = Entity::new(Uuid::nil(), "email", None);
+        entity.attributes.insert(
+            "regardingobjectid".to_string(),
+            Value::EntityReference(EntityReference {
+                id: Uuid::nil(),
+                logical_name: logical_name.to_string(),
+                name: Some(format!("{logical_name} name")),
+            }),
+        );
         entity
     }
 
@@ -1005,6 +1181,177 @@ mod tests {
             Some(Value::String(value)) if value == "CA"
         ));
         assert!(matches!(rows[0].attributes.get("count"), Some(Value::Int(2))));
+    }
+
+    #[test]
+    fn where_filters_by_lookup_type_companion_column() {
+        let stmt = SelectStmt {
+            columns: SelectColumns::Columns(vec![
+                SelectItem {
+                    kind: SelectItemKind::Attribute("ownerid".to_string()),
+                    alias: None,
+                },
+                SelectItem {
+                    kind: SelectItemKind::Attribute("owneridtype".to_string()),
+                    alias: None,
+                },
+            ]),
+            entity: "account".to_string(),
+            entity_alias: None,
+            joins: Vec::new(),
+            top: Some(20),
+            distinct: false,
+            filter: Some(Expr::Predicate(Predicate::Compare {
+                left: PredicateTarget::Column("owneridtype".to_string()),
+                op: CompareOp::Eq,
+                value: Literal::String("systemuser".to_string()),
+            })),
+            group_by: Vec::new(),
+            having: None,
+            order_by: Vec::new(),
+        };
+
+        let rows = vec![
+            ResultRow {
+                attributes: HashMap::from([
+                    (
+                        "ownerid".to_string(),
+                        Value::EntityReference(EntityReference {
+                            id: Uuid::nil(),
+                            logical_name: "systemuser".to_string(),
+                            name: Some("Jane Doe".to_string()),
+                        }),
+                    ),
+                    (
+                        "owneridtype".to_string(),
+                        Value::String("systemuser".to_string()),
+                    ),
+                ]),
+            },
+            ResultRow {
+                attributes: HashMap::from([
+                    (
+                        "ownerid".to_string(),
+                        Value::EntityReference(EntityReference {
+                            id: Uuid::nil(),
+                            logical_name: "team".to_string(),
+                            name: Some("Sales".to_string()),
+                        }),
+                    ),
+                    ("owneridtype".to_string(), Value::String("team".to_string())),
+                ]),
+            },
+        ];
+
+        let rows = apply_where(rows, &stmt).expect("where");
+
+        assert_eq!(rows.len(), 1);
+        assert!(matches!(
+            rows[0].attributes.get("owneridtype"),
+            Some(Value::String(value)) if value == "systemuser"
+        ));
+    }
+
+    #[test]
+    fn aggregate_group_by_reads_lookup_type_companion_value() {
+        let stmt = SelectStmt {
+            columns: SelectColumns::Columns(vec![
+                SelectItem {
+                    kind: SelectItemKind::Aggregate(AggregateExpr {
+                        function: AggregateFunction::Count,
+                        target: AggregateTarget::Star,
+                    }),
+                    alias: None,
+                },
+                SelectItem {
+                    kind: SelectItemKind::Attribute("regardingobjectidtype".to_string()),
+                    alias: None,
+                },
+            ]),
+            entity: "email".to_string(),
+            entity_alias: None,
+            joins: Vec::new(),
+            top: None,
+            distinct: false,
+            filter: None,
+            group_by: vec!["regardingobjectidtype".to_string()],
+            having: None,
+            order_by: Vec::new(),
+        };
+
+        let plan = aggregate_fallback_plan(&stmt).expect("aggregate plan");
+        let rows = aggregate_rows(
+            vec![
+                make_email_with_regarding_type("account"),
+                make_email_with_regarding_type("account"),
+                make_email_with_regarding_type("contact"),
+            ],
+            &plan,
+            &["count".to_string(), "regardingobjectidtype".to_string()],
+        );
+
+        let account_row = rows
+            .iter()
+            .find(|row| matches!(
+                row.attributes.get("regardingobjectidtype"),
+                Some(Value::String(value)) if value == "account"
+            ))
+            .expect("account group");
+
+        assert!(matches!(
+            account_row.attributes.get("count"),
+            Some(Value::Int(2))
+        ));
+    }
+
+    #[test]
+    fn having_filters_by_lookup_type_companion_value() {
+        let stmt = SelectStmt {
+            columns: SelectColumns::Columns(vec![
+                SelectItem {
+                    kind: SelectItemKind::Aggregate(AggregateExpr {
+                        function: AggregateFunction::Count,
+                        target: AggregateTarget::Star,
+                    }),
+                    alias: None,
+                },
+                SelectItem {
+                    kind: SelectItemKind::Attribute("regardingobjectidtype".to_string()),
+                    alias: None,
+                },
+            ]),
+            entity: "email".to_string(),
+            entity_alias: None,
+            joins: Vec::new(),
+            top: None,
+            distinct: false,
+            filter: None,
+            group_by: vec!["regardingobjectidtype".to_string()],
+            having: Some(Expr::Predicate(Predicate::Compare {
+                left: PredicateTarget::Column("regardingobjectidtype".to_string()),
+                op: CompareOp::Eq,
+                value: Literal::String("account".to_string()),
+            })),
+            order_by: Vec::new(),
+        };
+
+        let plan = aggregate_fallback_plan(&stmt).expect("aggregate plan");
+        let rows = aggregate_rows(
+            vec![
+                make_email_with_regarding_type("account"),
+                make_email_with_regarding_type("account"),
+                make_email_with_regarding_type("contact"),
+            ],
+            &plan,
+            &["count".to_string(), "regardingobjectidtype".to_string()],
+        );
+        let rows = apply_having(rows, &stmt).expect("having");
+
+        assert_eq!(rows.len(), 1);
+        assert!(matches!(
+            rows[0].attributes.get("regardingobjectidtype"),
+            Some(Value::String(value)) if value == "account"
+        ));
     }
 }
 

@@ -52,7 +52,14 @@ export function buildResultColumnDescriptors(
 ): { key: string; attribute: string; dataKey: string }[] {
     if (data.length === 0) return [];
 
-    const attributes = Object.keys(data[0].attributes);
+    const attributes = Array.from(
+        data.reduce((set, row) => {
+            for (const attribute of Object.keys(row.attributes)) {
+                set.add(attribute);
+            }
+            return set;
+        }, new Set<string>())
+    );
     const hasRowNumber = attributes.includes(ROW_NUMBER_ATTRIBUTE);
     const dataAttributes = attributes.filter((attribute) => attribute !== ROW_NUMBER_ATTRIBUTE);
 

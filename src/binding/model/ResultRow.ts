@@ -10,6 +10,7 @@ export type MoneyValue = {
 
 export type OptionSetValue = {
     value: number;
+    name?: string | null;
 };
 
 export type OptionSetValueCollection = {

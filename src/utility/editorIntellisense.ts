@@ -37,6 +37,13 @@ const getAttributesForIntellisense = (
             if (seen.has(key)) continue;
             seen.add(key);
             merged.push(attribute);
+
+            for (const companionAttribute of createCompanionIntellisenseAttributes(attribute)) {
+                const companionKey = `${companionAttribute.LogicalName.toLowerCase()}::${companionAttribute.SchemaName.toLowerCase()}`;
+                if (seen.has(companionKey)) continue;
+                seen.add(companionKey);
+                merged.push(companionAttribute);
+            }
         }
     };
 
@@ -49,6 +56,52 @@ const getAttributesForIntellisense = (
     }
 
     return merged;
+};
+
+const createCompanionIntellisenseAttributes = (attribute: EntityAttribute): EntityAttribute[] => {
+    const attributes: EntityAttribute[] = [];
+
+    if (supportsNameCompanionAttribute(attribute.AttributeType)) {
+        attributes.push({
+            ...attribute,
+            LogicalName: `${attribute.LogicalName}name`,
+            SchemaName: `${attribute.SchemaName}Name`,
+            AttributeType: `${attribute.AttributeType} Name`,
+        });
+    }
+
+    if (supportsTypeCompanionAttribute(attribute.AttributeType)) {
+        attributes.push({
+            ...attribute,
+            LogicalName: `${attribute.LogicalName}type`,
+            SchemaName: `${attribute.SchemaName}Type`,
+            AttributeType: `${attribute.AttributeType} Type`,
+        });
+    }
+
+    return attributes;
+};
+
+const supportsNameCompanionAttribute = (attributeType?: string) =>
+    matchesAttributeType(attributeType, [
+        "Customer",
+        "Lookup",
+        "Owner",
+        "Picklist",
+        "State",
+        "Status",
+    ]);
+
+const supportsTypeCompanionAttribute = (attributeType?: string) =>
+    matchesAttributeType(attributeType, ["Customer", "Lookup", "Owner"]);
+
+const matchesAttributeType = (attributeType: string | undefined, values: string[]) => {
+    if (!attributeType) return false;
+    const normalized = attributeType.toLowerCase();
+    return values.some((value) => {
+        const key = value.toLowerCase();
+        return normalized === key || normalized === `${key}type`;
+    });
 };
 
 const toDisplayIdentifier = (value: string | null | undefined) => value?.trim() ?? "";
