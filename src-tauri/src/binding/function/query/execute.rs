@@ -147,7 +147,7 @@ pub async fn execute_sql_with_client(
         let is_joined = !stmt.joins.is_empty();
         if is_joined {
             let server = service_client
-                .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
+                .retrieve_multiple_fetchxml_paging(&parsed.entity_set, &parsed.fetchxml)
                 .await;
 
             match server {
@@ -171,7 +171,7 @@ pub async fn execute_sql_with_client(
                             lookup_bases.as_ref(),
                         )?;
                         let entities = service_client
-                            .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
+                            .retrieve_multiple_fetchxml_paging(&parsed.entity_set, &demoted_fetchxml)
                             .await
                             .map_err(|error| {
                                 error!("Error: {error}");
@@ -220,7 +220,7 @@ pub async fn execute_sql_with_client(
                 lookup_bases.as_ref(),
             )?;
             let entities = service_client
-                .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
+                .retrieve_multiple_fetchxml_paging(&parsed.entity_set, &demoted_fetchxml)
                 .await
                 .map_err(|error| {
                     error!("execute_sql retrieve_multiple_fetchxml (aggregate) failed: {error}");
@@ -236,7 +236,7 @@ pub async fn execute_sql_with_client(
         }
     } else {
         let entities = service_client
-            .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
+            .retrieve_multiple_fetchxml_paging(&parsed.entity_set, &parsed.fetchxml)
             .await
             .map_err(|error| {
                 error!("execute_sql retrieve_multiple_fetchxml failed: {error}");

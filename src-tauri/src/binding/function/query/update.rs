@@ -96,7 +96,7 @@ pub async fn prepare_update_sql(
     let fetch = sql::update_to_fetchxml(&stmt, &primary_id_attribute).map_err(|e| e.to_string())?;
 
     let entities = service_client
-        .retrieve_multiple_fetchxml(&fetch.entity_set, &fetch.fetchxml)
+        .retrieve_multiple_fetchxml_paging(&fetch.entity_set, &fetch.fetchxml)
         .await
         .map_err(|error| {
             error!("prepare_update_sql retrieve_multiple_fetchxml failed: {error}");

@@ -651,15 +651,25 @@ export default function App() {
             return;
         }
 
+        const selectedText =
+            typeof editorRef.current?.getSelectedText === "function"
+                ? editorRef.current.getSelectedText()
+                : "";
+        const selectedQuery = selectedText.trim();
+        const queryToExecute =
+            selectedQuery.length > 0
+                ? selectedQuery
+                : editorRef.current?.getValue() ?? targetTab.query;
+
         updateTab(targetTab.id, (tab) => ({
             ...tab,
             isExecuting: true,
             executeError: null,
         }));
 
-        if (isUpdateQuery(targetTab.query)) {
+        if (isUpdateQuery(queryToExecute)) {
             try {
-                const preview = await prepareUpdateSql(targetTab.query);
+                const preview = await prepareUpdateSql(queryToExecute);
                 if (!preview.success) {
                     updateTab(targetTab.id, (tab) => ({
                         ...tab,
@@ -693,9 +703,9 @@ export default function App() {
             return;
         }
 
-        if (isDeleteQuery(targetTab.query)) {
+        if (isDeleteQuery(queryToExecute)) {
             try {
-                const preview = await prepareDeleteSql(targetTab.query);
+                const preview = await prepareDeleteSql(queryToExecute);
                 if (!preview.success) {
                     updateTab(targetTab.id, (tab) => ({
                         ...tab,
@@ -730,7 +740,7 @@ export default function App() {
         }
 
         try {
-            const response = await executeSql(targetTab.query);
+            const response = await executeSql(queryToExecute);
             if (!response.success) {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
