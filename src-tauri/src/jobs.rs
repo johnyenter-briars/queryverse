@@ -5,6 +5,7 @@ use tauri::async_runtime::Mutex as AsyncMutex;
 use crate::binding::model::{
     backgroundjobstatus::{BackgroundJobResult, BackgroundJobState, BackgroundJobStatus},
     deletesqlexecuteresponse::DeleteSqlExecuteResponse,
+    executesqlresponse::ExecuteSqlResponse,
     updatesqlexecuteresponse::UpdateSqlExecuteResponse,
 };
 
@@ -84,6 +85,25 @@ pub async fn complete_update_job(
         job.total = response.updated + response.failed;
         job.message = response.message.clone();
         job.result = Some(BackgroundJobResult::Update(response));
+    }
+}
+
+pub async fn complete_select_job(
+    job_store: &JobStore,
+    job_id: &str,
+    response: ExecuteSqlResponse,
+) {
+    if let Some(job) = job_store.lock().await.get_mut(job_id) {
+        job.state = if response.success {
+            BackgroundJobState::Success
+        } else {
+            BackgroundJobState::Failed
+        };
+        job.current_batch = job.total_batches.max(job.current_batch);
+        job.processed = response.value.len();
+        job.total = response.value.len();
+        job.message = response.message.clone();
+        job.result = Some(BackgroundJobResult::Select(response));
     }
 }
 

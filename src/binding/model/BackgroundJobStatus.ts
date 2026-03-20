@@ -1,9 +1,13 @@
 import { DeleteSqlExecuteResponse } from "./DeleteSqlExecuteResponse";
+import { ExecuteSqlResponse } from "./ExecuteSqlResponse";
 import { UpdateSqlExecuteResponse } from "./UpdateSqlExecuteResponse";
 
 export type BackgroundJobState = "running" | "failed" | "success";
 
 export type BackgroundJobResult =
+    | {
+          select: ExecuteSqlResponse;
+      }
     | {
           update: UpdateSqlExecuteResponse;
       }

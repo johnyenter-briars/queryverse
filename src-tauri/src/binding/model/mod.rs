@@ -9,6 +9,7 @@ pub mod deletesqlexecuteresponse;
 pub mod deletesqljobstartresponse;
 pub mod deletesqlpreviewresponse;
 pub mod executesqlrequest;
+pub mod executesqljobstartresponse;
 pub mod executesqlresponse;
 pub mod listconnectionsresponse;
 pub mod listentitydefinitionsrequest;

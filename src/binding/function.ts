@@ -6,11 +6,11 @@ import { UpdateConnectionResponse } from "./model/UpdateConnectionResponse";
 import { FetchXmlPreview } from "./model/FetchXmlPreview";
 import { ListConnectionsResponse } from "./model/ListConnectionsResponse";
 import { ExecuteSqlRequest } from "./model/ExecuteSqlRequest";
+import { ExecuteSqlJobStartResponse } from "./model/ExecuteSqlJobStartResponse";
 import { EntityDefinition } from "./model/EntityDefinition";
 import { EntityAttribute } from "./model/EntityAttribute";
 import { EntityRelationship } from "./model/EntityRelationship";
 import { SetConnectionRequest } from "./model/SetConnectionRequest";
-import { ExecuteSqlResponse } from "./model/ExecuteSqlResponse";
 import { MultipleResponse } from "./model/MultipleResponse";
 import { OpenSqlFileResponse } from "./model/OpenSqlFileResponse";
 import { SaveSqlFileRequest } from "./model/SaveSqlFileRequest";
@@ -73,8 +73,8 @@ const logBindingResponse = (command: string, response: unknown): void => {
 
 export const executeSql = async (
     sql: string
-): Promise<ExecuteSqlResponse> => {
-    const response: ExecuteSqlResponse = await invoke("execute_sql", {
+): Promise<ExecuteSqlJobStartResponse> => {
+    const response: ExecuteSqlJobStartResponse = await invoke("execute_sql", {
         request: {
             sql,
         } satisfies ExecuteSqlRequest,

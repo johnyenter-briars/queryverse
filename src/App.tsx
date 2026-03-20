@@ -186,7 +186,6 @@ export default function App() {
     const editorRef = useRef<CustomEditorHandle | null>(null);
     const jobPollersRef = useRef<Map<string, number>>(new Map());
     const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
-    const [debugEnabled, setDebugEnabled] = useState(false);
     const [tabContextMenu, setTabContextMenu] = useState<{
         open: boolean;
         x: number;
@@ -493,7 +492,7 @@ export default function App() {
     };
 
     const startBackgroundJobPolling = (
-        action: DataChangeAction,
+        action: DataChangeAction | "select",
         jobId: string,
         tabId: number
     ) => {
@@ -553,10 +552,6 @@ export default function App() {
                     );
 
                     const resultResponse = await getBackgroundJobResult(jobId);
-                    const resultRow =
-                        "update" in resultResponse.value
-                            ? buildUpdateSummaryRow(resultResponse.value.update)
-                            : buildDeleteSummaryRow(resultResponse.value.delete);
                     logDebug(
                         "Fetched background job result",
                         {
@@ -566,6 +561,29 @@ export default function App() {
                         },
                         "queryverse::frontend::jobs"
                     );
+                    if ("select" in resultResponse.value) {
+                        const selectResult = resultResponse.value as {
+                            select: {
+                                value: ResultRow[];
+                                metadata: SqlQueryMetadata | null;
+                            };
+                        };
+                        updateTab(tabId, (tab) => ({
+                            ...tab,
+                            results: selectResult.select.value,
+                            resultLayout: "grid",
+                            queryMetadata: selectResult.select.metadata ?? null,
+                            executeError: null,
+                            isExecuting: false,
+                            loadingMessage: null,
+                        }));
+                        return;
+                    }
+
+                    const resultRow =
+                        "update" in resultResponse.value
+                            ? buildUpdateSummaryRow(resultResponse.value.update)
+                            : buildDeleteSummaryRow(resultResponse.value.delete);
                     updateTab(tabId, (tab) => ({
                         ...tab,
                         results: [resultRow],
@@ -703,9 +721,6 @@ export default function App() {
         const initializeFromCli = async () => {
             try {
                 const context = await getLaunchContext();
-                const debugMode =
-                    context.logLevel === "debug" || context.logLevel === "trace";
-                setDebugEnabled(debugMode);
                 let connectionToUse: Connection | null = null;
 
                 if (context.connectionName) {
@@ -950,32 +965,26 @@ export default function App() {
 
         try {
             const response = await executeSql(queryToExecute);
-            if (!response.success) {
-                updateTab(targetTab.id, (tab) => ({
-                    ...tab,
-                    results: [],
-                    resultLayout: "grid",
-                    queryMetadata: null,
-                    executeError: response.message || "Query failed",
-                    isExecuting: false,
-                    loadingMessage: null,
-                }));
-                return;
-            }
-
-            if (debugEnabled) {
-                console.log("Query results response:", response);
-            }
-
             updateTab(targetTab.id, (tab) => ({
                 ...tab,
-                results: response.value,
-                resultLayout: "grid",
-                queryMetadata: response.metadata ?? null,
+                results: [
+                    {
+                        attributes: {
+                            status: "queued",
+                            processed: 0,
+                            total: 0,
+                            progressPercent: 0,
+                            message: response.message,
+                        },
+                    },
+                ],
+                resultLayout: "details",
+                queryMetadata: null,
                 executeError: null,
-                isExecuting: false,
-                loadingMessage: null,
+                isExecuting: true,
+                loadingMessage: response.message,
             }));
+            startBackgroundJobPolling("select", response.jobId, targetTab.id);
         } catch (error) {
             updateTab(targetTab.id, (tab) => ({
                 ...tab,
