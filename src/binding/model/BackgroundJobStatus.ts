@@ -15,6 +15,8 @@ export type BackgroundJobStatus = {
     jobId: string;
     kind: string;
     state: BackgroundJobState;
+    currentBatch: number;
+    totalBatches: number;
     processed: number;
     total: number;
     message: string;

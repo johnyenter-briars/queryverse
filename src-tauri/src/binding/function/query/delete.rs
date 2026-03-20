@@ -23,7 +23,7 @@ use crate::{
 
 use super::helpers::{resolve_primary_id_attribute, value_to_string};
 use super::metadata::get_entity_definitions_cached;
-use super::writebatch::{clamp_batch_size, execute_delete_batches};
+use super::writebatch::{clamp_batch_size, execute_delete_batches_with_progress};
 
 #[tauri::command]
 pub async fn prepare_delete_sql(
@@ -164,6 +164,8 @@ pub async fn execute_delete_sql(
 
     let job_id = Uuid::new_v4().to_string();
     let total = batch.ids.len();
+    let batch_size = clamp_batch_size(settings.dataverse_default_batch_size);
+    let total_batches = total.div_ceil(batch_size);
 
     insert_job(
         &database.background_jobs,
@@ -171,6 +173,8 @@ pub async fn execute_delete_sql(
             job_id: job_id.clone(),
             kind: "delete".to_string(),
             state: BackgroundJobState::Running,
+            current_batch: 0,
+            total_batches,
             processed: 0,
             total,
             message: format!("Queued delete job for {total} record(s)."),
@@ -181,7 +185,6 @@ pub async fn execute_delete_sql(
 
     let job_store = database.background_jobs.clone();
     let job_result_store = database.background_job_results.clone();
-    let batch_size = clamp_batch_size(settings.dataverse_default_batch_size);
     let queued_job_id = job_id.clone();
     tauri::async_runtime::spawn(async move {
         update_job_progress(
@@ -189,16 +192,37 @@ pub async fn execute_delete_sql(
             &queued_job_id,
             BackgroundJobState::Running,
             0,
+            total_batches,
+            0,
             total,
-            format!("Running delete job for {total} record(s)."),
+            format!("Running delete job for {total} record(s) in {total_batches} batch(es)."),
         )
         .await;
 
-        let outcome = execute_delete_batches(
+        let outcome = execute_delete_batches_with_progress(
             &service_client,
             &batch,
             &request_parameters,
             batch_size,
+            |processed, total, current_batch, total_batches| {
+                let job_store = job_store.clone();
+                let job_id = queued_job_id.clone();
+                tauri::async_runtime::spawn(async move {
+                    update_job_progress(
+                        &job_store,
+                        &job_id,
+                        BackgroundJobState::Running,
+                        current_batch,
+                        total_batches,
+                        processed,
+                        total,
+                        format!(
+                            "Processed {processed} of {total} record(s), batch {current_batch} of {total_batches}."
+                        ),
+                    )
+                    .await;
+                });
+            },
         )
         .await;
 
@@ -231,7 +255,16 @@ pub async fn execute_delete_sql(
                 complete_delete_job(&job_store, &queued_job_id, response).await;
             }
             Err(error) => {
-                fail_job(&job_store, &queued_job_id, 0, total, error).await;
+                fail_job(
+                    &job_store,
+                    &queued_job_id,
+                    0,
+                    total_batches,
+                    0,
+                    total,
+                    error,
+                )
+                .await;
             }
         }
     });

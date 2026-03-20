@@ -24,14 +24,15 @@ pub(crate) async fn execute_update_batches_with_progress<F>(
     mut on_progress: F,
 ) -> Result<(usize, usize, Vec<String>), String>
 where
-    F: FnMut(usize, usize),
+    F: FnMut(usize, usize, usize, usize),
 {
     let mut updated = 0usize;
     let mut failed = 0usize;
     let mut errors = Vec::new();
     let total = batch.ids.len();
+    let total_batches = total.div_ceil(batch_size);
 
-    for ids in batch.ids.chunks(batch_size) {
+    for (index, ids) in batch.ids.chunks(batch_size).enumerate() {
         let mut requests = Vec::new();
         let mut request_ids = Vec::new();
 
@@ -82,23 +83,29 @@ where
             }
         }
 
-        on_progress(updated + failed, total);
+        on_progress(updated + failed, total, index + 1, total_batches);
     }
 
     Ok((updated, failed, errors))
 }
 
-pub(crate) async fn execute_delete_batches(
+pub(crate) async fn execute_delete_batches_with_progress<F>(
     service_client: &ServiceClient,
     batch: &DeleteSet,
     request_parameters: &RequestParameters,
     batch_size: usize,
-) -> Result<(usize, usize, Vec<String>), String> {
+    mut on_progress: F,
+) -> Result<(usize, usize, Vec<String>), String>
+where
+    F: FnMut(usize, usize, usize, usize),
+{
     let mut deleted = 0usize;
     let mut failed = 0usize;
     let mut errors = Vec::new();
+    let total = batch.ids.len();
+    let total_batches = total.div_ceil(batch_size);
 
-    for ids in batch.ids.chunks(batch_size) {
+    for (index, ids) in batch.ids.chunks(batch_size).enumerate() {
         let mut requests = Vec::new();
         let mut request_ids = Vec::new();
 
@@ -149,6 +156,8 @@ pub(crate) async fn execute_delete_batches(
                 errors.push(format!("{record_id}: {}", fault.message));
             }
         }
+
+        on_progress(deleted + failed, total, index + 1, total_batches);
     }
 
     Ok((deleted, failed, errors))

@@ -19,6 +19,8 @@ pub struct BackgroundJobStatus {
     pub job_id: String,
     pub kind: String,
     pub state: BackgroundJobState,
+    pub current_batch: usize,
+    pub total_batches: usize,
     pub processed: usize,
     pub total: usize,
     pub message: String,

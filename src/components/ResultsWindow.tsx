@@ -103,6 +103,7 @@ export interface IResultsWindowProps {
     query: string;
     queryMetadata?: SqlQueryMetadata | null;
     isLoading: boolean;
+    loadingMessage?: string;
     errorMessage?: string | null;
 }
 
@@ -237,21 +238,6 @@ export const ResultsWindow = React.memo(
             );
         }, [totalWidth]);
 
-        if (isLoading) {
-            return (
-                <div
-                    style={{
-                        height: "100%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                    }}
-                >
-                    <Spinner label="Running query..." />
-                </div>
-            );
-        }
-
         if (errorMessage) {
             return (
                 <div
@@ -307,6 +293,13 @@ export const ResultsWindow = React.memo(
                     overflow: "hidden",
                 }}
             >
+                {isLoading ? (
+                    <div className={styles.loadingOverlay}>
+                        <div className={styles.loadingCard}>
+                            <Spinner />
+                        </div>
+                    </div>
+                ) : null}
                 <DataGrid
                     items={data}
                     columns={columns}

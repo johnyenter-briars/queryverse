@@ -89,6 +89,23 @@ export const useResultsWindowStyles = makeStyles({
             backgroundColor: tokens.colorNeutralBackground2,
         },
     },
+    loadingOverlay: {
+        position: "absolute",
+        right: tokens.spacingHorizontalM,
+        bottom: tokens.spacingHorizontalM,
+        display: "flex",
+        pointerEvents: "none",
+        zIndex: 20,
+    },
+    loadingCard: {
+        display: "inline-flex",
+        alignItems: "center",
+        backgroundColor: tokens.colorNeutralBackground3,
+        border: `1px solid ${tokens.colorNeutralStroke2}`,
+        borderRadius: tokens.borderRadiusMedium,
+        boxShadow: tokens.shadow16,
+        ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
+    },
     cellContent: {
         display: "block",
         width: "100%",

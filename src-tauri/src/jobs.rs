@@ -49,6 +49,8 @@ pub async fn update_job_progress(
     job_store: &JobStore,
     job_id: &str,
     state: BackgroundJobState,
+    current_batch: usize,
+    total_batches: usize,
     processed: usize,
     total: usize,
     message: String,
@@ -58,6 +60,8 @@ pub async fn update_job_progress(
             return;
         }
         job.state = state;
+        job.current_batch = current_batch;
+        job.total_batches = total_batches;
         job.processed = processed;
         job.total = total;
         job.message = message;
@@ -75,6 +79,7 @@ pub async fn complete_update_job(
         } else {
             BackgroundJobState::Failed
         };
+        job.current_batch = job.total_batches;
         job.processed = response.updated + response.failed;
         job.total = response.updated + response.failed;
         job.message = response.message.clone();
@@ -93,6 +98,7 @@ pub async fn complete_delete_job(
         } else {
             BackgroundJobState::Failed
         };
+        job.current_batch = job.total_batches;
         job.processed = response.deleted + response.failed;
         job.total = response.deleted + response.failed;
         job.message = response.message.clone();
@@ -100,9 +106,19 @@ pub async fn complete_delete_job(
     }
 }
 
-pub async fn fail_job(job_store: &JobStore, job_id: &str, processed: usize, total: usize, error: String) {
+pub async fn fail_job(
+    job_store: &JobStore,
+    job_id: &str,
+    current_batch: usize,
+    total_batches: usize,
+    processed: usize,
+    total: usize,
+    error: String,
+) {
     if let Some(job) = job_store.lock().await.get_mut(job_id) {
         job.state = BackgroundJobState::Failed;
+        job.current_batch = current_batch;
+        job.total_batches = total_batches;
         job.processed = processed;
         job.total = total;
         job.message = error;

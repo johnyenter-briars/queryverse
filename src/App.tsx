@@ -83,6 +83,7 @@ type EditorTab = {
     previewError: string | null;
     executeError: string | null;
     isExecuting: boolean;
+    loadingMessage: string | null;
     queryMetadata: SqlQueryMetadata | null;
     schemaLogicalName?: string | null;
     schemaDisplayName?: string | null;
@@ -112,6 +113,7 @@ const createQueryTab = (id: number): EditorTab => ({
     previewError: null,
     executeError: null,
     isExecuting: false,
+    loadingMessage: null,
     queryMetadata: null,
 });
 
@@ -135,6 +137,7 @@ const createFetchXmlTab = (
     previewError: null,
     executeError: null,
     isExecuting: false,
+    loadingMessage: null,
     queryMetadata: null,
 });
 
@@ -159,6 +162,7 @@ const createSchemaTab = (
     previewError: null,
     executeError: null,
     isExecuting: false,
+    loadingMessage: null,
     queryMetadata: null,
     schemaLogicalName: logicalName,
     schemaDisplayName: displayName,
@@ -431,10 +435,17 @@ export default function App() {
     const buildJobProgressRow = (status: BackgroundJobStatus): ResultRow => {
         const progressPercent =
             status.total > 0 ? Math.round((status.processed / status.total) * 100) : 0;
+        const batchLabel =
+            status.totalBatches > 0
+                ? `${status.currentBatch} / ${status.totalBatches}`
+                : "0 / 0";
 
         return {
             attributes: {
                 status: status.state,
+                currentBatch: status.currentBatch,
+                totalBatches: status.totalBatches,
+                batch: batchLabel,
                 processed: status.processed,
                 total: status.total,
                 progressPercent,
@@ -498,6 +509,8 @@ export default function App() {
                         action,
                         kind: status.kind,
                         state: status.state,
+                        currentBatch: status.currentBatch,
+                        totalBatches: status.totalBatches,
                         processed: status.processed,
                         total: status.total,
                     },
@@ -511,6 +524,7 @@ export default function App() {
                         queryMetadata: null,
                         executeError: null,
                         isExecuting: true,
+                        loadingMessage: status.message,
                     }));
 
                     const timeoutId = window.setTimeout(() => {
@@ -553,6 +567,7 @@ export default function App() {
                         queryMetadata: null,
                         executeError: null,
                         isExecuting: false,
+                        loadingMessage: null,
                     }));
                     return;
                 }
@@ -561,6 +576,7 @@ export default function App() {
                     ...tab,
                     executeError: status.message || "Background update job failed.",
                     isExecuting: false,
+                    loadingMessage: null,
                 }));
             } catch (error) {
                 clearJobPoller(jobId);
@@ -568,6 +584,7 @@ export default function App() {
                     ...tab,
                     executeError: getErrorMessage(error),
                     isExecuting: false,
+                    loadingMessage: null,
                 }));
             }
         };
@@ -834,6 +851,7 @@ export default function App() {
         updateTab(targetTab.id, (tab) => ({
             ...tab,
             isExecuting: true,
+            loadingMessage: "Running query...",
             executeError: null,
         }));
 
@@ -845,6 +863,7 @@ export default function App() {
                         ...tab,
                         executeError: preview.message || "Update preview failed",
                         isExecuting: false,
+                        loadingMessage: null,
                     }));
                     return;
                 }
@@ -862,12 +881,14 @@ export default function App() {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
                     isExecuting: false,
+                    loadingMessage: null,
                 }));
             } catch (error) {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
                     executeError: getErrorMessage(error),
                     isExecuting: false,
+                    loadingMessage: null,
                 }));
             }
             return;
@@ -881,6 +902,7 @@ export default function App() {
                         ...tab,
                         executeError: preview.message || "Delete preview failed",
                         isExecuting: false,
+                        loadingMessage: null,
                     }));
                     return;
                 }
@@ -898,12 +920,14 @@ export default function App() {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
                     isExecuting: false,
+                    loadingMessage: null,
                 }));
             } catch (error) {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
                     executeError: getErrorMessage(error),
                     isExecuting: false,
+                    loadingMessage: null,
                 }));
             }
             return;
@@ -918,6 +942,7 @@ export default function App() {
                     queryMetadata: null,
                     executeError: response.message || "Query failed",
                     isExecuting: false,
+                    loadingMessage: null,
                 }));
                 return;
             }
@@ -932,6 +957,7 @@ export default function App() {
                 queryMetadata: response.metadata ?? null,
                 executeError: null,
                 isExecuting: false,
+                loadingMessage: null,
             }));
         } catch (error) {
             updateTab(targetTab.id, (tab) => ({
@@ -940,6 +966,7 @@ export default function App() {
                 executeError: getErrorMessage(error),
                 queryMetadata: null,
                 isExecuting: false,
+                loadingMessage: null,
             }));
         }
     };
@@ -1272,6 +1299,7 @@ export default function App() {
         updateTab(dataChangeConfirm.tabId, (tab) => ({
             ...tab,
             isExecuting: true,
+            loadingMessage: "Queuing job...",
             executeError: null,
         }));
 
@@ -1294,6 +1322,7 @@ export default function App() {
                     queryMetadata: null,
                     executeError: null,
                     isExecuting: true,
+                    loadingMessage: response.message,
                 }));
                 startBackgroundJobPolling("delete", response.jobId, dataChangeConfirm.tabId);
                 return;
@@ -1316,6 +1345,7 @@ export default function App() {
                 queryMetadata: null,
                 executeError: null,
                 isExecuting: true,
+                loadingMessage: response.message,
             }));
             startBackgroundJobPolling("update", response.jobId, dataChangeConfirm.tabId);
         } catch (error) {
@@ -1323,6 +1353,7 @@ export default function App() {
                 ...tab,
                 executeError: getErrorMessage(error),
                 isExecuting: false,
+                loadingMessage: null,
             }));
         } finally {
             resetDataChangeConfirm();
@@ -1680,6 +1711,7 @@ export default function App() {
                                     query={activeTab.query}
                                     queryMetadata={activeTab.queryMetadata}
                                     isLoading={activeTab.isExecuting}
+                                    loadingMessage={activeTab.loadingMessage ?? undefined}
                                     errorMessage={activeTab.executeError}
                                 />
                             </div>

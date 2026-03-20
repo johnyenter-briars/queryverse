@@ -45,12 +45,16 @@ const summarizeResponse = (response: unknown): unknown => {
     if ("token" in raw) summary.token = raw.token;
     if ("jobId" in raw) summary.jobId = raw.jobId;
     if ("state" in raw) summary.state = raw.state;
+    if ("currentBatch" in raw) summary.currentBatch = raw.currentBatch;
+    if ("totalBatches" in raw) summary.totalBatches = raw.totalBatches;
     if ("processed" in raw) summary.processed = raw.processed;
     if ("total" in raw) summary.total = raw.total;
     if ("value" in raw && raw.value && typeof raw.value === "object") {
         const value = raw.value as Record<string, unknown>;
         if ("jobId" in value) summary.valueJobId = value.jobId;
         if ("state" in value) summary.valueState = value.state;
+        if ("currentBatch" in value) summary.valueCurrentBatch = value.currentBatch;
+        if ("totalBatches" in value) summary.valueTotalBatches = value.totalBatches;
         if ("processed" in value) summary.valueProcessed = value.processed;
         if ("total" in value) summary.valueTotal = value.total;
         if (Array.isArray(raw.value)) summary.valueCount = raw.value.length;
