@@ -84,6 +84,7 @@ type EditorTab = {
     executeError: string | null;
     isExecuting: boolean;
     loadingMessage: string | null;
+    resultLayout: "grid" | "details";
     queryMetadata: SqlQueryMetadata | null;
     schemaLogicalName?: string | null;
     schemaDisplayName?: string | null;
@@ -114,6 +115,7 @@ const createQueryTab = (id: number): EditorTab => ({
     executeError: null,
     isExecuting: false,
     loadingMessage: null,
+    resultLayout: "grid",
     queryMetadata: null,
 });
 
@@ -138,6 +140,7 @@ const createFetchXmlTab = (
     executeError: null,
     isExecuting: false,
     loadingMessage: null,
+    resultLayout: "grid",
     queryMetadata: null,
 });
 
@@ -163,6 +166,7 @@ const createSchemaTab = (
     executeError: null,
     isExecuting: false,
     loadingMessage: null,
+    resultLayout: "grid",
     queryMetadata: null,
     schemaLogicalName: logicalName,
     schemaDisplayName: displayName,
@@ -521,6 +525,7 @@ export default function App() {
                     updateTab(tabId, (tab) => ({
                         ...tab,
                         results: [buildJobProgressRow(status)],
+                        resultLayout: "details",
                         queryMetadata: null,
                         executeError: null,
                         isExecuting: true,
@@ -564,6 +569,7 @@ export default function App() {
                     updateTab(tabId, (tab) => ({
                         ...tab,
                         results: [resultRow],
+                        resultLayout: "details",
                         queryMetadata: null,
                         executeError: null,
                         isExecuting: false,
@@ -574,6 +580,7 @@ export default function App() {
 
                 updateTab(tabId, (tab) => ({
                     ...tab,
+                    resultLayout: "grid",
                     executeError: status.message || "Background update job failed.",
                     isExecuting: false,
                     loadingMessage: null,
@@ -582,6 +589,7 @@ export default function App() {
                 clearJobPoller(jobId);
                 updateTab(tabId, (tab) => ({
                     ...tab,
+                    resultLayout: "grid",
                     executeError: getErrorMessage(error),
                     isExecuting: false,
                     loadingMessage: null,
@@ -852,6 +860,7 @@ export default function App() {
             ...tab,
             isExecuting: true,
             loadingMessage: "Running query...",
+            resultLayout: "grid",
             executeError: null,
         }));
 
@@ -861,6 +870,7 @@ export default function App() {
                 if (!preview.success) {
                     updateTab(targetTab.id, (tab) => ({
                         ...tab,
+                        resultLayout: "grid",
                         executeError: preview.message || "Update preview failed",
                         isExecuting: false,
                         loadingMessage: null,
@@ -880,12 +890,14 @@ export default function App() {
 
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
+                    resultLayout: "grid",
                     isExecuting: false,
                     loadingMessage: null,
                 }));
             } catch (error) {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
+                    resultLayout: "grid",
                     executeError: getErrorMessage(error),
                     isExecuting: false,
                     loadingMessage: null,
@@ -900,6 +912,7 @@ export default function App() {
                 if (!preview.success) {
                     updateTab(targetTab.id, (tab) => ({
                         ...tab,
+                        resultLayout: "grid",
                         executeError: preview.message || "Delete preview failed",
                         isExecuting: false,
                         loadingMessage: null,
@@ -919,12 +932,14 @@ export default function App() {
 
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
+                    resultLayout: "grid",
                     isExecuting: false,
                     loadingMessage: null,
                 }));
             } catch (error) {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
+                    resultLayout: "grid",
                     executeError: getErrorMessage(error),
                     isExecuting: false,
                     loadingMessage: null,
@@ -939,6 +954,7 @@ export default function App() {
                 updateTab(targetTab.id, (tab) => ({
                     ...tab,
                     results: [],
+                    resultLayout: "grid",
                     queryMetadata: null,
                     executeError: response.message || "Query failed",
                     isExecuting: false,
@@ -954,6 +970,7 @@ export default function App() {
             updateTab(targetTab.id, (tab) => ({
                 ...tab,
                 results: response.value,
+                resultLayout: "grid",
                 queryMetadata: response.metadata ?? null,
                 executeError: null,
                 isExecuting: false,
@@ -963,6 +980,7 @@ export default function App() {
             updateTab(targetTab.id, (tab) => ({
                 ...tab,
                 results: [],
+                resultLayout: "grid",
                 executeError: getErrorMessage(error),
                 queryMetadata: null,
                 isExecuting: false,
@@ -1300,6 +1318,7 @@ export default function App() {
             ...tab,
             isExecuting: true,
             loadingMessage: "Queuing job...",
+            resultLayout: "details",
             executeError: null,
         }));
 
@@ -1319,6 +1338,7 @@ export default function App() {
                             },
                         },
                     ],
+                    resultLayout: "details",
                     queryMetadata: null,
                     executeError: null,
                     isExecuting: true,
@@ -1342,6 +1362,7 @@ export default function App() {
                         },
                     },
                 ],
+                resultLayout: "details",
                 queryMetadata: null,
                 executeError: null,
                 isExecuting: true,
@@ -1351,6 +1372,7 @@ export default function App() {
         } catch (error) {
             updateTab(dataChangeConfirm.tabId, (tab) => ({
                 ...tab,
+                resultLayout: "grid",
                 executeError: getErrorMessage(error),
                 isExecuting: false,
                 loadingMessage: null,
@@ -1712,6 +1734,7 @@ export default function App() {
                                     queryMetadata={activeTab.queryMetadata}
                                     isLoading={activeTab.isExecuting}
                                     loadingMessage={activeTab.loadingMessage ?? undefined}
+                                    layout={activeTab.resultLayout}
                                     errorMessage={activeTab.executeError}
                                 />
                             </div>

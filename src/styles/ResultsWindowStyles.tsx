@@ -106,6 +106,27 @@ export const useResultsWindowStyles = makeStyles({
         boxShadow: tokens.shadow16,
         ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
     },
+    detailsList: {
+        height: "100%",
+        overflowY: "auto",
+        overflowX: "hidden",
+        ...shorthands.padding(tokens.spacingVerticalS, 0),
+    },
+    detailsRow: {
+        display: "grid",
+        gridTemplateColumns: "220px minmax(0, 1fr)",
+        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    },
+    detailsKey: {
+        fontWeight: tokens.fontWeightSemibold,
+        boxShadow: `inset -1px 0 0 ${tokens.colorNeutralStroke2}`,
+        ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalM),
+    },
+    detailsValue: {
+        minWidth: 0,
+        wordBreak: "break-word",
+        ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalM),
+    },
     cellContent: {
         display: "block",
         width: "100%",

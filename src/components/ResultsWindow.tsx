@@ -104,6 +104,7 @@ export interface IResultsWindowProps {
     queryMetadata?: SqlQueryMetadata | null;
     isLoading: boolean;
     loadingMessage?: string;
+    layout?: "grid" | "details";
     errorMessage?: string | null;
 }
 
@@ -139,6 +140,7 @@ export const ResultsWindow = React.memo(
         query,
         queryMetadata,
         isLoading,
+        layout = "grid",
         errorMessage,
     }: IResultsWindowProps) => {
         const { targetDocument } = useFluent();
@@ -281,6 +283,39 @@ export const ResultsWindow = React.memo(
                 }}
             </DataGridRow>
         );
+
+        if (layout === "details" && data.length > 0) {
+            const detailEntries = Object.entries(data[0].attributes);
+
+            return (
+                <div
+                    ref={containerRef}
+                    className={styles.root}
+                    style={{
+                        height: "100%",
+                        width: "100%",
+                        maxWidth: "100%",
+                        overflow: "hidden",
+                    }}
+                >
+                    {isLoading ? (
+                        <div className={styles.loadingOverlay}>
+                            <div className={styles.loadingCard}>
+                                <Spinner />
+                            </div>
+                        </div>
+                    ) : null}
+                    <div className={styles.detailsList}>
+                        {detailEntries.map(([key, value]) => (
+                            <div key={key} className={styles.detailsRow}>
+                                <div className={styles.detailsKey}>{key}</div>
+                                <div className={styles.detailsValue}>{renderValue(value)}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
 
         return (
             <div
