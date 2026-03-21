@@ -93,7 +93,25 @@ function renderValue(value: Value): React.ReactNode {
     return formatValue(value);
 }
 
-function valueToClipboardText(value: Value): string {
+function buildEntityReferenceRecordUrl(
+    value: EntityReference,
+    dataverseUrl?: string | null
+): string {
+    if (!dataverseUrl) {
+        return value.id;
+    }
+
+    const trimmedBaseUrl = dataverseUrl.replace(/\/+$/, "");
+    return `${trimmedBaseUrl}/main.aspx?pagetype=entityrecord&etn=${encodeURIComponent(
+        value.logical_name
+    )}&id=${encodeURIComponent(value.id)}`;
+}
+
+function valueToClipboardText(value: Value, dataverseUrl?: string | null): string {
+    if (isEntityReference(value)) {
+        return buildEntityReferenceRecordUrl(value, dataverseUrl);
+    }
+
     return formatValue(value);
 }
 
@@ -106,6 +124,7 @@ export interface IResultsWindowProps {
     loadingMessage?: string;
     layout?: "grid" | "details";
     errorMessage?: string | null;
+    dataverseUrl?: string | null;
 }
 
 function getRowId(row: ResultRow, primaryIdAttribute?: string): string {
@@ -142,6 +161,7 @@ export const ResultsWindow = React.memo(
         isLoading,
         layout = "grid",
         errorMessage,
+        dataverseUrl,
     }: IResultsWindowProps) => {
         const { targetDocument } = useFluent();
         const scrollbarWidth = useScrollbarWidth({ targetDocument }) ?? 0;
@@ -263,7 +283,10 @@ export const ResultsWindow = React.memo(
                 {({ renderCell, columnId }) => {
                     const column = orderedAttributes.find((entry) => entry.key === columnId);
                     const cellValue = column
-                        ? valueToClipboardText(item.attributes[column.dataKey])
+                        ? valueToClipboardText(
+                            item.attributes[column.dataKey],
+                            dataverseUrl
+                        )
                         : "";
 
                     return (
@@ -319,11 +342,11 @@ export const ResultsWindow = React.memo(
                 >
                     {isLoading ? (
                         <div className={styles.loadingOverlay}>
-                        <div className={styles.loadingCard}>
-                            <Spinner />
+                            <div className={styles.loadingCard}>
+                                <Spinner />
+                            </div>
                         </div>
-                    </div>
-                ) : null}
+                    ) : null}
                     {isLoading ? (
                         <div className={styles.progressCardShell}>{detailsContent}</div>
                     ) : (

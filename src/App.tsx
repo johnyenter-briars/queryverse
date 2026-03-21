@@ -1808,6 +1808,7 @@ export default function App() {
                                     loadingMessage={activeTab.loadingMessage ?? undefined}
                                     layout={activeTab.resultLayout}
                                     errorMessage={activeTab.executeError}
+                                    dataverseUrl={selectedConnection?.auth.dataverseUrl}
                                 />
                             </div>
                         ) : null}
