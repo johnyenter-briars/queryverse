@@ -57,7 +57,10 @@ pub async fn update_job_progress(
     message: String,
 ) {
     if let Some(job) = job_store.lock().await.get_mut(job_id) {
-        if matches!(job.state, BackgroundJobState::Success | BackgroundJobState::Failed) {
+        if matches!(
+            job.state,
+            BackgroundJobState::Success | BackgroundJobState::Failed | BackgroundJobState::Canceled
+        ) {
             return;
         }
         job.state = state;
@@ -69,12 +72,33 @@ pub async fn update_job_progress(
     }
 }
 
+pub async fn request_job_cancellation(job_store: &JobStore, job_id: &str) -> bool {
+    if let Some(job) = job_store.lock().await.get_mut(job_id) {
+        if matches!(
+            job.state,
+            BackgroundJobState::Success | BackgroundJobState::Failed | BackgroundJobState::Canceled
+        ) {
+            return false;
+        }
+
+        job.state = BackgroundJobState::Canceled;
+        job.message = "Job canceled.".to_string();
+        job.result = None;
+        return true;
+    }
+
+    false
+}
+
 pub async fn complete_update_job(
     job_store: &JobStore,
     job_id: &str,
     response: UpdateSqlExecuteResponse,
 ) {
     if let Some(job) = job_store.lock().await.get_mut(job_id) {
+        if matches!(job.state, BackgroundJobState::Canceled) {
+            return;
+        }
         job.state = if response.success {
             BackgroundJobState::Success
         } else {
@@ -94,6 +118,9 @@ pub async fn complete_select_job(
     response: ExecuteSqlResponse,
 ) {
     if let Some(job) = job_store.lock().await.get_mut(job_id) {
+        if matches!(job.state, BackgroundJobState::Canceled) {
+            return;
+        }
         job.state = if response.success {
             BackgroundJobState::Success
         } else {
@@ -113,6 +140,9 @@ pub async fn complete_delete_job(
     response: DeleteSqlExecuteResponse,
 ) {
     if let Some(job) = job_store.lock().await.get_mut(job_id) {
+        if matches!(job.state, BackgroundJobState::Canceled) {
+            return;
+        }
         job.state = if response.success {
             BackgroundJobState::Success
         } else {
@@ -136,6 +166,9 @@ pub async fn fail_job(
     error: String,
 ) {
     if let Some(job) = job_store.lock().await.get_mut(job_id) {
+        if matches!(job.state, BackgroundJobState::Canceled) {
+            return;
+        }
         job.state = BackgroundJobState::Failed;
         job.current_batch = current_batch;
         job.total_batches = total_batches;

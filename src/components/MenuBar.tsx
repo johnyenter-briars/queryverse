@@ -16,6 +16,7 @@ import {
     PlugConnected24Regular,
     Settings24Filled,
     Play24Filled,
+    Stop24Regular,
     DocumentText24Regular,
     Table24Regular,
     Link24Filled,
@@ -48,8 +49,10 @@ export interface IMenuBarProps {
     schemaEnabled: boolean;
     onToggleSchema: () => void;
     onExecuteSql: () => void;
+    onCancelSql: () => void;
     onPreviewFetchXml: () => void;
     canExecute: boolean;
+    isExecuting: boolean;
     canPreview: boolean;
     onOpenSettings: () => void;
     onOpenSqlFile: () => void;
@@ -65,8 +68,10 @@ export function MenuBar({
     schemaEnabled,
     onToggleSchema,
     onExecuteSql,
+    onCancelSql,
     onPreviewFetchXml,
     canExecute,
+    isExecuting,
     canPreview,
     onOpenSettings,
     onOpenSqlFile,
@@ -128,15 +133,20 @@ export function MenuBar({
                 Schema
             </ToolbarButton>
             <ToolbarButton
-                icon={<Play24Filled />}
-                title="Execute Query"
-                disabled={!canExecute}
+                icon={isExecuting ? <Stop24Regular /> : <Play24Filled />}
+                title={isExecuting ? "Cancel Query" : "Execute Query"}
+                disabled={!isExecuting && !canExecute}
+                style={isExecuting ? { color: tokens.colorPaletteRedForeground1 } : undefined}
                 onClick={async () => {
+                    if (isExecuting) {
+                        onCancelSql();
+                        return;
+                    }
                     if (!canExecute) return;
                     onExecuteSql();
                 }}
             >
-                Execute
+                {isExecuting ? "Cancel" : "Execute"}
             </ToolbarButton>
             <ToolbarButton
                 icon={<DocumentText24Regular />}

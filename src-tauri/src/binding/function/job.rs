@@ -1,10 +1,12 @@
+use log::debug;
+
 use crate::{
     Database,
     binding::model::{
         backgroundjobresultresponse::BackgroundJobResultResponse,
         backgroundjobstatusresponse::BackgroundJobStatusResponse,
     },
-    jobs::{get_job, get_job_result},
+    jobs::{get_job, get_job_result, request_job_cancellation},
 };
 
 #[tauri::command]
@@ -39,4 +41,20 @@ pub async fn get_background_job_result(
         message: "Background job result retrieved.".to_string(),
         value: result,
     })
+}
+
+#[tauri::command]
+pub async fn cancel_background_job(
+    _window: tauri::Window,
+    job_id: String,
+    database: tauri::State<'_, Database>,
+) -> Result<bool, String> {
+    let canceled = request_job_cancellation(&database.background_jobs, &job_id).await;
+
+    debug!(
+        "cancel_background_job | job_id={} canceled={}",
+        job_id, canceled
+    );
+
+    Ok(canceled)
 }

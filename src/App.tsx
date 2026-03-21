@@ -29,6 +29,7 @@ import { ResultRow } from "./binding/model/ResultRow";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
 import { Connection } from "./binding/model/Connection";
 import {
+    cancelBackgroundJob,
     discardDeleteSql,
     discardUpdateSql,
     executeDeleteSql,
@@ -84,6 +85,7 @@ type EditorTab = {
     executeError: string | null;
     isExecuting: boolean;
     loadingMessage: string | null;
+    currentJobId: string | null;
     resultLayout: "grid" | "details";
     queryMetadata: SqlQueryMetadata | null;
     schemaLogicalName?: string | null;
@@ -115,6 +117,7 @@ const createQueryTab = (id: number): EditorTab => ({
     executeError: null,
     isExecuting: false,
     loadingMessage: null,
+    currentJobId: null,
     resultLayout: "grid",
     queryMetadata: null,
 });
@@ -140,6 +143,7 @@ const createFetchXmlTab = (
     executeError: null,
     isExecuting: false,
     loadingMessage: null,
+    currentJobId: null,
     resultLayout: "grid",
     queryMetadata: null,
 });
@@ -166,6 +170,7 @@ const createSchemaTab = (
     executeError: null,
     isExecuting: false,
     loadingMessage: null,
+    currentJobId: null,
     resultLayout: "grid",
     queryMetadata: null,
     schemaLogicalName: logicalName,
@@ -491,6 +496,17 @@ export default function App() {
         return { attributes };
     };
 
+    const buildCanceledSummaryRow = (status: BackgroundJobStatus): ResultRow => ({
+        attributes: {
+            status: "canceled",
+            currentBatch: status.currentBatch,
+            totalBatches: status.totalBatches,
+            processed: status.processed,
+            total: status.total,
+            message: status.message || "Job canceled.",
+        },
+    });
+
     const startBackgroundJobPolling = (
         action: DataChangeAction | "select",
         jobId: string,
@@ -529,6 +545,7 @@ export default function App() {
                         executeError: null,
                         isExecuting: true,
                         loadingMessage: status.message,
+                        currentJobId: jobId,
                     }));
 
                     const timeoutId = window.setTimeout(() => {
@@ -539,6 +556,20 @@ export default function App() {
                 }
 
                 clearJobPoller(jobId);
+
+                if (status.state === "canceled") {
+                    updateTab(tabId, (tab) => ({
+                        ...tab,
+                        results: [buildCanceledSummaryRow(status)],
+                        resultLayout: "details",
+                        queryMetadata: null,
+                        executeError: null,
+                        isExecuting: false,
+                        loadingMessage: null,
+                        currentJobId: null,
+                    }));
+                    return;
+                }
 
                 if (status.state === "success" || status.state === "failed") {
                     logDebug(
@@ -576,6 +607,7 @@ export default function App() {
                             executeError: null,
                             isExecuting: false,
                             loadingMessage: null,
+                            currentJobId: null,
                         }));
                         return;
                     }
@@ -592,6 +624,7 @@ export default function App() {
                         executeError: null,
                         isExecuting: false,
                         loadingMessage: null,
+                        currentJobId: null,
                     }));
                     return;
                 }
@@ -602,6 +635,7 @@ export default function App() {
                     executeError: status.message || "Background update job failed.",
                     isExecuting: false,
                     loadingMessage: null,
+                    currentJobId: null,
                 }));
             } catch (error) {
                 clearJobPoller(jobId);
@@ -611,6 +645,7 @@ export default function App() {
                     executeError: getErrorMessage(error),
                     isExecuting: false,
                     loadingMessage: null,
+                    currentJobId: null,
                 }));
             }
         };
@@ -983,6 +1018,7 @@ export default function App() {
                 executeError: null,
                 isExecuting: true,
                 loadingMessage: response.message,
+                currentJobId: response.jobId,
             }));
             startBackgroundJobPolling("select", response.jobId, targetTab.id);
         } catch (error) {
@@ -994,6 +1030,7 @@ export default function App() {
                 queryMetadata: null,
                 isExecuting: false,
                 loadingMessage: null,
+                currentJobId: null,
             }));
         }
     };
@@ -1327,6 +1364,7 @@ export default function App() {
             ...tab,
             isExecuting: true,
             loadingMessage: "Queuing job...",
+            currentJobId: null,
             resultLayout: "details",
             executeError: null,
         }));
@@ -1352,6 +1390,7 @@ export default function App() {
                     executeError: null,
                     isExecuting: true,
                     loadingMessage: response.message,
+                    currentJobId: response.jobId,
                 }));
                 startBackgroundJobPolling("delete", response.jobId, dataChangeConfirm.tabId);
                 return;
@@ -1376,6 +1415,7 @@ export default function App() {
                 executeError: null,
                 isExecuting: true,
                 loadingMessage: response.message,
+                currentJobId: response.jobId,
             }));
             startBackgroundJobPolling("update", response.jobId, dataChangeConfirm.tabId);
         } catch (error) {
@@ -1385,6 +1425,7 @@ export default function App() {
                 executeError: getErrorMessage(error),
                 isExecuting: false,
                 loadingMessage: null,
+                currentJobId: null,
             }));
         } finally {
             resetDataChangeConfirm();
@@ -1404,6 +1445,24 @@ export default function App() {
             }
         }
         resetDataChangeConfirm();
+    };
+
+    const handleCancelActiveTab = async () => {
+        if (!activeTab || activeTab.kind !== "query" || !activeTab.currentJobId) return;
+
+        try {
+            await cancelBackgroundJob(activeTab.currentJobId);
+            updateTab(activeTab.id, (tab) => ({
+                ...tab,
+                loadingMessage: "Cancelling query...",
+                executeError: null,
+            }));
+        } catch (error) {
+            updateTab(activeTab.id, (tab) => ({
+                ...tab,
+                executeError: getErrorMessage(error),
+            }));
+        }
     };
 
     return (
@@ -1429,12 +1488,15 @@ export default function App() {
                         }
                     }}
                     onExecuteSql={handleExecuteActiveTab}
+                    onCancelSql={handleCancelActiveTab}
                     onPreviewFetchXml={handlePreviewActiveTab}
                     canExecute={Boolean(
                         selectedConnection?.id &&
                             activeTab?.kind === "query" &&
-                            !activeTab?.isEditorDirty
+                            !activeTab?.isEditorDirty &&
+                            !activeTab?.isExecuting
                     )}
+                    isExecuting={Boolean(activeTab?.kind === "query" && activeTab?.isExecuting)}
                     canPreview={Boolean(activeTab?.kind === "query")}
                     onOpenSqlFile={handleOpenSqlFile}
                     onSaveSqlFile={handleSaveActiveTab}
@@ -1455,7 +1517,8 @@ export default function App() {
                             ? Boolean(
                                   selectedConnection?.id &&
                                       activeTab?.kind === "query" &&
-                                      !activeTab?.isEditorDirty
+                                      !activeTab?.isEditorDirty &&
+                                      !activeTab?.isExecuting
                               )
                             : id === "save-file"
                             ? Boolean(activeTab?.kind === "query")

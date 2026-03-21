@@ -10,6 +10,7 @@ use super::{
 #[serde(rename_all = "camelCase")]
 pub enum BackgroundJobState {
     Running,
+    Canceled,
     Failed,
     Success,
 }

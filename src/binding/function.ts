@@ -290,6 +290,14 @@ export const getBackgroundJobResult = async (
     return response;
 };
 
+export const cancelBackgroundJob = async (jobId: string): Promise<boolean> => {
+    const response: boolean = await invoke("cancel_background_job", { jobId });
+
+    logBindingResponse("cancel_background_job", response);
+
+    return response;
+};
+
 export const discardUpdateSql = async (token: string): Promise<boolean> => {
     const response: boolean = await invoke("discard_update_sql", { token });
 
