@@ -394,24 +394,14 @@ async fn retrieve_entities_with_progress<F>(
 where
     F: FnMut(usize, usize, usize, usize, String),
 {
-    let total = service_client
-        .retrieve_multiple_fetchxml_count(entity_set, fetchxml)
-        .await
-        .unwrap_or(0);
-    let total_batches = if total == 0 { 0 } else { total.div_ceil(5000) };
-
     service_client
         .retrieve_multiple_fetchxml_paging_with_progress(entity_set, fetchxml, |page, processed| {
             on_progress(
                 processed,
-                total,
+                0,
                 page,
-                total_batches,
-                if total > 0 {
-                    format!("Selected {processed} of {total} record(s), batch {page} of {total_batches}.")
-                } else {
-                    format!("Selected {processed} record(s), batch {page}.")
-                },
+                0,
+                format!("Selected {processed} record(s), batch {page}."),
             );
         })
         .await
