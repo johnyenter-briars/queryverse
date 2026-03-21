@@ -6,11 +6,11 @@ import { UpdateConnectionResponse } from "./model/UpdateConnectionResponse";
 import { FetchXmlPreview } from "./model/FetchXmlPreview";
 import { ListConnectionsResponse } from "./model/ListConnectionsResponse";
 import { ExecuteSqlRequest } from "./model/ExecuteSqlRequest";
+import { ExecuteSqlJobStartResponse } from "./model/ExecuteSqlJobStartResponse";
 import { EntityDefinition } from "./model/EntityDefinition";
 import { EntityAttribute } from "./model/EntityAttribute";
 import { EntityRelationship } from "./model/EntityRelationship";
 import { SetConnectionRequest } from "./model/SetConnectionRequest";
-import { ExecuteSqlResponse } from "./model/ExecuteSqlResponse";
 import { MultipleResponse } from "./model/MultipleResponse";
 import { OpenSqlFileResponse } from "./model/OpenSqlFileResponse";
 import { SaveSqlFileRequest } from "./model/SaveSqlFileRequest";
@@ -20,10 +20,12 @@ import { LaunchContext } from "./model/LaunchContext";
 import { Settings } from "./model/Settings";
 import { SettingsResponse } from "./model/SettingsResponse";
 import { UpdateSqlPreviewResponse } from "./model/UpdateSqlPreviewResponse";
-import { UpdateSqlExecuteResponse } from "./model/UpdateSqlExecuteResponse";
+import { UpdateSqlJobStartResponse } from "./model/UpdateSqlJobStartResponse";
 import { DeleteSqlPreviewResponse } from "./model/DeleteSqlPreviewResponse";
-import { DeleteSqlExecuteResponse } from "./model/DeleteSqlExecuteResponse";
+import { DeleteSqlJobStartResponse } from "./model/DeleteSqlJobStartResponse";
 import { Connection } from "./model/Connection";
+import { BackgroundJobStatusResponse } from "./model/BackgroundJobStatusResponse";
+import { BackgroundJobResultResponse } from "./model/BackgroundJobResultResponse";
 import { logDebug } from "../utility/logging";
 
 const summarizeResponse = (response: unknown): unknown => {
@@ -40,7 +42,23 @@ const summarizeResponse = (response: unknown): unknown => {
     if ("updated" in raw) summary.updated = raw.updated;
     if ("deleted" in raw) summary.deleted = raw.deleted;
     if ("failed" in raw) summary.failed = raw.failed;
-    if ("token" in raw) summary.token = "[redacted]";
+    if ("token" in raw) summary.token = raw.token;
+    if ("jobId" in raw) summary.jobId = raw.jobId;
+    if ("state" in raw) summary.state = raw.state;
+    if ("currentBatch" in raw) summary.currentBatch = raw.currentBatch;
+    if ("totalBatches" in raw) summary.totalBatches = raw.totalBatches;
+    if ("processed" in raw) summary.processed = raw.processed;
+    if ("total" in raw) summary.total = raw.total;
+    if ("value" in raw && raw.value && typeof raw.value === "object") {
+        const value = raw.value as Record<string, unknown>;
+        if ("jobId" in value) summary.valueJobId = value.jobId;
+        if ("state" in value) summary.valueState = value.state;
+        if ("currentBatch" in value) summary.valueCurrentBatch = value.currentBatch;
+        if ("totalBatches" in value) summary.valueTotalBatches = value.totalBatches;
+        if ("processed" in value) summary.valueProcessed = value.processed;
+        if ("total" in value) summary.valueTotal = value.total;
+        if (Array.isArray(raw.value)) summary.valueCount = raw.value.length;
+    }
 
     return Object.keys(summary).length === 0 ? "[object]" : summary;
 };
@@ -55,8 +73,8 @@ const logBindingResponse = (command: string, response: unknown): void => {
 
 export const executeSql = async (
     sql: string
-): Promise<ExecuteSqlResponse> => {
-    const response: ExecuteSqlResponse = await invoke("execute_sql", {
+): Promise<ExecuteSqlJobStartResponse> => {
+    const response: ExecuteSqlJobStartResponse = await invoke("execute_sql", {
         request: {
             sql,
         } satisfies ExecuteSqlRequest,
@@ -237,12 +255,45 @@ export const prepareUpdateSql = async (
 
 export const executeUpdateSql = async (
     token: string
-): Promise<UpdateSqlExecuteResponse> => {
-    const response: UpdateSqlExecuteResponse = await invoke("execute_update_sql", {
+): Promise<UpdateSqlJobStartResponse> => {
+    const response: UpdateSqlJobStartResponse = await invoke("execute_update_sql", {
         token,
     });
 
     logBindingResponse("execute_update_sql", response);
+
+    return response;
+};
+
+export const getBackgroundJobStatus = async (
+    jobId: string
+): Promise<BackgroundJobStatusResponse> => {
+    const response: BackgroundJobStatusResponse = await invoke("get_background_job_status", {
+        jobId,
+    });
+
+    logBindingResponse("get_background_job_status", response);
+
+    return response;
+};
+
+export const getBackgroundJobResult = async (
+    jobId: string
+): Promise<BackgroundJobResultResponse> => {
+    const response: BackgroundJobResultResponse = await invoke(
+        "get_background_job_result",
+        { jobId }
+    );
+
+    logBindingResponse("get_background_job_result", response);
+
+    return response;
+};
+
+export const cancelBackgroundJob = async (jobId: string): Promise<boolean> => {
+    const response: boolean = await invoke("cancel_background_job", { jobId });
+
+    logBindingResponse("cancel_background_job", response);
 
     return response;
 };
@@ -269,8 +320,8 @@ export const prepareDeleteSql = async (
 
 export const executeDeleteSql = async (
     token: string
-): Promise<DeleteSqlExecuteResponse> => {
-    const response: DeleteSqlExecuteResponse = await invoke("execute_delete_sql", {
+): Promise<DeleteSqlJobStartResponse> => {
+    const response: DeleteSqlJobStartResponse = await invoke("execute_delete_sql", {
         token,
     });
 

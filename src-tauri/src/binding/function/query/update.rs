@@ -10,9 +10,12 @@ use crate::{
         settings::load_settings,
     },
     binding::model::{
+        backgroundjobstatus::{BackgroundJobState, BackgroundJobStatus},
         updatesqlexecuteresponse::UpdateSqlExecuteResponse,
+        updatesqljobstartresponse::UpdateSqlJobStartResponse,
         updatesqlpreviewresponse::UpdateSqlPreviewResponse,
     },
+    jobs::{complete_update_job, fail_job, insert_job, store_job_result_rows, update_job_progress},
     sql,
 };
 
@@ -21,6 +24,7 @@ use super::helpers::{
     validate_update_attributes, value_to_string,
 };
 use super::metadata::{get_entity_attributes_cached, get_entity_definitions_cached};
+use super::writebatch::{clamp_batch_size, execute_update_batches_with_progress};
 
 #[tauri::command]
 pub async fn prepare_update_sql(
@@ -96,7 +100,7 @@ pub async fn prepare_update_sql(
     let fetch = sql::update_to_fetchxml(&stmt, &primary_id_attribute).map_err(|e| e.to_string())?;
 
     let entities = service_client
-        .retrieve_multiple_fetchxml(&fetch.entity_set, &fetch.fetchxml)
+        .retrieve_multiple_fetchxml_paging(&fetch.entity_set, &fetch.fetchxml)
         .await
         .map_err(|error| {
             error!("prepare_update_sql retrieve_multiple_fetchxml failed: {error}");
@@ -153,7 +157,7 @@ pub async fn execute_update_sql(
     token: String,
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
-) -> Result<UpdateSqlExecuteResponse, String> {
+) -> Result<UpdateSqlJobStartResponse, String> {
     let batch = {
         let mut batches = database
             .update_batches
@@ -195,37 +199,121 @@ pub async fn execute_update_sql(
         suppress_callback_registration_expander_job: settings
             .suppress_callback_registration_expander_job,
     };
+    let job_id = Uuid::new_v4().to_string();
+    let total = batch.ids.len();
+    let batch_size = clamp_batch_size(settings.dataverse_default_batch_size);
+    let total_batches = total.div_ceil(batch_size);
 
-    let mut updated = 0usize;
-    let mut failed = 0usize;
-    let mut errors: Vec<String> = Vec::new();
+    insert_job(
+        &database.background_jobs,
+        BackgroundJobStatus {
+            job_id: job_id.clone(),
+            kind: "update".to_string(),
+            state: BackgroundJobState::Running,
+            current_batch: 0,
+            total_batches,
+            processed: 0,
+            total,
+            message: format!("Queued update job for {total} record(s)."),
+            result: None,
+        },
+    )
+    .await;
 
-    for id in &batch.ids {
-        let result = service_client
-            .update_entity_with_options(&batch.entity_set, id, &batch.updates, &request_parameters)
-            .await;
-        match result {
-            Ok(_) => updated += 1,
+    let job_store = database.background_jobs.clone();
+    let job_result_store = database.background_job_results.clone();
+    let queued_job_id = job_id.clone();
+    tauri::async_runtime::spawn(async move {
+        update_job_progress(
+            &job_store,
+            &queued_job_id,
+            BackgroundJobState::Running,
+            0,
+            total_batches,
+            0,
+            total,
+            format!("Running update job for {total} record(s) in {total_batches} batch(es)."),
+        )
+        .await;
+
+        let outcome = execute_update_batches_with_progress(
+            &service_client,
+            &batch,
+            &request_parameters,
+            batch_size,
+            |processed, total, current_batch, total_batches| {
+                let job_store = job_store.clone();
+                let job_id = queued_job_id.clone();
+                tauri::async_runtime::spawn(async move {
+                    update_job_progress(
+                        &job_store,
+                        &job_id,
+                        BackgroundJobState::Running,
+                        current_batch,
+                        total_batches,
+                        processed,
+                        total,
+                        format!(
+                            "Processed {processed} of {total} record(s), batch {current_batch} of {total_batches}."
+                        ),
+                    )
+                    .await;
+                });
+            },
+        )
+        .await;
+
+        match outcome {
+            Ok((updated, failed, errors)) => {
+                let success = failed == 0;
+                let message = if success {
+                    format!("Updated {} record(s).", updated)
+                } else {
+                    format!("Updated {} record(s) with {} error(s).", updated, failed)
+                };
+                let response = UpdateSqlExecuteResponse {
+                    success,
+                    message,
+                    updated,
+                    failed,
+                    errors,
+                };
+
+                store_job_result_rows(
+                    &job_result_store,
+                    &queued_job_id,
+                    crate::binding::model::backgroundjobstatus::BackgroundJobResult::Update(
+                        response.clone(),
+                    ),
+                )
+                .await;
+
+                complete_update_job(
+                    &job_store,
+                    &queued_job_id,
+                    response,
+                )
+                .await;
+            }
             Err(error) => {
-                failed += 1;
-                errors.push(error);
+                fail_job(
+                    &job_store,
+                    &queued_job_id,
+                    0,
+                    total_batches,
+                    0,
+                    total,
+                    error,
+                )
+                .await;
             }
         }
-    }
+    });
 
-    let success = failed == 0;
-    let message = if success {
-        format!("Updated {} record(s).", updated)
-    } else {
-        format!("Updated {} record(s) with {} error(s).", updated, failed)
-    };
-
-    Ok(UpdateSqlExecuteResponse {
-        success,
-        message,
-        updated,
-        failed,
-        errors,
+    Ok(UpdateSqlJobStartResponse {
+        success: true,
+        message: "Update job queued.".to_string(),
+        job_id,
     })
 }
 

@@ -10,6 +10,8 @@ use powerplatform_dataverse_client::dataverse::{
     serviceclient::ServiceClient,
 };
 
+use crate::jobs::{JobResultStore, JobStore, create_job_result_store, create_job_store};
+
 pub struct Database {
     // Tracks the active Dataverse connection selected in the UI.
     pub selected_connection_id: Mutex<Option<Uuid>>,
@@ -25,6 +27,10 @@ pub struct Database {
     pub update_batches: Mutex<HashMap<String, UpdateSet>>,
     // Holds prepared delete batches until the user executes or discards them.
     pub delete_batches: Mutex<HashMap<String, DeleteSet>>,
+    // Tracks long-running background jobs and their progress.
+    pub background_jobs: JobStore,
+    // Holds completed background job result sets keyed by job id.
+    pub background_job_results: JobResultStore,
 }
 
 #[derive(Debug, Clone)]
@@ -70,6 +76,8 @@ impl Default for Database {
             // Prepared mutation batches exist only for the lifetime of the current app session.
             update_batches: Mutex::new(HashMap::new()),
             delete_batches: Mutex::new(HashMap::new()),
+            background_jobs: create_job_store(),
+            background_job_results: create_job_result_store(),
         }
     }
 }

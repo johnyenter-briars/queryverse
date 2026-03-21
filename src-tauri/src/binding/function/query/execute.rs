@@ -9,10 +9,13 @@ use crate::{
         settings::load_settings,
     },
     binding::model::{
+        backgroundjobstatus::{BackgroundJobResult, BackgroundJobState, BackgroundJobStatus},
         executesqlrequest::ExecuteSqlRequest,
+        executesqljobstartresponse::ExecuteSqlJobStartResponse,
         executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
         resultrow::ResultRow,
     },
+    jobs::{complete_select_job, fail_job, insert_job, store_job_result_rows, update_job_progress},
     sql::{
         self, aggregate,
         util::{
@@ -24,8 +27,9 @@ use crate::{
 };
 use powerplatform_dataverse_client::{
     LogLevel,
-    dataverse::{entity::Value, serviceclient::ServiceClient},
+    dataverse::{entity::{Entity, Value}, serviceclient::ServiceClient},
 };
+use uuid::Uuid;
 
 use super::metadata::{get_entity_attributes_cached, get_entity_definitions_cached};
 
@@ -63,7 +67,7 @@ pub async fn execute_sql(
     request: ExecuteSqlRequest,
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
-) -> Result<ExecuteSqlResponse, String> {
+) -> Result<ExecuteSqlJobStartResponse, String> {
     let connection_id = {
         let selected = database
             .selected_connection_id
@@ -93,13 +97,89 @@ pub async fn execute_sql(
     )
     .await?;
 
-    execute_sql_with_client(
-        &service_client,
-        &request.sql,
-        context.log_level,
-        Some(&entity_attributes),
+    let sql_text = request.sql.clone();
+    let log_level = context.log_level;
+    let job_id = Uuid::new_v4().to_string();
+
+    insert_job(
+        &database.background_jobs,
+        BackgroundJobStatus {
+            job_id: job_id.clone(),
+            kind: "select".to_string(),
+            state: BackgroundJobState::Running,
+            current_batch: 0,
+            total_batches: 0,
+            processed: 0,
+            total: 0,
+            message: "Queued select job.".to_string(),
+            result: None,
+        },
     )
-    .await
+    .await;
+
+    let job_store = database.background_jobs.clone();
+    let job_result_store = database.background_job_results.clone();
+    let queued_job_id = job_id.clone();
+    tauri::async_runtime::spawn(async move {
+        update_job_progress(
+            &job_store,
+            &queued_job_id,
+            BackgroundJobState::Running,
+            0,
+            0,
+            0,
+            0,
+            "Running select job.".to_string(),
+        )
+        .await;
+
+        let outcome = execute_sql_with_client_and_progress(
+            &service_client,
+            &sql_text,
+            log_level,
+            Some(&entity_attributes),
+            |processed, total, current_batch, total_batches, message| {
+                let job_store = job_store.clone();
+                let job_id = queued_job_id.clone();
+                tauri::async_runtime::spawn(async move {
+                    update_job_progress(
+                        &job_store,
+                        &job_id,
+                        BackgroundJobState::Running,
+                        current_batch,
+                        total_batches,
+                        processed,
+                        total,
+                        message,
+                    )
+                    .await;
+                });
+            },
+        )
+        .await;
+
+        match outcome {
+            Ok(response) => {
+                store_job_result_rows(
+                    &job_result_store,
+                    &queued_job_id,
+                    BackgroundJobResult::Select(response.clone()),
+                )
+                .await;
+
+                complete_select_job(&job_store, &queued_job_id, response).await;
+            }
+            Err(error) => {
+                fail_job(&job_store, &queued_job_id, 0, 0, 0, 0, error).await;
+            }
+        }
+    });
+
+    Ok(ExecuteSqlJobStartResponse {
+        success: true,
+        message: "Select job queued.".to_string(),
+        job_id,
+    })
 }
 
 pub async fn execute_sql_with_client(
@@ -108,6 +188,26 @@ pub async fn execute_sql_with_client(
     log_level: LogLevel,
     entity_attributes: Option<&[powerplatform_dataverse_client::dataverse::entityattribute::EntityAttribute]>,
 ) -> Result<ExecuteSqlResponse, String> {
+    execute_sql_with_client_and_progress(
+        service_client,
+        sql_text,
+        log_level,
+        entity_attributes,
+        |_, _, _, _, _| {},
+    )
+    .await
+}
+
+pub async fn execute_sql_with_client_and_progress<F>(
+    service_client: &ServiceClient,
+    sql_text: &str,
+    log_level: LogLevel,
+    entity_attributes: Option<&[powerplatform_dataverse_client::dataverse::entityattribute::EntityAttribute]>,
+    mut on_progress: F,
+) -> Result<ExecuteSqlResponse, String>
+where
+    F: FnMut(usize, usize, usize, usize, String),
+{
     if matches!(log_level, LogLevel::Debug) {
         debug!("SQL: {}", sql_text);
     }
@@ -146,9 +246,13 @@ pub async fn execute_sql_with_client(
     {
         let is_joined = !stmt.joins.is_empty();
         if is_joined {
-            let server = service_client
-                .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
-                .await;
+            let server = retrieve_entities_with_progress(
+                service_client,
+                &parsed.entity_set,
+                &parsed.fetchxml,
+                &mut on_progress,
+            )
+            .await;
 
             match server {
                 Ok(entities) => {
@@ -170,9 +274,13 @@ pub async fn execute_sql_with_client(
                             &plan,
                             lookup_bases.as_ref(),
                         )?;
-                        let entities = service_client
-                            .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
-                            .await
+                        let entities = retrieve_entities_with_progress(
+                            service_client,
+                            &parsed.entity_set,
+                            &demoted_fetchxml,
+                            &mut on_progress,
+                        )
+                        .await
                             .map_err(|error| {
                                 error!("Error: {error}");
                                 error
@@ -219,9 +327,13 @@ pub async fn execute_sql_with_client(
                 &plan,
                 lookup_bases.as_ref(),
             )?;
-            let entities = service_client
-                .retrieve_multiple_fetchxml(&parsed.entity_set, &demoted_fetchxml)
-                .await
+            let entities = retrieve_entities_with_progress(
+                service_client,
+                &parsed.entity_set,
+                &demoted_fetchxml,
+                &mut on_progress,
+            )
+            .await
                 .map_err(|error| {
                     error!("execute_sql retrieve_multiple_fetchxml (aggregate) failed: {error}");
                     error
@@ -235,9 +347,13 @@ pub async fn execute_sql_with_client(
             (rows, "Multiple results found".to_string(), true)
         }
     } else {
-        let entities = service_client
-            .retrieve_multiple_fetchxml(&parsed.entity_set, &parsed.fetchxml)
-            .await
+        let entities = retrieve_entities_with_progress(
+            service_client,
+            &parsed.entity_set,
+            &parsed.fetchxml,
+            &mut on_progress,
+        )
+        .await
             .map_err(|error| {
                 error!("execute_sql retrieve_multiple_fetchxml failed: {error}");
                 error
@@ -267,4 +383,26 @@ pub async fn execute_sql_with_client(
             columns_order,
         },
     })
+}
+
+async fn retrieve_entities_with_progress<F>(
+    service_client: &ServiceClient,
+    entity_set: &str,
+    fetchxml: &str,
+    on_progress: &mut F,
+) -> Result<Vec<Entity>, String>
+where
+    F: FnMut(usize, usize, usize, usize, String),
+{
+    service_client
+        .retrieve_multiple_fetchxml_paging_with_progress(entity_set, fetchxml, |page, processed| {
+            on_progress(
+                processed,
+                0,
+                page,
+                0,
+                format!("Selected {processed} record(s), batch {page}."),
+            );
+        })
+        .await
 }

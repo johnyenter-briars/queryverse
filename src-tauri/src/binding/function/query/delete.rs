@@ -10,14 +10,20 @@ use crate::{
         settings::load_settings,
     },
     binding::model::{
+        backgroundjobstatus::{BackgroundJobState, BackgroundJobStatus},
         deletesqlexecuteresponse::DeleteSqlExecuteResponse,
+        deletesqljobstartresponse::DeleteSqlJobStartResponse,
         deletesqlpreviewresponse::DeleteSqlPreviewResponse,
+    },
+    jobs::{
+        complete_delete_job, fail_job, insert_job, store_job_result_rows, update_job_progress,
     },
     sql,
 };
 
 use super::helpers::{resolve_primary_id_attribute, value_to_string};
 use super::metadata::get_entity_definitions_cached;
+use super::writebatch::{clamp_batch_size, execute_delete_batches_with_progress};
 
 #[tauri::command]
 pub async fn prepare_delete_sql(
@@ -63,7 +69,7 @@ pub async fn prepare_delete_sql(
     let fetch = sql::delete_to_fetchxml(&stmt, &primary_id_attribute).map_err(|e| e.to_string())?;
 
     let entities = service_client
-        .retrieve_multiple_fetchxml(&fetch.entity_set, &fetch.fetchxml)
+        .retrieve_multiple_fetchxml_paging(&fetch.entity_set, &fetch.fetchxml)
         .await
         .map_err(|error| {
             error!("prepare_delete_sql retrieve_multiple_fetchxml failed: {error}");
@@ -113,7 +119,7 @@ pub async fn execute_delete_sql(
     token: String,
     database: tauri::State<'_, Database>,
     context: tauri::State<'_, crate::LaunchContext>,
-) -> Result<DeleteSqlExecuteResponse, String> {
+) -> Result<DeleteSqlJobStartResponse, String> {
     let batch = {
         let mut batches = database
             .delete_batches
@@ -156,36 +162,117 @@ pub async fn execute_delete_sql(
             .suppress_callback_registration_expander_job,
     };
 
-    let mut deleted = 0usize;
-    let mut failed = 0usize;
-    let mut errors: Vec<String> = Vec::new();
+    let job_id = Uuid::new_v4().to_string();
+    let total = batch.ids.len();
+    let batch_size = clamp_batch_size(settings.dataverse_default_batch_size);
+    let total_batches = total.div_ceil(batch_size);
 
-    for id in &batch.ids {
-        let result = service_client
-            .delete_entity_with_options(&batch.entity_set, id, &request_parameters)
-            .await;
-        match result {
-            Ok(_) => deleted += 1,
+    insert_job(
+        &database.background_jobs,
+        BackgroundJobStatus {
+            job_id: job_id.clone(),
+            kind: "delete".to_string(),
+            state: BackgroundJobState::Running,
+            current_batch: 0,
+            total_batches,
+            processed: 0,
+            total,
+            message: format!("Queued delete job for {total} record(s)."),
+            result: None,
+        },
+    )
+    .await;
+
+    let job_store = database.background_jobs.clone();
+    let job_result_store = database.background_job_results.clone();
+    let queued_job_id = job_id.clone();
+    tauri::async_runtime::spawn(async move {
+        update_job_progress(
+            &job_store,
+            &queued_job_id,
+            BackgroundJobState::Running,
+            0,
+            total_batches,
+            0,
+            total,
+            format!("Running delete job for {total} record(s) in {total_batches} batch(es)."),
+        )
+        .await;
+
+        let outcome = execute_delete_batches_with_progress(
+            &service_client,
+            &batch,
+            &request_parameters,
+            batch_size,
+            |processed, total, current_batch, total_batches| {
+                let job_store = job_store.clone();
+                let job_id = queued_job_id.clone();
+                tauri::async_runtime::spawn(async move {
+                    update_job_progress(
+                        &job_store,
+                        &job_id,
+                        BackgroundJobState::Running,
+                        current_batch,
+                        total_batches,
+                        processed,
+                        total,
+                        format!(
+                            "Processed {processed} of {total} record(s), batch {current_batch} of {total_batches}."
+                        ),
+                    )
+                    .await;
+                });
+            },
+        )
+        .await;
+
+        match outcome {
+            Ok((deleted, failed, errors)) => {
+                let success = failed == 0;
+                let message = if success {
+                    format!("Deleted {} record(s).", deleted)
+                } else {
+                    format!("Deleted {} record(s) with {} error(s).", deleted, failed)
+                };
+
+                let response = DeleteSqlExecuteResponse {
+                    success,
+                    message,
+                    deleted,
+                    failed,
+                    errors,
+                };
+
+                store_job_result_rows(
+                    &job_result_store,
+                    &queued_job_id,
+                    crate::binding::model::backgroundjobstatus::BackgroundJobResult::Delete(
+                        response.clone(),
+                    ),
+                )
+                .await;
+
+                complete_delete_job(&job_store, &queued_job_id, response).await;
+            }
             Err(error) => {
-                failed += 1;
-                errors.push(error);
+                fail_job(
+                    &job_store,
+                    &queued_job_id,
+                    0,
+                    total_batches,
+                    0,
+                    total,
+                    error,
+                )
+                .await;
             }
         }
-    }
+    });
 
-    let success = failed == 0;
-    let message = if success {
-        format!("Deleted {} record(s).", deleted)
-    } else {
-        format!("Deleted {} record(s) with {} error(s).", deleted, failed)
-    };
-
-    Ok(DeleteSqlExecuteResponse {
-        success,
-        message,
-        deleted,
-        failed,
-        errors,
+    Ok(DeleteSqlJobStartResponse {
+        success: true,
+        message: "Delete job queued.".to_string(),
+        job_id,
     })
 }
 

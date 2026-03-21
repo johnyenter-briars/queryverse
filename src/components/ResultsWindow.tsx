@@ -103,6 +103,8 @@ export interface IResultsWindowProps {
     query: string;
     queryMetadata?: SqlQueryMetadata | null;
     isLoading: boolean;
+    loadingMessage?: string;
+    layout?: "grid" | "details";
     errorMessage?: string | null;
 }
 
@@ -138,6 +140,7 @@ export const ResultsWindow = React.memo(
         query,
         queryMetadata,
         isLoading,
+        layout = "grid",
         errorMessage,
     }: IResultsWindowProps) => {
         const { targetDocument } = useFluent();
@@ -237,21 +240,6 @@ export const ResultsWindow = React.memo(
             );
         }, [totalWidth]);
 
-        if (isLoading) {
-            return (
-                <div
-                    style={{
-                        height: "100%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                    }}
-                >
-                    <Spinner label="Running query..." />
-                </div>
-            );
-        }
-
         if (errorMessage) {
             return (
                 <div
@@ -296,6 +284,55 @@ export const ResultsWindow = React.memo(
             </DataGridRow>
         );
 
+        if (layout === "details" && data.length > 0) {
+            const detailEntries = Object.entries(data[0].attributes);
+            const detailsContent = (
+                <div className={isLoading ? styles.progressCard : undefined}>
+                    <div className={styles.detailsList}>
+                        {detailEntries.map(([key, value]) => (
+                            <div
+                                key={key}
+                                className={
+                                    key === detailEntries[detailEntries.length - 1][0]
+                                        ? `${styles.detailsRow} ${styles.detailsRowLast}`
+                                        : styles.detailsRow
+                                }
+                            >
+                                <div className={styles.detailsKey}>{key}</div>
+                                <div className={styles.detailsValue}>{renderValue(value)}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            return (
+                <div
+                    ref={containerRef}
+                    className={styles.root}
+                    style={{
+                        height: "100%",
+                        width: "100%",
+                        maxWidth: "100%",
+                        overflow: "hidden",
+                    }}
+                >
+                    {isLoading ? (
+                        <div className={styles.loadingOverlay}>
+                        <div className={styles.loadingCard}>
+                            <Spinner />
+                        </div>
+                    </div>
+                ) : null}
+                    {isLoading ? (
+                        <div className={styles.progressCardShell}>{detailsContent}</div>
+                    ) : (
+                        detailsContent
+                    )}
+                </div>
+            );
+        }
+
         return (
             <div
                 ref={containerRef}
@@ -307,6 +344,13 @@ export const ResultsWindow = React.memo(
                     overflow: "hidden",
                 }}
             >
+                {isLoading ? (
+                    <div className={styles.loadingOverlay}>
+                        <div className={styles.loadingCard}>
+                            <Spinner />
+                        </div>
+                    </div>
+                ) : null}
                 <DataGrid
                     items={data}
                     columns={columns}

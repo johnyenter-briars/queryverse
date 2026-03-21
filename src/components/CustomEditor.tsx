@@ -39,6 +39,7 @@ interface ICustomEditor {
 
 export type CustomEditorHandle = {
     getValue: () => string;
+    getSelectedText: () => string;
 };
 
 export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
@@ -108,6 +109,17 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         getValue: () => {
             const modelValue = editorRef.current?.getModel()?.getValue();
             return typeof modelValue === "string" ? modelValue : localValue;
+        },
+        getSelectedText: () => {
+            const editor = editorRef.current;
+            const model = editor?.getModel?.();
+            const selection = editor?.getSelection?.();
+
+            if (!model || !selection) {
+                return "";
+            }
+
+            return model.getValueInRange(selection);
         },
     }), [localValue]);
 
