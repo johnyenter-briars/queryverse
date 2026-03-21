@@ -286,6 +286,25 @@ export const ResultsWindow = React.memo(
 
         if (layout === "details" && data.length > 0) {
             const detailEntries = Object.entries(data[0].attributes);
+            const detailsContent = (
+                <div className={isLoading ? styles.progressCard : undefined}>
+                    <div className={styles.detailsList}>
+                        {detailEntries.map(([key, value]) => (
+                            <div
+                                key={key}
+                                className={
+                                    key === detailEntries[detailEntries.length - 1][0]
+                                        ? `${styles.detailsRow} ${styles.detailsRowLast}`
+                                        : styles.detailsRow
+                                }
+                            >
+                                <div className={styles.detailsKey}>{key}</div>
+                                <div className={styles.detailsValue}>{renderValue(value)}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
 
             return (
                 <div
@@ -300,19 +319,16 @@ export const ResultsWindow = React.memo(
                 >
                     {isLoading ? (
                         <div className={styles.loadingOverlay}>
-                            <div className={styles.loadingCard}>
-                                <Spinner />
-                            </div>
+                        <div className={styles.loadingCard}>
+                            <Spinner />
                         </div>
-                    ) : null}
-                    <div className={styles.detailsList}>
-                        {detailEntries.map(([key, value]) => (
-                            <div key={key} className={styles.detailsRow}>
-                                <div className={styles.detailsKey}>{key}</div>
-                                <div className={styles.detailsValue}>{renderValue(value)}</div>
-                            </div>
-                        ))}
                     </div>
+                ) : null}
+                    {isLoading ? (
+                        <div className={styles.progressCardShell}>{detailsContent}</div>
+                    ) : (
+                        detailsContent
+                    )}
                 </div>
             );
         }

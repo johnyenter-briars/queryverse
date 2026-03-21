@@ -112,10 +112,30 @@ export const useResultsWindowStyles = makeStyles({
         overflowX: "hidden",
         ...shorthands.padding(tokens.spacingVerticalS, 0),
     },
+    progressCardShell: {
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "flex-start",
+        height: "100%",
+        overflowY: "auto",
+        ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXXL),
+    },
+    progressCard: {
+        width: "100%",
+        maxWidth: "720px",
+        backgroundColor: tokens.colorNeutralBackground2,
+        border: `1px solid ${tokens.colorNeutralStroke1}`,
+        borderRadius: tokens.borderRadiusXLarge,
+        boxShadow: tokens.shadow16,
+        overflow: "hidden",
+    },
     detailsRow: {
         display: "grid",
         gridTemplateColumns: "220px minmax(0, 1fr)",
         borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    },
+    detailsRowLast: {
+        borderBottom: "none",
     },
     detailsKey: {
         fontWeight: tokens.fontWeightSemibold,
