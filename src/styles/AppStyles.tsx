@@ -125,6 +125,26 @@ export const useAppStyles = makeStyles({
         height: "100%",
         overflowX: "auto",
         overflowY: "hidden",
+        scrollbarColor: `${tokens.colorBrandBackground} ${tokens.colorNeutralBackground2}`,
+        scrollbarWidth: "thin",
+        "&::-webkit-scrollbar": {
+            width: "12px",
+            height: "12px",
+        },
+        "&::-webkit-scrollbar-track": {
+            backgroundColor: tokens.colorNeutralBackground2,
+        },
+        "&::-webkit-scrollbar-thumb": {
+            backgroundColor: tokens.colorBrandBackground,
+            borderRadius: tokens.borderRadiusMedium,
+            border: `3px solid ${tokens.colorNeutralBackground2}`,
+        },
+        "&::-webkit-scrollbar-thumb:hover": {
+            backgroundColor: tokens.colorBrandBackgroundHover,
+        },
+        "&::-webkit-scrollbar-corner": {
+            backgroundColor: tokens.colorNeutralBackground2,
+        },
     },
     resultsPanelsStrip: {
         height: "100%",
