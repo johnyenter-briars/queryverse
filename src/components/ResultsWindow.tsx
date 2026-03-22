@@ -12,7 +12,9 @@ import {
 import {
     createTableColumn,
     type TableColumnDefinition,
+    type TableColumnId,
     type TableColumnSizingOptions,
+    type SortDirection,
     Button,
     Spinner,
     webDarkTheme,
@@ -98,6 +100,73 @@ function formatValue(value: Value): string {
 
 function renderValue(value: Value): React.ReactNode {
     return formatValue(value);
+}
+
+function getSortableValue(value: Value): number | string | null {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    if (typeof value === "number") {
+        return value;
+    }
+
+    if (typeof value === "boolean") {
+        return value ? 1 : 0;
+    }
+
+    if (typeof value === "string") {
+        return value;
+    }
+
+    if (isEntityReference(value)) {
+        return formatValue(value);
+    }
+
+    if (isOptionSetValueCollection(value)) {
+        return value.values.join(", ");
+    }
+
+    if (isOptionSetValue(value)) {
+        return value.value;
+    }
+
+    if (isMoneyValue(value)) {
+        if (typeof value.value === "number") {
+            return value.value;
+        }
+
+        const parsed = Number(value.value);
+        return Number.isNaN(parsed) ? String(value.value) : parsed;
+    }
+
+    return String(value);
+}
+
+function compareCellValues(left: Value, right: Value): number {
+    const leftValue = getSortableValue(left);
+    const rightValue = getSortableValue(right);
+
+    if (leftValue === null && rightValue === null) {
+        return 0;
+    }
+
+    if (leftValue === null) {
+        return 1;
+    }
+
+    if (rightValue === null) {
+        return -1;
+    }
+
+    if (typeof leftValue === "number" && typeof rightValue === "number") {
+        return leftValue - rightValue;
+    }
+
+    return String(leftValue).localeCompare(String(rightValue), undefined, {
+        numeric: true,
+        sensitivity: "base",
+    });
 }
 
 function measureTextWidth(
@@ -245,6 +314,13 @@ export const ResultsWindow = React.memo(
             x: number;
             y: number;
         }>({ open: false, x: 0, y: 0 });
+        const [sortState, setSortState] = useState<{
+            sortColumn: TableColumnId | undefined;
+            sortDirection: SortDirection;
+        }>({
+            sortColumn: undefined,
+            sortDirection: "ascending",
+        });
 
         useEffect(() => {
             const el = containerRef.current;
@@ -297,10 +373,24 @@ export const ResultsWindow = React.memo(
             return buildResultColumnDescriptors(data, entityDefinitions, query, queryMetadata);
         }, [data, entityDefinitions, query, queryMetadata]);
 
+        useEffect(() => {
+            if (
+                sortState.sortColumn &&
+                !orderedAttributes.some((entry) => entry.key === sortState.sortColumn)
+            ) {
+                setSortState({
+                    sortColumn: undefined,
+                    sortDirection: "ascending",
+                });
+            }
+        }, [orderedAttributes, sortState.sortColumn]);
+
         const columns = useMemo<TableColumnDefinition<ResultRow>[]>(() => {
             return orderedAttributes.map(({ key, attribute, dataKey }) =>
                 createTableColumn<ResultRow>({
                     columnId: key,
+                    compare: (left, right) =>
+                        compareCellValues(left.attributes[dataKey], right.attributes[dataKey]),
                     renderHeaderCell: () =>
                         dataKey === "__rownum" && !isLoading ? (
                             <Button
@@ -336,6 +426,28 @@ export const ResultsWindow = React.memo(
             styles.headerContent,
             styles.resultsHeaderActionButton,
         ]);
+
+        const sortedData = useMemo(() => {
+            if (!sortState.sortColumn) {
+                return data;
+            }
+
+            const column = orderedAttributes.find((entry) => entry.key === sortState.sortColumn);
+            if (!column) {
+                return data;
+            }
+
+            const directionMultiplier = sortState.sortDirection === "ascending" ? 1 : -1;
+
+            return [...data].sort((left, right) => {
+                return (
+                    compareCellValues(
+                        left.attributes[column.dataKey],
+                        right.attributes[column.dataKey]
+                    ) * directionMultiplier
+                );
+            });
+        }, [data, orderedAttributes, sortState]);
 
         const computedColumnWidths = useMemo(() => {
             const sampledRows =
@@ -584,10 +696,12 @@ export const ResultsWindow = React.memo(
                     </div>
                 ) : null}
                 <DataGrid
-                    items={data}
+                    items={sortedData}
                     columns={columns}
                     focusMode="cell"
                     sortable
+                    sortState={sortState}
+                    onSortChange={(_, nextSortState) => setSortState(nextSortState)}
                     resizableColumns
                     resizableColumnsOptions={{ autoFitColumns: AUTO_FIT_COLUMNS }}
                     columnSizingOptions={columnSizingOptions}
