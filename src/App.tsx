@@ -617,7 +617,7 @@ export default function App() {
                             executeError: null,
                             isExecuting: false,
                             loadingMessage: null,
-                            currentJobId: null,
+                            currentJobId: jobId,
                         }));
                         return;
                     }
@@ -1810,6 +1810,7 @@ export default function App() {
                                     layout={activeTab.resultLayout}
                                     errorMessage={activeTab.executeError}
                                     dataverseUrl={selectedConnection?.auth.dataverseUrl}
+                                    exportJobId={activeTab.currentJobId}
                                 />
                             </div>
                         ) : null}

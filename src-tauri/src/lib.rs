@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod binding;
 mod database;
+mod export;
 mod jobs;
 mod logging;
 pub mod sql;
@@ -15,6 +16,7 @@ use crate::binding::function::{
         create_connection, create_connection_folder, get_default_connection, list_connection_tree,
         list_connections, set_connection, update_connection, update_connection_folder_color,
     },
+    export::{export_csv, export_excel},
     file::{open_sql_file, open_sql_file_path, save_sql_file, save_sql_file_as},
     job::{cancel_background_job, get_background_job_result, get_background_job_status},
     launch::get_launch_context,
@@ -133,6 +135,8 @@ pub fn run() {
             list_connection_tree,
             create_connection_folder,
             update_connection_folder_color,
+            export_csv,
+            export_excel,
             set_connection,
             update_connection,
             execute_sql,

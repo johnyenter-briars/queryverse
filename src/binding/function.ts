@@ -340,6 +340,22 @@ export const cancelBackgroundJob = async (jobId: string): Promise<boolean> => {
     return response;
 };
 
+export const exportCsv = async (jobId: string): Promise<string | null> => {
+    const response: string | null = await invoke("export_csv", { jobId });
+
+    logBindingResponse("export_csv", response);
+
+    return response;
+};
+
+export const exportExcel = async (jobId: string): Promise<string | null> => {
+    const response: string | null = await invoke("export_excel", { jobId });
+
+    logBindingResponse("export_excel", response);
+
+    return response;
+};
+
 export const discardUpdateSql = async (token: string): Promise<boolean> => {
     const response: boolean = await invoke("discard_update_sql", { token });
 

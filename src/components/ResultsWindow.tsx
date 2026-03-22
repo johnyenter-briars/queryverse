@@ -37,6 +37,7 @@ import {
 } from "../utility/resultsColumns";
 import { useResultsWindowStyles } from "../styles/ResultsWindowStyles";
 import { useAppToast } from "../utility/toast";
+import { exportCsv } from "../binding/function";
 
 const DEFAULT_COL_WIDTH = 300;
 const MIN_COL_WIDTH = 120;
@@ -155,6 +156,7 @@ export interface IResultsWindowProps {
     layout?: "grid" | "details";
     errorMessage?: string | null;
     dataverseUrl?: string | null;
+    exportJobId?: string | null;
 }
 
 function getRowId(row: ResultRow, primaryIdAttribute?: string): string {
@@ -227,11 +229,12 @@ export const ResultsWindow = React.memo(
         layout = "grid",
         errorMessage,
         dataverseUrl,
+        exportJobId,
     }: IResultsWindowProps) => {
         const { targetDocument } = useFluent();
         const scrollbarWidth = useScrollbarWidth({ targetDocument }) ?? 0;
         const styles = useResultsWindowStyles();
-        const { notifySuccess, notifyError } = useAppToast();
+        const { notifySuccess, notifyError, notifyWarning } = useAppToast();
 
         const containerRef = useRef<HTMLDivElement>(null);
         const exportMenuRef = useRef<HTMLDivElement>(null);
@@ -412,6 +415,24 @@ export const ResultsWindow = React.memo(
             });
         }
 
+        const handleExportCsv = async () => {
+            setExportMenu({ open: false, x: 0, y: 0 });
+
+            if (!exportJobId) {
+                notifyWarning("No exportable result set is available.");
+                return;
+            }
+
+            try {
+                const savedPath = await exportCsv(exportJobId);
+                if (savedPath) {
+                    notifySuccess(`CSV exported: ${savedPath}`);
+                }
+            } catch (error) {
+                notifyError(error instanceof Error ? error.message : "Could not export CSV.");
+            }
+        };
+
         const innerElementType = useMemo(() => {
             return React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
                 (props, ref) => {
@@ -513,15 +534,19 @@ export const ResultsWindow = React.memo(
                 }}
             >
                 {exportMenu.open ? (
-                    <div
-                        ref={exportMenuRef}
-                        className={styles.resultsContextMenu}
-                        style={{ left: exportMenu.x, top: exportMenu.y }}
-                    >
-                        <Button appearance="subtle" className={styles.resultsContextMenuButton}>
-                            Export results as CSV
-                        </Button>
-                        <Button appearance="subtle" className={styles.resultsContextMenuButton}>
+                        <div
+                            ref={exportMenuRef}
+                            className={styles.resultsContextMenu}
+                            style={{ left: exportMenu.x, top: exportMenu.y }}
+                        >
+                            <Button
+                                appearance="subtle"
+                                className={styles.resultsContextMenuButton}
+                                onClick={() => void handleExportCsv()}
+                            >
+                                Export results as CSV
+                            </Button>
+                            <Button appearance="subtle" className={styles.resultsContextMenuButton}>
                             Export results as Excel
                         </Button>
                         <Button appearance="subtle" className={styles.resultsContextMenuButton}>
