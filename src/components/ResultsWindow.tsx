@@ -46,6 +46,7 @@ const AUTO_FIT_COLUMNS = false;
 const CELL_HORIZONTAL_PADDING = 32;
 const CELL_MEASURE_FONT = "14px 'Segoe UI'";
 const MAX_COL_WIDTH = 1600;
+const MAX_WIDTH_SAMPLE_ROWS = 200;
 
 function isEntityReference(value: Value): value is EntityReference {
     return (
@@ -98,8 +99,13 @@ function renderValue(value: Value): React.ReactNode {
 
 function measureTextWidth(
     text: string,
-    targetDocument?: Document | null
+    targetDocument?: Document | null,
+    measureContext?: CanvasRenderingContext2D | null
 ): number {
+    if (measureContext) {
+        return measureContext.measureText(text).width;
+    }
+
     if (!targetDocument) {
         return text.length * 8;
     }
@@ -243,6 +249,16 @@ export const ResultsWindow = React.memo(
         }, [orderedAttributes, styles.cellContent, styles.headerContent]);
 
         const computedColumnWidths = useMemo(() => {
+            const sampledRows =
+                data.length > MAX_WIDTH_SAMPLE_ROWS
+                    ? data.slice(0, MAX_WIDTH_SAMPLE_ROWS)
+                    : data;
+            const canvas = targetDocument?.createElement("canvas");
+            const measureContext = canvas?.getContext("2d");
+            if (measureContext) {
+                measureContext.font = CELL_MEASURE_FONT;
+            }
+
             return orderedAttributes.reduce<Record<string, number>>((widths, entry) => {
                 const isRowNumber = entry.dataKey === "__rownum";
 
@@ -252,12 +268,14 @@ export const ResultsWindow = React.memo(
                 }
 
                 const headerWidth =
-                    measureTextWidth(entry.attribute, targetDocument) + CELL_HORIZONTAL_PADDING;
+                    measureTextWidth(entry.attribute, targetDocument, measureContext) +
+                    CELL_HORIZONTAL_PADDING;
 
-                const valueWidth = data.reduce((maxWidth, row) => {
+                const valueWidth = sampledRows.reduce((maxWidth, row) => {
                     const displayValue = formatValue(row.attributes[entry.dataKey]);
                     const nextWidth =
-                        measureTextWidth(displayValue, targetDocument) + CELL_HORIZONTAL_PADDING;
+                        measureTextWidth(displayValue, targetDocument, measureContext) +
+                        CELL_HORIZONTAL_PADDING;
                     return Math.max(maxWidth, nextWidth);
                 }, 0);
 

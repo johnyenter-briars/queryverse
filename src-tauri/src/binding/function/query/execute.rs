@@ -401,14 +401,19 @@ where
     F: FnMut(usize, usize, usize, usize, String),
 {
     service_client
-        .retrieve_multiple_fetchxml_paging_with_progress(entity_set, fetchxml, |page, processed| {
-            on_progress(
-                processed,
-                0,
-                page,
-                0,
-                format!("Selected {processed} record(s), batch {page}."),
-            );
-        })
+        .retrieve_multiple_fetchxml_paging_with_progress(
+            entity_set,
+            fetchxml,
+            |page, processed| {
+                on_progress(
+                    processed,
+                    0,
+                    page,
+                    0,
+                    format!("Selected {processed} record(s), batch {page}."),
+                );
+            },
+            None,
+        )
         .await
 }
