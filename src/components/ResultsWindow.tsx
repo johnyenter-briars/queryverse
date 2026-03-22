@@ -43,6 +43,9 @@ const ROW_NUMBER_MIN_WIDTH = 40;
 const ROW_HEIGHT = 36;
 const HEADER_HEIGHT = 40;
 const AUTO_FIT_COLUMNS = false;
+const CELL_HORIZONTAL_PADDING = 32;
+const CELL_MEASURE_FONT = "14px 'Segoe UI'";
+const MAX_COL_WIDTH = 1600;
 
 function isEntityReference(value: Value): value is EntityReference {
     return (
@@ -91,6 +94,25 @@ function formatValue(value: Value): string {
 
 function renderValue(value: Value): React.ReactNode {
     return formatValue(value);
+}
+
+function measureTextWidth(
+    text: string,
+    targetDocument?: Document | null
+): number {
+    if (!targetDocument) {
+        return text.length * 8;
+    }
+
+    const canvas = targetDocument.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+        return text.length * 8;
+    }
+
+    context.font = CELL_MEASURE_FONT;
+    return context.measureText(text).width;
 }
 
 function buildEntityReferenceRecordUrl(
@@ -220,25 +242,59 @@ export const ResultsWindow = React.memo(
             );
         }, [orderedAttributes, styles.cellContent, styles.headerContent]);
 
+        const computedColumnWidths = useMemo(() => {
+            return orderedAttributes.reduce<Record<string, number>>((widths, entry) => {
+                const isRowNumber = entry.dataKey === "__rownum";
+
+                if (isRowNumber) {
+                    widths[entry.key] = ROW_NUMBER_COL_WIDTH;
+                    return widths;
+                }
+
+                const headerWidth =
+                    measureTextWidth(entry.attribute, targetDocument) + CELL_HORIZONTAL_PADDING;
+
+                const valueWidth = data.reduce((maxWidth, row) => {
+                    const displayValue = formatValue(row.attributes[entry.dataKey]);
+                    const nextWidth =
+                        measureTextWidth(displayValue, targetDocument) + CELL_HORIZONTAL_PADDING;
+                    return Math.max(maxWidth, nextWidth);
+                }, 0);
+
+                widths[entry.key] = Math.min(
+                    MAX_COL_WIDTH,
+                    Math.max(MIN_COL_WIDTH, headerWidth, valueWidth)
+                );
+                return widths;
+            }, {});
+        }, [data, orderedAttributes, targetDocument]);
+
         const columnSizingOptions = useMemo<TableColumnSizingOptions>(() => {
             const options: TableColumnSizingOptions = {};
             for (const { key, dataKey } of orderedAttributes) {
                 const isRowNumber = dataKey === "__rownum";
+                const width = computedColumnWidths[key] ?? DEFAULT_COL_WIDTH;
                 options[key] = {
-                    defaultWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : DEFAULT_COL_WIDTH,
+                    defaultWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : width,
                     minWidth: isRowNumber ? ROW_NUMBER_MIN_WIDTH : MIN_COL_WIDTH,
-                    idealWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : DEFAULT_COL_WIDTH,
+                    idealWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : width,
                 };
             }
             return options;
-        }, [orderedAttributes]);
+        }, [computedColumnWidths, orderedAttributes]);
 
         const primaryIdAttribute = useMemo(
             () => getPrimaryIdAttributeForQuery(entityDefinitions, query),
             [entityDefinitions, query]
         );
 
-        const totalWidth = columns.length * DEFAULT_COL_WIDTH;
+        const totalWidth = useMemo(
+            () =>
+                orderedAttributes.reduce((sum, { key }) => {
+                    return sum + (computedColumnWidths[key] ?? DEFAULT_COL_WIDTH);
+                }, 0),
+            [computedColumnWidths, orderedAttributes]
+        );
         const bodyHeight = Math.max(200, containerHeight - HEADER_HEIGHT);
         const bodyWidth = containerWidth > 0 ? containerWidth : "100%";
 
