@@ -13,12 +13,14 @@ import {
     createTableColumn,
     type TableColumnDefinition,
     type TableColumnSizingOptions,
+    Button,
     Spinner,
     webDarkTheme,
     useFluent,
     useScrollbarWidth,
     TableCellLayout,
 } from "@fluentui/react-components";
+import { ArrowDownload24Regular } from "@fluentui/react-icons";
 import {
     ResultRow,
     Value,
@@ -232,8 +234,14 @@ export const ResultsWindow = React.memo(
         const { notifySuccess, notifyError } = useAppToast();
 
         const containerRef = useRef<HTMLDivElement>(null);
+        const exportMenuRef = useRef<HTMLDivElement>(null);
         const [containerHeight, setContainerHeight] = useState<number>(800);
         const [containerWidth, setContainerWidth] = useState<number>(0);
+        const [exportMenu, setExportMenu] = useState<{
+            open: boolean;
+            x: number;
+            y: number;
+        }>({ open: false, x: 0, y: 0 });
 
         useEffect(() => {
             const el = containerRef.current;
@@ -256,6 +264,31 @@ export const ResultsWindow = React.memo(
             };
         }, []);
 
+        useEffect(() => {
+            if (!exportMenu.open) return;
+
+            const handleClose = (event: MouseEvent | KeyboardEvent) => {
+                if (
+                    event instanceof MouseEvent &&
+                    exportMenuRef.current?.contains(event.target as Node)
+                ) {
+                    return;
+                }
+
+                setExportMenu({ open: false, x: 0, y: 0 });
+            };
+
+            window.addEventListener("click", handleClose, true);
+            window.addEventListener("contextmenu", handleClose, true);
+            window.addEventListener("keydown", handleClose, true);
+
+            return () => {
+                window.removeEventListener("click", handleClose, true);
+                window.removeEventListener("contextmenu", handleClose, true);
+                window.removeEventListener("keydown", handleClose, true);
+            };
+        }, [exportMenu.open]);
+
         const orderedAttributes = useMemo(() => {
             if (data.length === 0) return [];
             return buildResultColumnDescriptors(data, entityDefinitions, query, queryMetadata);
@@ -265,9 +298,20 @@ export const ResultsWindow = React.memo(
             return orderedAttributes.map(({ key, attribute, dataKey }) =>
                 createTableColumn<ResultRow>({
                     columnId: key,
-                    renderHeaderCell: () => (
-                        <span className={styles.headerContent}>{attribute}</span>
-                    ),
+                    renderHeaderCell: () =>
+                        dataKey === "__rownum" && !isLoading ? (
+                            <Button
+                                appearance="subtle"
+                                size="small"
+                                icon={<ArrowDownload24Regular />}
+                                className={styles.resultsHeaderActionButton}
+                                onClick={openExportMenu}
+                                onContextMenu={openExportMenu}
+                                title="Export results"
+                            />
+                        ) : dataKey === "__rownum" ? null : (
+                            <span className={styles.headerContent}>{attribute}</span>
+                        ),
                     renderCell: (row) => {
                         const rawValue = row.attributes[dataKey];
 
@@ -281,7 +325,14 @@ export const ResultsWindow = React.memo(
                     },
                 })
             );
-        }, [orderedAttributes, styles.cellContent, styles.headerContent]);
+        }, [
+            isLoading,
+            openExportMenu,
+            orderedAttributes,
+            styles.cellContent,
+            styles.headerContent,
+            styles.resultsHeaderActionButton,
+        ]);
 
         const computedColumnWidths = useMemo(() => {
             const sampledRows =
@@ -351,6 +402,16 @@ export const ResultsWindow = React.memo(
         const bodyHeight = Math.max(200, containerHeight - HEADER_HEIGHT);
         const bodyWidth = containerWidth > 0 ? containerWidth : "100%";
 
+        function openExportMenu(event: React.MouseEvent<HTMLElement>) {
+            event.preventDefault();
+            event.stopPropagation();
+            setExportMenu({
+                open: true,
+                x: event.clientX,
+                y: event.clientY,
+            });
+        }
+
         const innerElementType = useMemo(() => {
             return React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
                 (props, ref) => {
@@ -393,9 +454,9 @@ export const ResultsWindow = React.memo(
                     const column = orderedAttributes.find((entry) => entry.key === columnId);
                     const cellValue = column
                         ? valueToClipboardText(
-                            item.attributes[column.dataKey],
-                            dataverseUrl
-                        )
+                              item.attributes[column.dataKey],
+                              dataverseUrl
+                          )
                         : "";
 
                     return (
@@ -451,6 +512,23 @@ export const ResultsWindow = React.memo(
                     overflow: "hidden",
                 }}
             >
+                {exportMenu.open ? (
+                    <div
+                        ref={exportMenuRef}
+                        className={styles.resultsContextMenu}
+                        style={{ left: exportMenu.x, top: exportMenu.y }}
+                    >
+                        <Button appearance="subtle" className={styles.resultsContextMenuButton}>
+                            Export results as CSV
+                        </Button>
+                        <Button appearance="subtle" className={styles.resultsContextMenuButton}>
+                            Export results as Excel
+                        </Button>
+                        <Button appearance="subtle" className={styles.resultsContextMenuButton}>
+                            Export results as JSON (TODO)
+                        </Button>
+                    </div>
+                ) : null}
                 {isLoading ? (
                     <div className={styles.loadingOverlay}>
                         <div className={styles.loadingCard}>
