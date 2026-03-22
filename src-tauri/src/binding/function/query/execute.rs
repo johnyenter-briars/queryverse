@@ -387,6 +387,7 @@ where
         metadata: SqlQueryMetadata {
             columns_selected,
             columns_order,
+            entity_logical_name: Some(parsed.entity_logical),
         },
     })
 }

@@ -1,9 +1,10 @@
 use crate::{
     Database,
-    binding::model::backgroundjobstatus::BackgroundJobResult,
+    binding::model::{backgroundjobstatus::BackgroundJobResult, executesqlresponse::ExecuteSqlResponse},
     export::{csv::render_csv, excel::build_excel_bytes},
     jobs::get_job_result,
 };
+use chrono::Local;
 
 #[tauri::command]
 pub async fn export_csv(
@@ -19,7 +20,7 @@ pub async fn export_csv(
         return Err("CSV export is only supported for select results.".to_string());
     };
 
-    let suggested_name = build_file_name(&job_id, "csv");
+    let suggested_name = build_file_name(&select_result, "csv");
     let file = rfd::FileDialog::new()
         .add_filter("CSV", &["csv"])
         .set_file_name(&suggested_name)
@@ -49,7 +50,7 @@ pub async fn export_excel(
         return Err("Excel export is only supported for select results.".to_string());
     };
 
-    let suggested_name = build_file_name(&job_id, "xlsx");
+    let suggested_name = build_file_name(&select_result, "xlsx");
     let file = rfd::FileDialog::new()
         .add_filter("Excel", &["xlsx"])
         .set_file_name(&suggested_name)
@@ -65,7 +66,13 @@ pub async fn export_excel(
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
-fn build_file_name(job_id: &str, extension: &str) -> String {
-    let short_job_id = job_id.chars().take(8).collect::<String>();
-    format!("queryverse-results-{short_job_id}.{extension}")
+fn build_file_name(result: &ExecuteSqlResponse, extension: &str) -> String {
+    let table_name = result
+        .metadata
+        .entity_logical_name
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("results");
+    let timestamp = Local::now().format("%Y-%m-%d-%H-%M-%S");
+    format!("results_{table_name}_{timestamp}.{extension}")
 }

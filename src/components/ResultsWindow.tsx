@@ -562,18 +562,18 @@ export const ResultsWindow = React.memo(
                                 className={styles.resultsContextMenuButton}
                                 onClick={() => void handleExportCsv()}
                             >
-                                Export results as CSV
+                                CSV
                             </Button>
                             <Button
                                 appearance="subtle"
                                 className={styles.resultsContextMenuButton}
                                 onClick={() => void handleExportExcel()}
                             >
-                                Export results as Excel
+                                Excel
                             </Button>
-                        <Button appearance="subtle" className={styles.resultsContextMenuButton}>
-                            Export results as JSON (TODO)
-                        </Button>
+                            <Button appearance="subtle" className={styles.resultsContextMenuButton}>
+                                JSON (TODO)
+                            </Button>
                     </div>
                 ) : null}
                 {isLoading ? (
