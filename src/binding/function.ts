@@ -29,6 +29,7 @@ import { CreateConnectionFolderResponse } from "./model/CreateConnectionFolderRe
 import { BackgroundJobStatusResponse } from "./model/BackgroundJobStatusResponse";
 import { BackgroundJobResultResponse } from "./model/BackgroundJobResultResponse";
 import { UpdateConnectionFolderColorResponse } from "./model/UpdateConnectionFolderColorResponse";
+import { SplitSqlPartsResponse } from "./model/SplitSqlPartsResponse";
 import { logDebug } from "../utility/logging";
 
 const summarizeResponse = (response: unknown): unknown => {
@@ -94,6 +95,16 @@ export const previewFetchXml = async (sql: string): Promise<FetchXmlPreview> => 
     });
 
     logBindingResponse("parse_sql_to_fetchxml", response);
+
+    return response;
+};
+
+export const splitSqlParts = async (sql: string): Promise<SplitSqlPartsResponse> => {
+    const response: SplitSqlPartsResponse = await invoke("split_sql_parts", {
+        sql,
+    });
+
+    logBindingResponse("split_sql_parts", response);
 
     return response;
 };

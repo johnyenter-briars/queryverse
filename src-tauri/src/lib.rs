@@ -25,6 +25,7 @@ use crate::binding::function::{
         discard_delete_sql, discard_update_sql, execute_delete_sql, execute_sql,
         execute_update_sql, list_entity_attributes, list_entity_definitions,
         list_entity_relationships, parse_sql_to_fetchxml, prepare_delete_sql, prepare_update_sql,
+        split_sql_parts,
     },
     settings::{get_settings, save_settings},
 };
@@ -140,6 +141,7 @@ pub fn run() {
             set_connection,
             update_connection,
             execute_sql,
+            split_sql_parts,
             list_entity_attributes,
             list_entity_definitions,
             list_entity_relationships,

@@ -28,6 +28,7 @@ pub mod savesqlfilerequest;
 pub mod setconnectionrequest;
 pub mod settings;
 pub mod settingsresponse;
+pub mod splitsqlpartsresponse;
 pub mod updateconnectionrequest;
 pub mod updateconnectionfoldercolorresponse;
 pub mod updateconnectionresponse;

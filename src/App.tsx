@@ -55,6 +55,7 @@ import {
     saveSqlFileAs,
     saveSettings,
     setConnection,
+    splitSqlParts,
 } from "./binding/function";
 import { ShortcutActionId } from "./settings/shortcuts";
 import { useAppStyles } from "./styles/AppStyles";
@@ -91,9 +92,42 @@ type EditorTab = {
     currentJobId: string | null;
     resultLayout: "grid" | "details";
     queryMetadata: SqlQueryMetadata | null;
+    extraResultPanes: QueryResultPane[];
     schemaLogicalName?: string | null;
     schemaDisplayName?: string | null;
 };
+
+type QueryResultPane = {
+    id: string;
+    title: string;
+    query: string;
+    results: ResultRow[];
+    executeError: string | null;
+    isExecuting: boolean;
+    loadingMessage: string | null;
+    currentJobId: string | null;
+    resultLayout: "grid" | "details";
+    queryMetadata: SqlQueryMetadata | null;
+};
+
+const PRIMARY_RESULT_PANE_ID = "primary";
+
+const createQueryResultPane = (
+    id: string,
+    title: string,
+    query: string
+): QueryResultPane => ({
+    id,
+    title,
+    query,
+    results: [],
+    executeError: null,
+    isExecuting: false,
+    loadingMessage: null,
+    currentJobId: null,
+    resultLayout: "grid",
+    queryMetadata: null,
+});
 
 type DeviceCodeAuthModalState = {
     open: boolean;
@@ -123,6 +157,7 @@ const createQueryTab = (id: number): EditorTab => ({
     currentJobId: null,
     resultLayout: "grid",
     queryMetadata: null,
+    extraResultPanes: [],
 });
 
 const createFetchXmlTab = (
@@ -149,6 +184,7 @@ const createFetchXmlTab = (
     currentJobId: null,
     resultLayout: "grid",
     queryMetadata: null,
+    extraResultPanes: [],
 });
 
 const createSchemaTab = (
@@ -176,6 +212,7 @@ const createSchemaTab = (
     currentJobId: null,
     resultLayout: "grid",
     queryMetadata: null,
+    extraResultPanes: [],
     schemaLogicalName: logicalName,
     schemaDisplayName: displayName,
 });
@@ -407,6 +444,94 @@ export default function App() {
         );
     };
 
+    const getPrimaryResultPane = (tab: EditorTab): QueryResultPane => ({
+        id: PRIMARY_RESULT_PANE_ID,
+        title: "Results",
+        query: tab.query,
+        results: tab.results,
+        executeError: tab.executeError,
+        isExecuting: tab.isExecuting,
+        loadingMessage: tab.loadingMessage,
+        currentJobId: tab.currentJobId,
+        resultLayout: tab.resultLayout,
+        queryMetadata: tab.queryMetadata,
+    });
+
+    const applyPrimaryResultPane = (
+        tab: EditorTab,
+        pane: QueryResultPane,
+        overrides?: Partial<EditorTab>
+    ): EditorTab => ({
+        ...tab,
+        results: pane.results,
+        executeError: pane.executeError,
+        isExecuting: pane.isExecuting,
+        loadingMessage: pane.loadingMessage,
+        currentJobId: pane.currentJobId,
+        resultLayout: pane.resultLayout,
+        queryMetadata: pane.queryMetadata,
+        ...overrides,
+    });
+
+    const getAllResultPanes = (tab: EditorTab): QueryResultPane[] =>
+        tab.extraResultPanes.length > 0 ? tab.extraResultPanes : [getPrimaryResultPane(tab)];
+
+    const syncTabExecutionState = (
+        pane: QueryResultPane,
+        extraResultPanes: QueryResultPane[]
+    ) => {
+        const allPanes = [pane, ...extraResultPanes];
+        const anyExecuting = allPanes.some((entry) => entry.isExecuting);
+        return {
+            isExecuting: anyExecuting,
+            loadingMessage: anyExecuting ? "Running queries..." : pane.loadingMessage,
+        };
+    };
+
+    const updateResultPane = (
+        tabId: number,
+        paneId: string,
+        updater: (pane: QueryResultPane) => QueryResultPane
+    ) => {
+        updateTab(tabId, (tab) => {
+            if (paneId === PRIMARY_RESULT_PANE_ID) {
+                const updatedPrimary = updater(getPrimaryResultPane(tab));
+                const executionState = syncTabExecutionState(updatedPrimary, tab.extraResultPanes);
+                return applyPrimaryResultPane(tab, updatedPrimary, executionState);
+            }
+
+            let updatedPrimary = getPrimaryResultPane(tab);
+            const updatedExtras = tab.extraResultPanes.map((pane) => {
+                if (pane.id !== paneId) {
+                    return pane;
+                }
+
+                return updater(pane);
+            });
+            const executionState =
+                updatedExtras.length > 0
+                    ? {
+                          isExecuting: updatedExtras.some((pane) => pane.isExecuting),
+                          loadingMessage: updatedExtras.some((pane) => pane.isExecuting)
+                              ? "Running queries..."
+                              : null,
+                      }
+                    : syncTabExecutionState(updatedPrimary, updatedExtras);
+            updatedPrimary = {
+                ...updatedPrimary,
+                isExecuting: executionState.isExecuting,
+                loadingMessage: executionState.loadingMessage,
+            };
+
+            return applyPrimaryResultPane(tab, updatedPrimary, {
+                extraResultPanes: updatedExtras,
+            });
+        });
+    };
+
+    const activeResultPanes =
+        activeTab && activeTab.kind === "query" ? getAllResultPanes(activeTab) : [];
+
     useEffect(() => {
         if (!tabContextMenu.open) return;
 
@@ -561,7 +686,8 @@ export default function App() {
     const startBackgroundJobPolling = (
         action: DataChangeAction | "select",
         jobId: string,
-        tabId: number
+        tabId: number,
+        paneId: string = PRIMARY_RESULT_PANE_ID
     ) => {
         const poll = async () => {
             try {
@@ -588,8 +714,8 @@ export default function App() {
                 );
 
                 if (status.state === "running") {
-                    updateTab(tabId, (tab) => ({
-                        ...tab,
+                    updateResultPane(tabId, paneId, (pane) => ({
+                        ...pane,
                         results: [buildJobProgressRow(status)],
                         resultLayout: "details",
                         queryMetadata: null,
@@ -609,8 +735,8 @@ export default function App() {
                 clearJobPoller(jobId);
 
                 if (status.state === "canceled") {
-                    updateTab(tabId, (tab) => ({
-                        ...tab,
+                    updateResultPane(tabId, paneId, (pane) => ({
+                        ...pane,
                         results: [buildCanceledSummaryRow(status)],
                         resultLayout: "details",
                         queryMetadata: null,
@@ -650,8 +776,8 @@ export default function App() {
                                 metadata: SqlQueryMetadata | null;
                             };
                         };
-                        updateTab(tabId, (tab) => ({
-                            ...tab,
+                        updateResultPane(tabId, paneId, (pane) => ({
+                            ...pane,
                             results: selectResult.select.value,
                             resultLayout: "grid",
                             queryMetadata: selectResult.select.metadata ?? null,
@@ -667,8 +793,8 @@ export default function App() {
                         "update" in resultResponse.value
                             ? buildUpdateSummaryRow(resultResponse.value.update)
                             : buildDeleteSummaryRow(resultResponse.value.delete);
-                    updateTab(tabId, (tab) => ({
-                        ...tab,
+                    updateResultPane(tabId, paneId, (pane) => ({
+                        ...pane,
                         results: [resultRow],
                         resultLayout: "details",
                         queryMetadata: null,
@@ -680,8 +806,8 @@ export default function App() {
                     return;
                 }
 
-                updateTab(tabId, (tab) => ({
-                    ...tab,
+                updateResultPane(tabId, paneId, (pane) => ({
+                    ...pane,
                     resultLayout: "grid",
                     executeError: status.message || "Background update job failed.",
                     isExecuting: false,
@@ -690,8 +816,8 @@ export default function App() {
                 }));
             } catch (error) {
                 clearJobPoller(jobId);
-                updateTab(tabId, (tab) => ({
-                    ...tab,
+                updateResultPane(tabId, paneId, (pane) => ({
+                    ...pane,
                     resultLayout: "grid",
                     executeError: getErrorMessage(error),
                     isExecuting: false,
@@ -957,6 +1083,30 @@ export default function App() {
                 ? selectedQuery
                 : editorRef.current?.getValue() ?? targetTab.query;
 
+        let queryParts;
+        try {
+            const splitPreview = await splitSqlParts(queryToExecute);
+            queryParts = splitPreview.parts;
+        } catch (error) {
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                executeError: getErrorMessage(error),
+                isExecuting: false,
+                loadingMessage: null,
+            }));
+            return;
+        }
+
+        if (queryParts.length === 0) {
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                executeError: "No executable queries found.",
+                isExecuting: false,
+                loadingMessage: null,
+            }));
+            return;
+        }
+
         updateTab(targetTab.id, (tab) => ({
             ...tab,
             isExecuting: true,
@@ -965,9 +1115,9 @@ export default function App() {
             executeError: null,
         }));
 
-        if (isUpdateQuery(queryToExecute)) {
+        if (queryParts.length === 1 && isUpdateQuery(queryParts[0].sql)) {
             try {
-                const preview = await prepareUpdateSql(queryToExecute);
+                const preview = await prepareUpdateSql(queryParts[0].sql);
                 if (!preview.success) {
                     updateTab(targetTab.id, (tab) => ({
                         ...tab,
@@ -1007,9 +1157,9 @@ export default function App() {
             return;
         }
 
-        if (isDeleteQuery(queryToExecute)) {
+        if (queryParts.length === 1 && isDeleteQuery(queryParts[0].sql)) {
             try {
-                const preview = await prepareDeleteSql(queryToExecute);
+                const preview = await prepareDeleteSql(queryParts[0].sql);
                 if (!preview.success) {
                     updateTab(targetTab.id, (tab) => ({
                         ...tab,
@@ -1050,28 +1200,115 @@ export default function App() {
         }
 
         try {
-            const response = await executeSql(queryToExecute);
-            updateTab(targetTab.id, (tab) => ({
-                ...tab,
-                results: [
+            if (
+                queryParts.length > 1 &&
+                queryParts.some(
+                    (part) => isUpdateQuery(part.sql) || isDeleteQuery(part.sql)
+                )
+            ) {
+                throw new Error(
+                    "Multiple update/delete statements are not supported in one editor tab yet."
+                );
+            }
+
+            const paneSeeds = queryParts.map((part) =>
+                createQueryResultPane(
+                    queryParts.length === 1
+                        ? PRIMARY_RESULT_PANE_ID
+                        : `part-${part.index}`,
+                    queryParts.length === 1 ? "Results" : `Query ${part.index}`,
+                    part.sql
+                )
+            );
+
+            updateTab(targetTab.id, (tab) => {
+                const [primaryPane, ...extraPanes] = paneSeeds;
+                const multiPaneSeeds =
+                    queryParts.length === 1
+                        ? extraPanes
+                        : paneSeeds.map((pane) => ({
+                              ...pane,
+                              isExecuting: true,
+                              resultLayout: "details" as const,
+                              results: [
+                                  {
+                                      attributes: {
+                                          status: "queued",
+                                          processed: 0,
+                                          total: 0,
+                                          progressPercent: 0,
+                                          message: "Queuing queries...",
+                                      },
+                                  },
+                              ],
+                              loadingMessage: "Queuing queries...",
+                          }));
+                return applyPrimaryResultPane(
                     {
-                        attributes: {
-                            status: "queued",
-                            processed: 0,
-                            total: 0,
-                            progressPercent: 0,
-                            message: response.message,
-                        },
+                        ...tab,
+                        extraResultPanes: multiPaneSeeds,
                     },
-                ],
-                resultLayout: "details",
-                queryMetadata: null,
-                executeError: null,
-                isExecuting: true,
-                loadingMessage: response.message,
-                currentJobId: response.jobId,
-            }));
-            startBackgroundJobPolling("select", response.jobId, targetTab.id);
+                    {
+                        ...primaryPane,
+                        isExecuting: true,
+                        resultLayout: "details",
+                        results: [
+                            {
+                                attributes: {
+                                    status: "queued",
+                                    processed: 0,
+                                    total: 0,
+                                    progressPercent: 0,
+                                    message: "Queuing queries...",
+                                },
+                            },
+                        ],
+                        loadingMessage: "Queuing queries...",
+                    },
+                    {
+                        extraResultPanes: multiPaneSeeds,
+                        isExecuting: true,
+                        loadingMessage: "Queuing queries...",
+                    }
+                );
+            });
+
+            await Promise.all(
+                queryParts.map(async (part) => {
+                    const paneId =
+                        queryParts.length === 1
+                            ? PRIMARY_RESULT_PANE_ID
+                            : `part-${part.index}`;
+                    const response = await executeSql(part.sql);
+
+                    updateResultPane(targetTab.id, paneId, (pane) => ({
+                        ...pane,
+                        results: [
+                            {
+                                attributes: {
+                                    status: "queued",
+                                    processed: 0,
+                                    total: 0,
+                                    progressPercent: 0,
+                                    message: response.message,
+                                },
+                            },
+                        ],
+                        resultLayout: "details",
+                        queryMetadata: null,
+                        executeError: null,
+                        isExecuting: true,
+                        loadingMessage: response.message,
+                        currentJobId: response.jobId,
+                    }));
+                    startBackgroundJobPolling(
+                        "select",
+                        response.jobId,
+                        targetTab.id,
+                        paneId
+                    );
+                })
+            );
         } catch (error) {
             updateTab(targetTab.id, (tab) => ({
                 ...tab,
@@ -1082,6 +1319,7 @@ export default function App() {
                 isExecuting: false,
                 loadingMessage: null,
                 currentJobId: null,
+                extraResultPanes: [],
             }));
         }
     };
@@ -1418,6 +1656,7 @@ export default function App() {
             currentJobId: null,
             resultLayout: "details",
             executeError: null,
+            extraResultPanes: [],
         }));
 
         try {
@@ -1442,6 +1681,7 @@ export default function App() {
                     isExecuting: true,
                     loadingMessage: response.message,
                     currentJobId: response.jobId,
+                    extraResultPanes: [],
                 }));
                 startBackgroundJobPolling("delete", response.jobId, dataChangeConfirm.tabId);
                 return;
@@ -1467,6 +1707,7 @@ export default function App() {
                 isExecuting: true,
                 loadingMessage: response.message,
                 currentJobId: response.jobId,
+                extraResultPanes: [],
             }));
             startBackgroundJobPolling("update", response.jobId, dataChangeConfirm.tabId);
         } catch (error) {
@@ -1477,6 +1718,7 @@ export default function App() {
                 isExecuting: false,
                 loadingMessage: null,
                 currentJobId: null,
+                extraResultPanes: [],
             }));
         } finally {
             resetDataChangeConfirm();
@@ -1499,15 +1741,39 @@ export default function App() {
     };
 
     const handleCancelActiveTab = async () => {
-        if (!activeTab || activeTab.kind !== "query" || !activeTab.currentJobId) return;
+        if (!activeTab || activeTab.kind !== "query") return;
+
+        const runningJobIds = getAllResultPanes(activeTab)
+            .map((pane) => pane.currentJobId)
+            .filter((jobId): jobId is string => Boolean(jobId));
+
+        if (runningJobIds.length === 0) return;
 
         try {
-            await cancelBackgroundJob(activeTab.currentJobId);
-            updateTab(activeTab.id, (tab) => ({
-                ...tab,
-                loadingMessage: "Cancelling query...",
-                executeError: null,
-            }));
+            await Promise.all(runningJobIds.map((jobId) => cancelBackgroundJob(jobId)));
+            updateTab(activeTab.id, (tab) =>
+                applyPrimaryResultPane(
+                    {
+                        ...tab,
+                        extraResultPanes: tab.extraResultPanes.map((pane) => ({
+                            ...pane,
+                            loadingMessage: pane.currentJobId ? "Cancelling query..." : null,
+                            executeError: null,
+                        })),
+                    },
+                    {
+                        ...getPrimaryResultPane(tab),
+                        loadingMessage: runningJobIds.includes(tab.currentJobId ?? "")
+                            ? "Cancelling query..."
+                            : null,
+                        executeError: null,
+                    },
+                    {
+                        isExecuting: true,
+                        loadingMessage: "Cancelling query...",
+                    }
+                )
+            );
         } catch (error) {
             updateTab(activeTab.id, (tab) => ({
                 ...tab,
@@ -1867,18 +2133,52 @@ export default function App() {
                                 className={styles.bottom}
                                 style={{ height: `${resultsPaneHeight}px` }}
                             >
-                                <ResultsWindow
-                                    data={activeTab.results}
-                                    entityDefinitions={entityDefinitions}
-                                    query={activeTab.query}
-                                    queryMetadata={activeTab.queryMetadata}
-                                    isLoading={activeTab.isExecuting}
-                                    loadingMessage={activeTab.loadingMessage ?? undefined}
-                                    layout={activeTab.resultLayout}
-                                    errorMessage={activeTab.executeError}
-                                    dataverseUrl={selectedConnection?.auth.dataverseUrl}
-                                    exportJobId={activeTab.currentJobId}
-                                />
+                                <div className={styles.resultsPanelsViewport}>
+                                    <div
+                                        className={styles.resultsPanelsStrip}
+                                        style={{
+                                            minWidth:
+                                                activeResultPanes.length <= 2
+                                                    ? "100%"
+                                                    : "max-content",
+                                        }}
+                                    >
+                                        {activeResultPanes.map((pane) => (
+                                            <div
+                                                key={pane.id}
+                                                className={styles.resultsPanel}
+                                                style={{
+                                                    flex:
+                                                        activeResultPanes.length <= 2
+                                                            ? "1 1 0"
+                                                            : "0 0 min(720px, 100%)",
+                                                }}
+                                            >
+                                                <div className={styles.resultsPanelHeader}>
+                                                    {pane.title}
+                                                </div>
+                                                <div className={styles.resultsPanelBody}>
+                                                    <ResultsWindow
+                                                        data={pane.results}
+                                                        entityDefinitions={entityDefinitions}
+                                                        query={pane.query}
+                                                        queryMetadata={pane.queryMetadata}
+                                                        isLoading={pane.isExecuting}
+                                                        loadingMessage={
+                                                            pane.loadingMessage ?? undefined
+                                                        }
+                                                        layout={pane.resultLayout}
+                                                        errorMessage={pane.executeError}
+                                                        dataverseUrl={
+                                                            selectedConnection?.auth.dataverseUrl
+                                                        }
+                                                        exportJobId={pane.currentJobId}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                             </>
                         ) : null}
