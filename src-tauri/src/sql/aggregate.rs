@@ -78,7 +78,7 @@ impl AggregatePlan {
             .iter()
             .map(|column| {
                 lookup_companion_base_attribute(&column.source, lookup_bases)
-                    .unwrap_or_else(|| column.source.as_str())
+                    .unwrap_or(column.source.as_str())
                     .to_string()
             })
             .collect();
@@ -87,13 +87,13 @@ impl AggregatePlan {
             if let Some(target) = &aggregate.target
                 && !columns.contains(
                     &lookup_companion_base_attribute(target, lookup_bases)
-                        .unwrap_or_else(|| target.as_str())
+                        .unwrap_or(target.as_str())
                         .to_string(),
                 )
             {
                 columns.push(
                     lookup_companion_base_attribute(target, lookup_bases)
-                        .unwrap_or_else(|| target.as_str())
+                        .unwrap_or(target.as_str())
                         .to_string(),
                 );
             }
@@ -289,11 +289,11 @@ fn ensure_attributes(
     let mut missing: Vec<String> = Vec::new();
     for column in columns {
         let requested_column =
-            lookup_companion_base_attribute(column, lookup_bases).unwrap_or_else(|| column.as_str());
+            lookup_companion_base_attribute(column, lookup_bases).unwrap_or(column.as_str());
         if let Some((table, attr)) = split_qualified_column(column) {
             let requested_attr =
                 lookup_companion_base_attribute(&attr, lookup_bases)
-                    .unwrap_or_else(|| attr.as_str());
+                    .unwrap_or(attr.as_str());
             if has_link_entity_attribute(fetchxml, &table, requested_attr) {
                 continue;
             }
@@ -683,15 +683,15 @@ fn companion_entity_value(entity: &Entity, key: &str, alias: &str) -> Option<Val
 
 fn split_companion_column(value: &str) -> Option<(String, &'static str)> {
     let (_, column) = value.rsplit_once('.').unwrap_or(("", value));
-    if let Some(base) = column.strip_suffix("name") {
-        if !base.is_empty() {
-            return Some((base.to_string(), "name"));
-        }
+    if let Some(base) = column.strip_suffix("name")
+        && !base.is_empty()
+    {
+        return Some((base.to_string(), "name"));
     }
-    if let Some(base) = column.strip_suffix("type") {
-        if !base.is_empty() {
-            return Some((base.to_string(), "type"));
-        }
+    if let Some(base) = column.strip_suffix("type")
+        && !base.is_empty()
+    {
+        return Some((base.to_string(), "type"));
     }
     None
 }
@@ -902,11 +902,15 @@ fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::{
         AggregateTarget, OrderBy, SelectColumns, aggregate_fallback_plan, aggregate_rows,
         apply_having, apply_where, sort_rows_by_order,
     };
+    use crate::binding::model::resultrow::ResultRow;
     use crate::sql::{
         AggregateExpr, AggregateFunction, CompareOp, Expr, Literal, Predicate, PredicateTarget,
         SelectItem, SelectItemKind, SelectStmt,
