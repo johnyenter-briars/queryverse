@@ -37,7 +37,7 @@ import {
 } from "../utility/resultsColumns";
 import { useResultsWindowStyles } from "../styles/ResultsWindowStyles";
 import { useAppToast } from "../utility/toast";
-import { exportCsv } from "../binding/function";
+import { exportCsv, exportExcel } from "../binding/function";
 
 const DEFAULT_COL_WIDTH = 300;
 const MIN_COL_WIDTH = 120;
@@ -433,6 +433,24 @@ export const ResultsWindow = React.memo(
             }
         };
 
+        const handleExportExcel = async () => {
+            setExportMenu({ open: false, x: 0, y: 0 });
+
+            if (!exportJobId) {
+                notifyWarning("No exportable result set is available.");
+                return;
+            }
+
+            try {
+                const savedPath = await exportExcel(exportJobId);
+                if (savedPath) {
+                    notifySuccess(`Excel exported: ${savedPath}`);
+                }
+            } catch (error) {
+                notifyError(error instanceof Error ? error.message : "Could not export Excel.");
+            }
+        };
+
         const innerElementType = useMemo(() => {
             return React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
                 (props, ref) => {
@@ -546,9 +564,13 @@ export const ResultsWindow = React.memo(
                             >
                                 Export results as CSV
                             </Button>
-                            <Button appearance="subtle" className={styles.resultsContextMenuButton}>
-                            Export results as Excel
-                        </Button>
+                            <Button
+                                appearance="subtle"
+                                className={styles.resultsContextMenuButton}
+                                onClick={() => void handleExportExcel()}
+                            >
+                                Export results as Excel
+                            </Button>
                         <Button appearance="subtle" className={styles.resultsContextMenuButton}>
                             Export results as JSON (TODO)
                         </Button>
