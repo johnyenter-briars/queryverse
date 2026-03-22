@@ -14,21 +14,25 @@ const useStyles = makeStyles({
     root: {
         display: "flex",
         flexDirection: "column",
+        alignItems: "flex-start",
         gap: tokens.spacingVerticalXXS,
         minWidth: 0,
     },
     row: {
-        display: "flex",
+        display: "inline-flex",
         alignItems: "center",
         gap: tokens.spacingHorizontalS,
         minWidth: 0,
-        width: "100%",
+        width: "fit-content",
+        maxWidth: "100%",
+        backgroundColor: "rgba(255, 255, 255, 0.035)",
+        ...shorthands.border(`1px solid rgba(255, 255, 255, 0.06)`),
         ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
-        ...shorthands.borderRadius(tokens.borderRadiusMedium),
+        ...shorthands.borderRadius(tokens.borderRadiusLarge),
         transitionProperty: "background-color, color",
         transitionDuration: tokens.durationFast,
         "&:hover": {
-            backgroundColor: tokens.colorNeutralBackground1Hover,
+            backgroundColor: "rgba(255, 255, 255, 0.05)",
         },
     },
     rowButton: {
@@ -38,10 +42,12 @@ const useStyles = makeStyles({
         cursor: "pointer",
         font: "inherit",
         textAlign: "left",
-        width: "100%",
+        width: "auto",
+        maxWidth: "100%",
         minWidth: 0,
         display: "flex",
         alignItems: "center",
+        flex: "0 1 auto",
         gap: tokens.spacingHorizontalS,
         ...shorthands.padding(0),
     },
@@ -52,12 +58,19 @@ const useStyles = makeStyles({
         justifyContent: "center",
         flexShrink: 0,
     },
+    icon: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+    },
     label: {
         minWidth: 0,
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
-        flex: 1,
+        flex: "0 1 auto",
+        maxWidth: "280px",
         fontSize: tokens.fontSizeBase300,
         fontWeight: tokens.fontWeightSemibold,
     },
@@ -69,6 +82,13 @@ const useStyles = makeStyles({
         alignItems: "center",
         gap: tokens.spacingHorizontalXS,
         flexShrink: 0,
+    },
+    nest: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: tokens.spacingVerticalXXS,
+        marginTop: tokens.spacingVerticalXXS,
     },
 });
 
@@ -103,7 +123,7 @@ export function ConnectionTreeList({
             const next = { ...prev };
             for (const folderId of nextFolderIds) {
                 if (typeof next[folderId] === "undefined") {
-                    next[folderId] = true;
+                    next[folderId] = false;
                 }
             }
             return next;
@@ -127,7 +147,7 @@ export function ConnectionTreeList({
                     <div key={`folder-${item.id}`}>
                         <div
                             className={styles.row}
-                            style={{ paddingLeft: `${12 + depth * 18}px`, color }}
+                            style={{ paddingLeft: `${12 + depth * 18}px` }}
                             onContextMenu={(event) => {
                                 if (!onFolderContextMenu) return;
                                 event.preventDefault();
@@ -142,13 +162,17 @@ export function ConnectionTreeList({
                                 <span className={styles.expander}>
                                     {isExpanded ? <ChevronDown12Regular /> : <ChevronRight12Regular />}
                                 </span>
-                                <Folder24Regular />
+                                <span className={styles.icon} style={{ color }}>
+                                    <Folder24Regular />
+                                </span>
                                 <span className={`${styles.label} ${styles.folderLabel}`}>
                                     {item.name}
                                 </span>
                             </button>
                         </div>
-                        {isExpanded ? renderItems(item.children, depth + 1, color) : null}
+                        {isExpanded ? (
+                            <div className={styles.nest}>{renderItems(item.children, depth + 1, color)}</div>
+                        ) : null}
                     </div>
                 );
             }
@@ -157,7 +181,7 @@ export function ConnectionTreeList({
                 <div
                     key={`connection-${item.id ?? item.name}`}
                     className={styles.row}
-                    style={{ paddingLeft: `${12 + depth * 18}px`, color: inheritedColor ?? undefined }}
+                    style={{ paddingLeft: `${12 + depth * 18}px` }}
                     onContextMenu={(event) => {
                         if (!onConnectionContextMenu) return;
                         event.preventDefault();
@@ -170,7 +194,9 @@ export function ConnectionTreeList({
                         onClick={() => onConnectionSelect(item)}
                     >
                         <span className={styles.expander} />
-                        <Link24Filled />
+                        <span className={styles.icon} style={{ color: inheritedColor ?? undefined }}>
+                            <Link24Filled />
+                        </span>
                         <span className={styles.label}>{item.name}</span>
                     </button>
                     {renderConnectionActions ? (
