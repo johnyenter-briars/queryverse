@@ -12,13 +12,17 @@ import {
 import {
     createTableColumn,
     type TableColumnDefinition,
+    type TableColumnId,
     type TableColumnSizingOptions,
+    type SortDirection,
+    Button,
     Spinner,
     webDarkTheme,
     useFluent,
     useScrollbarWidth,
     TableCellLayout,
 } from "@fluentui/react-components";
+import { ArrowDownload24Regular } from "@fluentui/react-icons";
 import {
     ResultRow,
     Value,
@@ -35,10 +39,10 @@ import {
 } from "../utility/resultsColumns";
 import { useResultsWindowStyles } from "../styles/ResultsWindowStyles";
 import { useAppToast } from "../utility/toast";
+import { exportCsv, exportExcel } from "../binding/function";
 
 const DEFAULT_COL_WIDTH = 300;
 const MIN_COL_WIDTH = 120;
-const ROW_NUMBER_COL_WIDTH = 40;
 const ROW_NUMBER_MIN_WIDTH = 40;
 const ROW_HEIGHT = 36;
 const HEADER_HEIGHT = 40;
@@ -97,6 +101,73 @@ function renderValue(value: Value): React.ReactNode {
     return formatValue(value);
 }
 
+function getSortableValue(value: Value): number | string | null {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    if (typeof value === "number") {
+        return value;
+    }
+
+    if (typeof value === "boolean") {
+        return value ? 1 : 0;
+    }
+
+    if (typeof value === "string") {
+        return value;
+    }
+
+    if (isEntityReference(value)) {
+        return formatValue(value);
+    }
+
+    if (isOptionSetValueCollection(value)) {
+        return value.values.join(", ");
+    }
+
+    if (isOptionSetValue(value)) {
+        return value.value;
+    }
+
+    if (isMoneyValue(value)) {
+        if (typeof value.value === "number") {
+            return value.value;
+        }
+
+        const parsed = Number(value.value);
+        return Number.isNaN(parsed) ? String(value.value) : parsed;
+    }
+
+    return String(value);
+}
+
+function compareCellValues(left: Value, right: Value): number {
+    const leftValue = getSortableValue(left);
+    const rightValue = getSortableValue(right);
+
+    if (leftValue === null && rightValue === null) {
+        return 0;
+    }
+
+    if (leftValue === null) {
+        return 1;
+    }
+
+    if (rightValue === null) {
+        return -1;
+    }
+
+    if (typeof leftValue === "number" && typeof rightValue === "number") {
+        return leftValue - rightValue;
+    }
+
+    return String(leftValue).localeCompare(String(rightValue), undefined, {
+        numeric: true,
+        sensitivity: "base",
+    });
+}
+
 function measureTextWidth(
     text: string,
     targetDocument?: Document | null,
@@ -153,6 +224,7 @@ export interface IResultsWindowProps {
     layout?: "grid" | "details";
     errorMessage?: string | null;
     dataverseUrl?: string | null;
+    exportJobId?: string | null;
 }
 
 function getRowId(row: ResultRow, primaryIdAttribute?: string): string {
@@ -225,15 +297,29 @@ export const ResultsWindow = React.memo(
         layout = "grid",
         errorMessage,
         dataverseUrl,
+        exportJobId,
     }: IResultsWindowProps) => {
         const { targetDocument } = useFluent();
         const scrollbarWidth = useScrollbarWidth({ targetDocument }) ?? 0;
         const styles = useResultsWindowStyles();
-        const { notifySuccess, notifyError } = useAppToast();
+        const { notifySuccess, notifyError, notifyWarning } = useAppToast();
 
         const containerRef = useRef<HTMLDivElement>(null);
+        const exportMenuRef = useRef<HTMLDivElement>(null);
         const [containerHeight, setContainerHeight] = useState<number>(800);
         const [containerWidth, setContainerWidth] = useState<number>(0);
+        const [exportMenu, setExportMenu] = useState<{
+            open: boolean;
+            x: number;
+            y: number;
+        }>({ open: false, x: 0, y: 0 });
+        const [sortState, setSortState] = useState<{
+            sortColumn: TableColumnId | undefined;
+            sortDirection: SortDirection;
+        }>({
+            sortColumn: undefined,
+            sortDirection: "ascending",
+        });
 
         useEffect(() => {
             const el = containerRef.current;
@@ -256,18 +342,68 @@ export const ResultsWindow = React.memo(
             };
         }, []);
 
+        useEffect(() => {
+            if (!exportMenu.open) return;
+
+            const handleClose = (event: MouseEvent | KeyboardEvent) => {
+                if (
+                    event instanceof MouseEvent &&
+                    exportMenuRef.current?.contains(event.target as Node)
+                ) {
+                    return;
+                }
+
+                setExportMenu({ open: false, x: 0, y: 0 });
+            };
+
+            window.addEventListener("click", handleClose, true);
+            window.addEventListener("contextmenu", handleClose, true);
+            window.addEventListener("keydown", handleClose, true);
+
+            return () => {
+                window.removeEventListener("click", handleClose, true);
+                window.removeEventListener("contextmenu", handleClose, true);
+                window.removeEventListener("keydown", handleClose, true);
+            };
+        }, [exportMenu.open]);
+
         const orderedAttributes = useMemo(() => {
             if (data.length === 0) return [];
             return buildResultColumnDescriptors(data, entityDefinitions, query, queryMetadata);
         }, [data, entityDefinitions, query, queryMetadata]);
 
+        useEffect(() => {
+            if (
+                sortState.sortColumn &&
+                !orderedAttributes.some((entry) => entry.key === sortState.sortColumn)
+            ) {
+                setSortState({
+                    sortColumn: undefined,
+                    sortDirection: "ascending",
+                });
+            }
+        }, [orderedAttributes, sortState.sortColumn]);
+
         const columns = useMemo<TableColumnDefinition<ResultRow>[]>(() => {
             return orderedAttributes.map(({ key, attribute, dataKey }) =>
                 createTableColumn<ResultRow>({
                     columnId: key,
-                    renderHeaderCell: () => (
-                        <span className={styles.headerContent}>{attribute}</span>
-                    ),
+                    compare: (left, right) =>
+                        compareCellValues(left.attributes[dataKey], right.attributes[dataKey]),
+                    renderHeaderCell: () =>
+                        dataKey === "__rownum" && !isLoading ? (
+                            <Button
+                                appearance="subtle"
+                                size="small"
+                                icon={<ArrowDownload24Regular />}
+                                className={styles.resultsHeaderActionButton}
+                                onClick={openExportMenu}
+                                onContextMenu={openExportMenu}
+                                title="Export results"
+                            />
+                        ) : dataKey === "__rownum" ? null : (
+                            <span className={styles.headerContent}>{attribute}</span>
+                        ),
                     renderCell: (row) => {
                         const rawValue = row.attributes[dataKey];
 
@@ -281,7 +417,36 @@ export const ResultsWindow = React.memo(
                     },
                 })
             );
-        }, [orderedAttributes, styles.cellContent, styles.headerContent]);
+        }, [
+            isLoading,
+            openExportMenu,
+            orderedAttributes,
+            styles.cellContent,
+            styles.headerContent,
+            styles.resultsHeaderActionButton,
+        ]);
+
+        const sortedData = useMemo(() => {
+            if (!sortState.sortColumn) {
+                return data;
+            }
+
+            const column = orderedAttributes.find((entry) => entry.key === sortState.sortColumn);
+            if (!column) {
+                return data;
+            }
+
+            const directionMultiplier = sortState.sortDirection === "ascending" ? 1 : -1;
+
+            return [...data].sort((left, right) => {
+                return (
+                    compareCellValues(
+                        left.attributes[column.dataKey],
+                        right.attributes[column.dataKey]
+                    ) * directionMultiplier
+                );
+            });
+        }, [data, orderedAttributes, sortState]);
 
         const computedColumnWidths = useMemo(() => {
             const sampledRows =
@@ -294,11 +459,15 @@ export const ResultsWindow = React.memo(
                 measureContext.font = CELL_MEASURE_FONT;
             }
 
+            const largestRowNumberWidth =
+                measureTextWidth(String(Math.max(data.length, 1)), targetDocument, measureContext) +
+                CELL_HORIZONTAL_PADDING;
+
             return orderedAttributes.reduce<Record<string, number>>((widths, entry) => {
                 const isRowNumber = entry.dataKey === "__rownum";
 
                 if (isRowNumber) {
-                    widths[entry.key] = ROW_NUMBER_COL_WIDTH;
+                    widths[entry.key] = Math.max(ROW_NUMBER_MIN_WIDTH, largestRowNumberWidth);
                     return widths;
                 }
 
@@ -328,9 +497,9 @@ export const ResultsWindow = React.memo(
                 const isRowNumber = dataKey === "__rownum";
                 const width = computedColumnWidths[key] ?? DEFAULT_COL_WIDTH;
                 options[key] = {
-                    defaultWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : width,
+                    defaultWidth: width,
                     minWidth: isRowNumber ? ROW_NUMBER_MIN_WIDTH : MIN_COL_WIDTH,
-                    idealWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : width,
+                    idealWidth: width,
                 };
             }
             return options;
@@ -350,6 +519,52 @@ export const ResultsWindow = React.memo(
         );
         const bodyHeight = Math.max(200, containerHeight - HEADER_HEIGHT);
         const bodyWidth = containerWidth > 0 ? containerWidth : "100%";
+
+        function openExportMenu(event: React.MouseEvent<HTMLElement>) {
+            event.preventDefault();
+            event.stopPropagation();
+            setExportMenu({
+                open: true,
+                x: event.clientX,
+                y: event.clientY,
+            });
+        }
+
+        const handleExportCsv = async () => {
+            setExportMenu({ open: false, x: 0, y: 0 });
+
+            if (!exportJobId) {
+                notifyWarning("No exportable result set is available.");
+                return;
+            }
+
+            try {
+                const savedPath = await exportCsv(exportJobId);
+                if (savedPath) {
+                    notifySuccess(`CSV exported: ${savedPath}`);
+                }
+            } catch (error) {
+                notifyError(error instanceof Error ? error.message : "Could not export CSV.");
+            }
+        };
+
+        const handleExportExcel = async () => {
+            setExportMenu({ open: false, x: 0, y: 0 });
+
+            if (!exportJobId) {
+                notifyWarning("No exportable result set is available.");
+                return;
+            }
+
+            try {
+                const savedPath = await exportExcel(exportJobId);
+                if (savedPath) {
+                    notifySuccess(`Excel exported: ${savedPath}`);
+                }
+            } catch (error) {
+                notifyError(error instanceof Error ? error.message : "Could not export Excel.");
+            }
+        };
 
         const innerElementType = useMemo(() => {
             return React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
@@ -393,9 +608,9 @@ export const ResultsWindow = React.memo(
                     const column = orderedAttributes.find((entry) => entry.key === columnId);
                     const cellValue = column
                         ? valueToClipboardText(
-                            item.attributes[column.dataKey],
-                            dataverseUrl
-                        )
+                              item.attributes[column.dataKey],
+                              dataverseUrl
+                          )
                         : "";
 
                     return (
@@ -451,6 +666,31 @@ export const ResultsWindow = React.memo(
                     overflow: "hidden",
                 }}
             >
+                {exportMenu.open ? (
+                        <div
+                            ref={exportMenuRef}
+                            className={styles.resultsContextMenu}
+                            style={{ left: exportMenu.x, top: exportMenu.y }}
+                        >
+                            <Button
+                                appearance="subtle"
+                                className={styles.resultsContextMenuButton}
+                                onClick={() => void handleExportCsv()}
+                            >
+                                CSV
+                            </Button>
+                            <Button
+                                appearance="subtle"
+                                className={styles.resultsContextMenuButton}
+                                onClick={() => void handleExportExcel()}
+                            >
+                                Excel
+                            </Button>
+                            <Button appearance="subtle" className={styles.resultsContextMenuButton}>
+                                JSON (TODO)
+                            </Button>
+                    </div>
+                ) : null}
                 {isLoading ? (
                     <div className={styles.loadingOverlay}>
                         <div className={styles.loadingCard}>
@@ -459,10 +699,12 @@ export const ResultsWindow = React.memo(
                     </div>
                 ) : null}
                 <DataGrid
-                    items={data}
+                    items={sortedData}
                     columns={columns}
                     focusMode="cell"
                     sortable
+                    sortState={sortState}
+                    onSortChange={(_, nextSortState) => setSortState(nextSortState)}
                     resizableColumns
                     resizableColumnsOptions={{ autoFitColumns: AUTO_FIT_COLUMNS }}
                     columnSizingOptions={columnSizingOptions}

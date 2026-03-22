@@ -7,6 +7,7 @@ use crate::binding::model::resultrow::ResultRow;
 pub struct SqlQueryMetadata {
     pub columns_selected: bool,
     pub columns_order: Vec<String>,
+    pub entity_logical_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
