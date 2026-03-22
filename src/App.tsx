@@ -192,8 +192,11 @@ export default function App() {
     const cliInitRef = useRef(false);
     const tabContextMenuRef = useRef<HTMLDivElement | null>(null);
     const editorRef = useRef<CustomEditorHandle | null>(null);
+    const queryPaneRef = useRef<HTMLDivElement | null>(null);
     const jobPollersRef = useRef<Map<string, number>>(new Map());
     const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
+    const [resultsPaneHeight, setResultsPaneHeight] = useState(320);
+    const [isResizingResultsPane, setIsResizingResultsPane] = useState(false);
     const [tabContextMenu, setTabContextMenu] = useState<{
         open: boolean;
         x: number;
@@ -300,6 +303,44 @@ export default function App() {
             jobPollersRef.current.clear();
         };
     }, []);
+
+    useEffect(() => {
+        if (!isResizingResultsPane) {
+            return;
+        }
+
+        const handlePointerMove = (event: MouseEvent) => {
+            const container = queryPaneRef.current;
+            if (!container) {
+                return;
+            }
+
+            const bounds = container.getBoundingClientRect();
+            const nextHeight = bounds.bottom - event.clientY;
+            const minResultsHeight = 180;
+            const minEditorHeight = 180;
+            const maxResultsHeight = Math.max(
+                minResultsHeight,
+                bounds.height - minEditorHeight - 12
+            );
+
+            setResultsPaneHeight(
+                Math.max(minResultsHeight, Math.min(maxResultsHeight, nextHeight))
+            );
+        };
+
+        const stopResizing = () => {
+            setIsResizingResultsPane(false);
+        };
+
+        window.addEventListener("mousemove", handlePointerMove);
+        window.addEventListener("mouseup", stopResizing);
+
+        return () => {
+            window.removeEventListener("mousemove", handlePointerMove);
+            window.removeEventListener("mouseup", stopResizing);
+        };
+    }, [isResizingResultsPane]);
 
     useEffect(() => {
         let unlisten: (() => void) | null = null;
@@ -1671,7 +1712,21 @@ export default function App() {
                     />
 
                     <div className={contentClasses}>
-                        <div className={styles.top}>
+                        <div
+                            ref={queryPaneRef}
+                            className={styles.queryPane}
+                        >
+                        <div
+                            className={styles.top}
+                            style={
+                                activeTab && activeTab.kind === "query"
+                                    ? {
+                                          flex: "0 0 auto",
+                                          height: `calc(100% - ${resultsPaneHeight}px - 12px)`,
+                                      }
+                                    : undefined
+                            }
+                        >
                             <div className={styles.tabsBar}>
                                 <TabList
                                     className={styles.tabsList}
@@ -1799,7 +1854,19 @@ export default function App() {
                         </div>
 
                         {activeTab && activeTab.kind === "query" ? (
-                            <div className={styles.bottom}>
+                            <>
+                            <div
+                                className={styles.resultsResizeHandle}
+                                onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    setIsResizingResultsPane(true);
+                                }}
+                                title="Drag to resize results"
+                            />
+                            <div
+                                className={styles.bottom}
+                                style={{ height: `${resultsPaneHeight}px` }}
+                            >
                                 <ResultsWindow
                                     data={activeTab.results}
                                     entityDefinitions={entityDefinitions}
@@ -1813,7 +1880,9 @@ export default function App() {
                                     exportJobId={activeTab.currentJobId}
                                 />
                             </div>
+                            </>
                         ) : null}
+                        </div>
                     </div>
                 </div>
                 {tabContextMenu.open && tabContextMenu.tabId !== null ? (

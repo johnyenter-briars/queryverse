@@ -40,6 +40,13 @@ export const useAppStyles = makeStyles({
         marginLeft: DRAWER_WIDTH,
         width: `calc(100% - ${DRAWER_WIDTH})`,
     },
+    queryPane: {
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        overflow: "hidden",
+    },
 
     // Placeholder Sections
     top: {
@@ -110,9 +117,39 @@ export const useAppStyles = makeStyles({
         flexShrink: 0,
     },
     bottom: {
-        flex: 1,
-        overflowY: "auto",
-        paddingTop: tokens.spacingVerticalS,
+        flex: "0 0 auto",
+        overflow: "hidden",
+        minHeight: 0,
+    },
+    resultsResizeHandle: {
+        height: "4px",
+        flex: "0 0 auto",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "row-resize",
+        position: "relative",
+        userSelect: "none",
+        "&::after": {
+            content: '""',
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "28px",
+            height: "2px",
+            borderRadius: tokens.borderRadiusCircular,
+            backgroundColor: "transparent",
+            transitionDuration: tokens.durationFaster,
+            transitionProperty: "background-color, box-shadow",
+        },
+        "&:hover::after": {
+            backgroundColor: tokens.colorNeutralForeground3,
+            boxShadow: tokens.shadow4,
+        },
+        "&:active::after": {
+            backgroundColor: tokens.colorNeutralForeground2,
+        },
     },
     connectionPicker: {
         display: "grid",
