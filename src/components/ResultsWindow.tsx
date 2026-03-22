@@ -180,6 +180,41 @@ function getRowId(row: ResultRow, primaryIdAttribute?: string): string {
     return String(value);
 }
 
+type ResultDetailsCardProps = {
+    data: ResultRow[];
+    styles: ReturnType<typeof useResultsWindowStyles>;
+};
+
+function ResultDetailsCard({ data, styles }: ResultDetailsCardProps) {
+    if (data.length === 0) {
+        return null;
+    }
+
+    const detailEntries = Object.entries(data[0].attributes);
+
+    return (
+        <div className={styles.progressCardShell}>
+            <div className={styles.progressCard}>
+                <div className={styles.detailsList}>
+                    {detailEntries.map(([key, value]) => (
+                        <div
+                            key={key}
+                            className={
+                                key === detailEntries[detailEntries.length - 1][0]
+                                    ? `${styles.detailsRow} ${styles.detailsRowLast}`
+                                    : styles.detailsRow
+                            }
+                        >
+                            <div className={styles.detailsKey}>{key}</div>
+                            <div className={styles.detailsValue}>{renderValue(value)}</div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export const ResultsWindow = React.memo(
     ({
         data,
@@ -382,27 +417,6 @@ export const ResultsWindow = React.memo(
         );
 
         if (layout === "details" && data.length > 0) {
-            const detailEntries = Object.entries(data[0].attributes);
-            const detailsContent = (
-                <div className={isLoading ? styles.progressCard : undefined}>
-                    <div className={styles.detailsList}>
-                        {detailEntries.map(([key, value]) => (
-                            <div
-                                key={key}
-                                className={
-                                    key === detailEntries[detailEntries.length - 1][0]
-                                        ? `${styles.detailsRow} ${styles.detailsRowLast}`
-                                        : styles.detailsRow
-                                }
-                            >
-                                <div className={styles.detailsKey}>{key}</div>
-                                <div className={styles.detailsValue}>{renderValue(value)}</div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-
             return (
                 <div
                     ref={containerRef}
@@ -421,11 +435,7 @@ export const ResultsWindow = React.memo(
                             </div>
                         </div>
                     ) : null}
-                    {isLoading ? (
-                        <div className={styles.progressCardShell}>{detailsContent}</div>
-                    ) : (
-                        detailsContent
-                    )}
+                    <ResultDetailsCard data={data} styles={styles} />
                 </div>
             );
         }
