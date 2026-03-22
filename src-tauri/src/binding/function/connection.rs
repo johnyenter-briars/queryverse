@@ -4,15 +4,19 @@ use uuid::Uuid;
 use crate::Database;
 use crate::auth::serviceclient::{ensure_device_code_auth, remove_service_client};
 use crate::auth::connection::{
-    get_default_connection as build_default_connection, load_connections, save_connection,
-    save_connections, utc_timestamp,
+    folder_exists, get_default_connection as build_default_connection, load_connection_folders,
+    load_connection_tree, load_connections, new_connection_folder, save_connection,
+    save_connection_folder, save_connection_folders, save_connections, utc_timestamp,
 };
 use crate::binding::model::{
     connection::Connection, createconnectionpayload::CreateConnectionPayload,
+    createconnectionfolderresponse::CreateConnectionFolderResponse,
     createconnectionrequest::CreateConnectionRequest,
     createconnectionresponse::CreateConnectionResponse,
-    listconnectionsresponse::ListConnectionsResponse, setconnectionrequest::SetConnectionRequest,
+    listconnectionsresponse::ListConnectionsResponse, listconnectiontreeresponse::ListConnectionTreeResponse,
+    setconnectionrequest::SetConnectionRequest,
     updateconnectionrequest::UpdateConnectionRequest,
+    updateconnectionfoldercolorresponse::UpdateConnectionFolderColorResponse,
     updateconnectionresponse::UpdateConnectionResponse,
 };
 use powerplatform_dataverse_client::auth::config::AuthConfig;
@@ -32,10 +36,13 @@ pub async fn create_connection(
             tenant_id,
             dataverse_url,
             token_cache_store_path,
+            parent_folder_id,
         } => {
+            validate_folder_parent(parent_folder_id)?;
             let connection = Connection {
                 id: Some(id.unwrap_or_else(Uuid::new_v4)),
                 name,
+                parent_folder_id,
                 auth: AuthConfig::ClientCredentials {
                     client_id,
                     client_secret,
@@ -61,10 +68,13 @@ pub async fn create_connection(
             tenant_id,
             dataverse_url,
             token_cache_store_path,
+            parent_folder_id,
         } => {
+            validate_folder_parent(parent_folder_id)?;
             let connection = Connection {
                 id: Some(id.unwrap_or_else(Uuid::new_v4)),
                 name,
+                parent_folder_id,
                 auth: AuthConfig::DeviceCode {
                     client_id,
                     tenant_id,
@@ -108,6 +118,52 @@ pub async fn list_connections(_window: tauri::Window) -> Result<ListConnectionsR
         message: "Connections found".to_string(),
         success: true,
         value: connections,
+    })
+}
+
+#[tauri::command]
+pub async fn list_connection_tree(_window: tauri::Window) -> Result<ListConnectionTreeResponse, String> {
+    Ok(ListConnectionTreeResponse {
+        message: "Connection tree found".to_string(),
+        success: true,
+        value: load_connection_tree()?,
+    })
+}
+
+#[tauri::command]
+pub async fn create_connection_folder(
+    _window: tauri::Window,
+    name: String,
+    parent_folder_id: Option<Uuid>,
+) -> Result<CreateConnectionFolderResponse, String> {
+    validate_folder_parent(parent_folder_id)?;
+    let folder = new_connection_folder(name, parent_folder_id);
+    save_connection_folder(&folder)?;
+    Ok(CreateConnectionFolderResponse {
+        message: "Folder created.".to_string(),
+        success: true,
+        value: folder,
+    })
+}
+
+#[tauri::command]
+pub async fn update_connection_folder_color(
+    _window: tauri::Window,
+    folder_id: Uuid,
+    color: Option<String>,
+) -> Result<UpdateConnectionFolderColorResponse, String> {
+    let mut folders = load_connection_folders()?;
+    let target_index = folders
+        .iter_mut()
+        .position(|folder| folder.id == folder_id)
+        .ok_or("Folder not found".to_string())?;
+    folders[target_index].color = color.filter(|value| !value.trim().is_empty());
+    let updated_folder = folders[target_index].clone();
+    save_connection_folders(&folders)?;
+    Ok(UpdateConnectionFolderColorResponse {
+        message: "Folder color updated.".to_string(),
+        success: true,
+        value: updated_folder,
     })
 }
 
@@ -168,10 +224,13 @@ pub async fn update_connection(
             tenant_id,
             dataverse_url,
             token_cache_store_path,
+            parent_folder_id,
         } => {
+            validate_folder_parent(parent_folder_id)?;
             let connection = Connection {
                 id: existing_id,
                 name,
+                parent_folder_id,
                 auth: AuthConfig::ClientCredentials {
                     client_id,
                     client_secret,
@@ -197,10 +256,13 @@ pub async fn update_connection(
             tenant_id,
             dataverse_url,
             token_cache_store_path,
+            parent_folder_id,
         } => {
+            validate_folder_parent(parent_folder_id)?;
             let connection = Connection {
                 id: existing_id,
                 name,
+                parent_folder_id,
                 auth: AuthConfig::DeviceCode {
                     client_id,
                     tenant_id,
@@ -260,4 +322,14 @@ pub async fn update_connection(
         success: true,
         value: updated_connection,
     })
+}
+
+fn validate_folder_parent(parent_folder_id: Option<Uuid>) -> Result<(), String> {
+    if let Some(folder_id) = parent_folder_id
+        && !folder_exists(folder_id)?
+    {
+        return Err("Parent folder not found".to_string());
+    }
+
+    Ok(())
 }

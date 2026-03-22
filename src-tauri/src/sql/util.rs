@@ -376,6 +376,10 @@ mod tests {
         SelectColumns, SelectStmt,
     };
 
+    fn lookup_attributes(values: &[&str]) -> std::collections::HashSet<String> {
+        values.iter().map(|value| value.to_string()).collect()
+    }
+
     #[test]
     fn fills_requested_entity_reference_name() {
         let mut attributes = HashMap::new();
@@ -472,7 +476,10 @@ mod tests {
             value: Literal::String("systemuser".to_string()),
         });
 
-        assert!(filter_requires_local_companion_evaluation(Some(&expr)));
+        assert!(filter_requires_local_companion_evaluation(
+            Some(&expr),
+            &lookup_attributes(&["ownerid"])
+        ));
     }
 
     #[test]
@@ -494,7 +501,10 @@ mod tests {
             order_by: Vec::new(),
         };
 
-        assert!(push_down_lookup_type_filters(&mut stmt));
+        assert!(push_down_lookup_type_filters(
+            &mut stmt,
+            &lookup_attributes(&["ownerid"])
+        ));
         assert!(stmt.filter.is_none());
         assert_eq!(stmt.joins.len(), 1);
         assert_eq!(stmt.joins[0].entity, "systemuser");

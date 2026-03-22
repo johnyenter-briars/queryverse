@@ -5,6 +5,7 @@ import { UpdateConnectionRequest } from "./model/UpdateConnectionRequest";
 import { UpdateConnectionResponse } from "./model/UpdateConnectionResponse";
 import { FetchXmlPreview } from "./model/FetchXmlPreview";
 import { ListConnectionsResponse } from "./model/ListConnectionsResponse";
+import { ListConnectionTreeResponse } from "./model/ListConnectionTreeResponse";
 import { ExecuteSqlRequest } from "./model/ExecuteSqlRequest";
 import { ExecuteSqlJobStartResponse } from "./model/ExecuteSqlJobStartResponse";
 import { EntityDefinition } from "./model/EntityDefinition";
@@ -24,8 +25,10 @@ import { UpdateSqlJobStartResponse } from "./model/UpdateSqlJobStartResponse";
 import { DeleteSqlPreviewResponse } from "./model/DeleteSqlPreviewResponse";
 import { DeleteSqlJobStartResponse } from "./model/DeleteSqlJobStartResponse";
 import { Connection } from "./model/Connection";
+import { CreateConnectionFolderResponse } from "./model/CreateConnectionFolderResponse";
 import { BackgroundJobStatusResponse } from "./model/BackgroundJobStatusResponse";
 import { BackgroundJobResultResponse } from "./model/BackgroundJobResultResponse";
+import { UpdateConnectionFolderColorResponse } from "./model/UpdateConnectionFolderColorResponse";
 import { logDebug } from "../utility/logging";
 
 const summarizeResponse = (response: unknown): unknown => {
@@ -119,6 +122,45 @@ export const listConnections = async (): Promise<ListConnectionsResponse> => {
     const response: ListConnectionsResponse = await invoke("list_connections");
 
     logBindingResponse("list_connections", response);
+
+    return response;
+};
+
+export const listConnectionTree = async (): Promise<ListConnectionTreeResponse> => {
+    const response: ListConnectionTreeResponse = await invoke("list_connection_tree");
+
+    logBindingResponse("list_connection_tree", response);
+
+    return response;
+};
+
+export const createConnectionFolder = async (
+    name: string,
+    parentFolderId?: string | null
+): Promise<CreateConnectionFolderResponse> => {
+    const response: CreateConnectionFolderResponse = await invoke("create_connection_folder", {
+        name,
+        parentFolderId: parentFolderId ?? null,
+    });
+
+    logBindingResponse("create_connection_folder", response);
+
+    return response;
+};
+
+export const updateConnectionFolderColor = async (
+    folderId: string,
+    color?: string | null
+): Promise<UpdateConnectionFolderColorResponse> => {
+    const response: UpdateConnectionFolderColorResponse = await invoke(
+        "update_connection_folder_color",
+        {
+            folderId,
+            color: color ?? null,
+        }
+    );
+
+    logBindingResponse("update_connection_folder_color", response);
 
     return response;
 };

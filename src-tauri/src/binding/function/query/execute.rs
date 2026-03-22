@@ -10,8 +10,8 @@ use crate::{
     },
     binding::model::{
         backgroundjobstatus::{BackgroundJobResult, BackgroundJobState, BackgroundJobStatus},
-        executesqlrequest::ExecuteSqlRequest,
         executesqljobstartresponse::ExecuteSqlJobStartResponse,
+        executesqlrequest::ExecuteSqlRequest,
         executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
         resultrow::ResultRow,
     },
@@ -27,7 +27,10 @@ use crate::{
 };
 use powerplatform_dataverse_client::{
     LogLevel,
-    dataverse::{entity::{Entity, Value}, serviceclient::ServiceClient},
+    dataverse::{
+        entity::{Entity, Value},
+        serviceclient::ServiceClient,
+    },
 };
 use uuid::Uuid;
 
@@ -186,7 +189,9 @@ pub async fn execute_sql_with_client(
     service_client: &ServiceClient,
     sql_text: &str,
     log_level: LogLevel,
-    entity_attributes: Option<&[powerplatform_dataverse_client::dataverse::entityattribute::EntityAttribute]>,
+    entity_attributes: Option<
+        &[powerplatform_dataverse_client::dataverse::entityattribute::EntityAttribute],
+    >,
 ) -> Result<ExecuteSqlResponse, String> {
     execute_sql_with_client_and_progress(
         service_client,
@@ -202,7 +207,9 @@ pub async fn execute_sql_with_client_and_progress<F>(
     service_client: &ServiceClient,
     sql_text: &str,
     log_level: LogLevel,
-    entity_attributes: Option<&[powerplatform_dataverse_client::dataverse::entityattribute::EntityAttribute]>,
+    entity_attributes: Option<
+        &[powerplatform_dataverse_client::dataverse::entityattribute::EntityAttribute],
+    >,
     mut on_progress: F,
 ) -> Result<ExecuteSqlResponse, String>
 where
@@ -218,10 +225,9 @@ where
     if let Some(lookup_bases) = &lookup_bases {
         let _ = push_down_lookup_type_filters(&mut execution_stmt, lookup_bases);
     }
-    let requires_local_companion_filter =
-        lookup_bases.as_ref().is_some_and(|lookup_bases| {
-            filter_requires_local_companion_evaluation(execution_stmt.filter.as_ref(), lookup_bases)
-        });
+    let requires_local_companion_filter = lookup_bases.as_ref().is_some_and(|lookup_bases| {
+        filter_requires_local_companion_evaluation(execution_stmt.filter.as_ref(), lookup_bases)
+    });
     let fetch_stmt = if requires_local_companion_filter {
         let mut fetch_stmt = execution_stmt.clone();
         fetch_stmt.filter = None;
@@ -281,10 +287,10 @@ where
                             &mut on_progress,
                         )
                         .await
-                            .map_err(|error| {
-                                error!("Error: {error}");
-                                error
-                            })?;
+                        .map_err(|error| {
+                            error!("Error: {error}");
+                            error
+                        })?;
 
                         let mut rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
                         fill_entity_reference_names(&mut rows, &columns_order);
@@ -334,10 +340,10 @@ where
                 &mut on_progress,
             )
             .await
-                .map_err(|error| {
-                    error!("execute_sql retrieve_multiple_fetchxml (aggregate) failed: {error}");
-                    error
-                })?;
+            .map_err(|error| {
+                error!("execute_sql retrieve_multiple_fetchxml (aggregate) failed: {error}");
+                error
+            })?;
 
             let mut rows = aggregate::aggregate_rows(entities, &plan, &columns_order);
             fill_entity_reference_names(&mut rows, &columns_order);
@@ -354,10 +360,10 @@ where
             &mut on_progress,
         )
         .await
-            .map_err(|error| {
-                error!("execute_sql retrieve_multiple_fetchxml failed: {error}");
-                error
-            })?;
+        .map_err(|error| {
+            error!("execute_sql retrieve_multiple_fetchxml failed: {error}");
+            error
+        })?;
 
         let mut rows: Vec<ResultRow> = entities
             .into_iter()
@@ -395,14 +401,19 @@ where
     F: FnMut(usize, usize, usize, usize, String),
 {
     service_client
-        .retrieve_multiple_fetchxml_paging_with_progress(entity_set, fetchxml, |page, processed| {
-            on_progress(
-                processed,
-                0,
-                page,
-                0,
-                format!("Selected {processed} record(s), batch {page}."),
-            );
-        })
+        .retrieve_multiple_fetchxml_paging_with_progress(
+            entity_set,
+            fetchxml,
+            |page, processed| {
+                on_progress(
+                    processed,
+                    0,
+                    page,
+                    0,
+                    format!("Selected {processed} record(s), batch {page}."),
+                );
+            },
+            None,
+        )
         .await
 }

@@ -127,6 +127,7 @@ pub fn to_fetchxml(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_attribute(
     item: &SelectItem,
     entity_name: &str,
@@ -821,9 +822,7 @@ fn lookup_companion_base_attribute<'a>(
     }
 
     if !base_lower.ends_with("id") && !base_lower.ends_with("by") {
-        let Some(projected_attributes) = projected_attributes else {
-            return None;
-        };
+        let projected_attributes = projected_attributes?;
         if !projected_attributes.contains(&base_lower) {
             return None;
         }

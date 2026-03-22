@@ -43,6 +43,10 @@ const ROW_NUMBER_MIN_WIDTH = 40;
 const ROW_HEIGHT = 36;
 const HEADER_HEIGHT = 40;
 const AUTO_FIT_COLUMNS = false;
+const CELL_HORIZONTAL_PADDING = 32;
+const CELL_MEASURE_FONT = "14px 'Segoe UI'";
+const MAX_COL_WIDTH = 1600;
+const MAX_WIDTH_SAMPLE_ROWS = 200;
 
 function isEntityReference(value: Value): value is EntityReference {
     return (
@@ -93,7 +97,49 @@ function renderValue(value: Value): React.ReactNode {
     return formatValue(value);
 }
 
-function valueToClipboardText(value: Value): string {
+function measureTextWidth(
+    text: string,
+    targetDocument?: Document | null,
+    measureContext?: CanvasRenderingContext2D | null
+): number {
+    if (measureContext) {
+        return measureContext.measureText(text).width;
+    }
+
+    if (!targetDocument) {
+        return text.length * 8;
+    }
+
+    const canvas = targetDocument.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+        return text.length * 8;
+    }
+
+    context.font = CELL_MEASURE_FONT;
+    return context.measureText(text).width;
+}
+
+function buildEntityReferenceRecordUrl(
+    value: EntityReference,
+    dataverseUrl?: string | null
+): string {
+    if (!dataverseUrl) {
+        return value.id;
+    }
+
+    const trimmedBaseUrl = dataverseUrl.replace(/\/+$/, "");
+    return `${trimmedBaseUrl}/main.aspx?pagetype=entityrecord&etn=${encodeURIComponent(
+        value.logical_name
+    )}&id=${encodeURIComponent(value.id)}`;
+}
+
+function valueToClipboardText(value: Value, dataverseUrl?: string | null): string {
+    if (isEntityReference(value)) {
+        return buildEntityReferenceRecordUrl(value, dataverseUrl);
+    }
+
     return formatValue(value);
 }
 
@@ -106,6 +152,7 @@ export interface IResultsWindowProps {
     loadingMessage?: string;
     layout?: "grid" | "details";
     errorMessage?: string | null;
+    dataverseUrl?: string | null;
 }
 
 function getRowId(row: ResultRow, primaryIdAttribute?: string): string {
@@ -133,6 +180,41 @@ function getRowId(row: ResultRow, primaryIdAttribute?: string): string {
     return String(value);
 }
 
+type ResultDetailsCardProps = {
+    data: ResultRow[];
+    styles: ReturnType<typeof useResultsWindowStyles>;
+};
+
+function ResultDetailsCard({ data, styles }: ResultDetailsCardProps) {
+    if (data.length === 0) {
+        return null;
+    }
+
+    const detailEntries = Object.entries(data[0].attributes);
+
+    return (
+        <div className={styles.progressCardShell}>
+            <div className={styles.progressCard}>
+                <div className={styles.detailsList}>
+                    {detailEntries.map(([key, value]) => (
+                        <div
+                            key={key}
+                            className={
+                                key === detailEntries[detailEntries.length - 1][0]
+                                    ? `${styles.detailsRow} ${styles.detailsRowLast}`
+                                    : styles.detailsRow
+                            }
+                        >
+                            <div className={styles.detailsKey}>{key}</div>
+                            <div className={styles.detailsValue}>{renderValue(value)}</div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export const ResultsWindow = React.memo(
     ({
         data,
@@ -142,6 +224,7 @@ export const ResultsWindow = React.memo(
         isLoading,
         layout = "grid",
         errorMessage,
+        dataverseUrl,
     }: IResultsWindowProps) => {
         const { targetDocument } = useFluent();
         const scrollbarWidth = useScrollbarWidth({ targetDocument }) ?? 0;
@@ -200,25 +283,71 @@ export const ResultsWindow = React.memo(
             );
         }, [orderedAttributes, styles.cellContent, styles.headerContent]);
 
+        const computedColumnWidths = useMemo(() => {
+            const sampledRows =
+                data.length > MAX_WIDTH_SAMPLE_ROWS
+                    ? data.slice(0, MAX_WIDTH_SAMPLE_ROWS)
+                    : data;
+            const canvas = targetDocument?.createElement("canvas");
+            const measureContext = canvas?.getContext("2d");
+            if (measureContext) {
+                measureContext.font = CELL_MEASURE_FONT;
+            }
+
+            return orderedAttributes.reduce<Record<string, number>>((widths, entry) => {
+                const isRowNumber = entry.dataKey === "__rownum";
+
+                if (isRowNumber) {
+                    widths[entry.key] = ROW_NUMBER_COL_WIDTH;
+                    return widths;
+                }
+
+                const headerWidth =
+                    measureTextWidth(entry.attribute, targetDocument, measureContext) +
+                    CELL_HORIZONTAL_PADDING;
+
+                const valueWidth = sampledRows.reduce((maxWidth, row) => {
+                    const displayValue = formatValue(row.attributes[entry.dataKey]);
+                    const nextWidth =
+                        measureTextWidth(displayValue, targetDocument, measureContext) +
+                        CELL_HORIZONTAL_PADDING;
+                    return Math.max(maxWidth, nextWidth);
+                }, 0);
+
+                widths[entry.key] = Math.min(
+                    MAX_COL_WIDTH,
+                    Math.max(MIN_COL_WIDTH, headerWidth, valueWidth)
+                );
+                return widths;
+            }, {});
+        }, [data, orderedAttributes, targetDocument]);
+
         const columnSizingOptions = useMemo<TableColumnSizingOptions>(() => {
             const options: TableColumnSizingOptions = {};
             for (const { key, dataKey } of orderedAttributes) {
                 const isRowNumber = dataKey === "__rownum";
+                const width = computedColumnWidths[key] ?? DEFAULT_COL_WIDTH;
                 options[key] = {
-                    defaultWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : DEFAULT_COL_WIDTH,
+                    defaultWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : width,
                     minWidth: isRowNumber ? ROW_NUMBER_MIN_WIDTH : MIN_COL_WIDTH,
-                    idealWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : DEFAULT_COL_WIDTH,
+                    idealWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : width,
                 };
             }
             return options;
-        }, [orderedAttributes]);
+        }, [computedColumnWidths, orderedAttributes]);
 
         const primaryIdAttribute = useMemo(
             () => getPrimaryIdAttributeForQuery(entityDefinitions, query),
             [entityDefinitions, query]
         );
 
-        const totalWidth = columns.length * DEFAULT_COL_WIDTH;
+        const totalWidth = useMemo(
+            () =>
+                orderedAttributes.reduce((sum, { key }) => {
+                    return sum + (computedColumnWidths[key] ?? DEFAULT_COL_WIDTH);
+                }, 0),
+            [computedColumnWidths, orderedAttributes]
+        );
         const bodyHeight = Math.max(200, containerHeight - HEADER_HEIGHT);
         const bodyWidth = containerWidth > 0 ? containerWidth : "100%";
 
@@ -263,7 +392,10 @@ export const ResultsWindow = React.memo(
                 {({ renderCell, columnId }) => {
                     const column = orderedAttributes.find((entry) => entry.key === columnId);
                     const cellValue = column
-                        ? valueToClipboardText(item.attributes[column.dataKey])
+                        ? valueToClipboardText(
+                            item.attributes[column.dataKey],
+                            dataverseUrl
+                        )
                         : "";
 
                     return (
@@ -285,27 +417,6 @@ export const ResultsWindow = React.memo(
         );
 
         if (layout === "details" && data.length > 0) {
-            const detailEntries = Object.entries(data[0].attributes);
-            const detailsContent = (
-                <div className={isLoading ? styles.progressCard : undefined}>
-                    <div className={styles.detailsList}>
-                        {detailEntries.map(([key, value]) => (
-                            <div
-                                key={key}
-                                className={
-                                    key === detailEntries[detailEntries.length - 1][0]
-                                        ? `${styles.detailsRow} ${styles.detailsRowLast}`
-                                        : styles.detailsRow
-                                }
-                            >
-                                <div className={styles.detailsKey}>{key}</div>
-                                <div className={styles.detailsValue}>{renderValue(value)}</div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-
             return (
                 <div
                     ref={containerRef}
@@ -319,16 +430,12 @@ export const ResultsWindow = React.memo(
                 >
                     {isLoading ? (
                         <div className={styles.loadingOverlay}>
-                        <div className={styles.loadingCard}>
-                            <Spinner />
+                            <div className={styles.loadingCard}>
+                                <Spinner />
+                            </div>
                         </div>
-                    </div>
-                ) : null}
-                    {isLoading ? (
-                        <div className={styles.progressCardShell}>{detailsContent}</div>
-                    ) : (
-                        detailsContent
-                    )}
+                    ) : null}
+                    <ResultDetailsCard data={data} styles={styles} />
                 </div>
             );
         }

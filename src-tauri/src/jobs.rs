@@ -46,6 +46,7 @@ pub async fn get_job_result(
     job_result_store.lock().await.get(job_id).cloned()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn update_job_progress(
     job_store: &JobStore,
     job_id: &str,

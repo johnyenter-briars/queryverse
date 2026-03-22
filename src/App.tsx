@@ -7,7 +7,7 @@ import {
     Button,
     Text,
 } from "@fluentui/react-components";
-import { Add24Regular, Copy24Regular, Link24Filled } from "@fluentui/react-icons";
+import { Add24Regular, Copy24Regular } from "@fluentui/react-icons";
 import { listen } from "@tauri-apps/api/event";
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor, type CustomEditorHandle } from "./components/CustomEditor";
@@ -22,12 +22,14 @@ import { SettingsModal } from "./components/SettingsModal";
 import { TabSwitcher } from "./components/TabSwitcher";
 import { MenuBar } from "./components/MenuBar";
 import { ConnectionsMenu } from "./components/ConnectionsMenu";
+import { ConnectionTreeList } from "./components/ConnectionTreeList";
 import { SchemaEntityView } from "./components/SchemaEntityView";
 import { SchemaExplorerMenu } from "./components/SchemaExplorerMenu";
 import { combineClasses } from "./utility/class";
 import { ResultRow } from "./binding/model/ResultRow";
 import { FetchXmlPreview } from "./binding/model/FetchXmlPreview";
 import { Connection } from "./binding/model/Connection";
+import { ConnectionTreeItem } from "./binding/model/ConnectionTreeItem";
 import {
     cancelBackgroundJob,
     discardDeleteSql,
@@ -39,6 +41,7 @@ import {
     getBackgroundJobStatus,
     getSettings,
     getLaunchContext,
+    listConnectionTree,
     listConnections,
     listEntityAttributes,
     listEntityDefinitions,
@@ -201,7 +204,7 @@ export default function App() {
     const [connectionPickerTabId, setConnectionPickerTabId] = useState<number | null>(null);
     const [connectionPickerLoading, setConnectionPickerLoading] = useState(false);
     const [connectionPickerError, setConnectionPickerError] = useState<string | null>(null);
-    const [connectionOptions, setConnectionOptions] = useState<Connection[]>([]);
+    const [connectionTreeOptions, setConnectionTreeOptions] = useState<ConnectionTreeItem[]>([]);
     const [dataChangeConfirm, setDataChangeConfirm] = useState<{
         open: boolean;
         count: number;
@@ -396,15 +399,22 @@ export default function App() {
             setConnectionPickerLoading(true);
             setConnectionPickerError(null);
             try {
-                const response = await listConnections();
-                if (response.success) {
-                    setConnectionOptions(response.value);
+                const [connectionsResponse, treeResponse] = await Promise.all([
+                    listConnections(),
+                    listConnectionTree(),
+                ]);
+                if (connectionsResponse.success && treeResponse.success) {
+                    setConnectionTreeOptions(treeResponse.value);
                 } else {
-                    setConnectionOptions([]);
-                    setConnectionPickerError(response.message || "Failed to load connections.");
+                    setConnectionTreeOptions([]);
+                    setConnectionPickerError(
+                        connectionsResponse.message ||
+                            treeResponse.message ||
+                            "Failed to load connections."
+                    );
                 }
             } catch (error) {
-                setConnectionOptions([]);
+                setConnectionTreeOptions([]);
                 setConnectionPickerError(getErrorMessage(error));
             } finally {
                 setConnectionPickerLoading(false);
@@ -1603,22 +1613,13 @@ export default function App() {
                             <div>Loading connections...</div>
                         ) : connectionPickerError ? (
                             <div>{connectionPickerError}</div>
-                        ) : connectionOptions.length === 0 ? (
+                        ) : connectionTreeOptions.length === 0 ? (
                             <div>No connections available.</div>
                         ) : (
-                            connectionOptions.map((connection) => (
-                                <Button
-                                    key={connection.id ?? connection.name}
-                                    appearance="subtle"
-                                    icon={<Link24Filled className={styles.connectionPickerIcon} />}
-                                    className={styles.connectionPickerItem}
-                                    onClick={() => {
-                                        handleSelectConnectionForTab(connection);
-                                    }}
-                                >
-                                    {connection.name ?? "Unnamed connection"}
-                                </Button>
-                            ))
+                            <ConnectionTreeList
+                                items={connectionTreeOptions}
+                                onConnectionSelect={handleSelectConnectionForTab}
+                            />
                         )}
                         </div>
                     </div>
@@ -1808,6 +1809,7 @@ export default function App() {
                                     loadingMessage={activeTab.loadingMessage ?? undefined}
                                     layout={activeTab.resultLayout}
                                     errorMessage={activeTab.executeError}
+                                    dataverseUrl={selectedConnection?.auth.dataverseUrl}
                                 />
                             </div>
                         ) : null}

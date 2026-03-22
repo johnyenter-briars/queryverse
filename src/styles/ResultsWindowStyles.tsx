@@ -57,6 +57,7 @@ export const useResultsWindowStyles = makeStyles({
             boxSizing: "border-box",
             boxShadow: `inset -1px 0 0 ${tokens.colorNeutralStroke2}`,
             userSelect: "none",
+            overflow: "hidden",
             ...shorthands.padding(0),
         },
         "& .fui-DataGridCell:last-child": {
@@ -68,6 +69,7 @@ export const useResultsWindowStyles = makeStyles({
             display: "flex",
             alignItems: "center",
             userSelect: "none",
+            overflow: "hidden",
             ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalM),
         },
         "& ::-webkit-scrollbar": {
