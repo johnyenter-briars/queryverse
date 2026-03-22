@@ -28,6 +28,10 @@ pub enum CreateConnectionPayload {
         #[serde(default)]
         #[serde(rename = "tokenCacheStorePath")]
         token_cache_store_path: Option<String>,
+
+        #[serde(default)]
+        #[serde(rename = "parentFolderId")]
+        parent_folder_id: Option<Uuid>,
     },
 
     #[serde(rename = "DeviceCode", alias = "AuthorizationCode", alias = "OAuth")]
@@ -51,5 +55,9 @@ pub enum CreateConnectionPayload {
         #[serde(default)]
         #[serde(rename = "tokenCacheStorePath")]
         token_cache_store_path: Option<String>,
+
+        #[serde(default)]
+        #[serde(rename = "parentFolderId")]
+        parent_folder_id: Option<Uuid>,
     },
 }

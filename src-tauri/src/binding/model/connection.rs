@@ -7,6 +7,8 @@ use uuid::Uuid;
 pub struct Connection {
     pub id: Option<Uuid>,
     pub name: String,
+    #[serde(default)]
+    pub parent_folder_id: Option<Uuid>,
     pub auth: AuthConfig,
     #[serde(default)]
     pub generated_on: String,

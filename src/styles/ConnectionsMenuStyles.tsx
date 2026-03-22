@@ -45,6 +45,11 @@ export const useConnectionsMenuStyles = makeStyles({
         justifyContent: "space-between",
         gap: tokens.spacingHorizontalS,
     },
+    sectionHeaderActions: {
+        display: "flex",
+        alignItems: "center",
+        gap: tokens.spacingHorizontalXS,
+    },
     sectionTitle: {
         display: "flex",
         flexDirection: "column",
@@ -61,30 +66,6 @@ export const useConnectionsMenuStyles = makeStyles({
     list: {
         ...shorthands.padding(0),
     },
-    connectionRow: {
-        display: "flex",
-        alignItems: "center",
-        gap: tokens.spacingHorizontalS,
-        cursor: "pointer",
-        transitionProperty: "background-color, color",
-        transitionDuration: tokens.durationFast,
-        ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
-        ...shorthands.borderRadius(tokens.borderRadiusMedium),
-        width: "100%",
-        "&:hover": {
-            backgroundColor: tokens.colorNeutralBackground1Hover,
-        },
-        "&:active": {
-            backgroundColor: tokens.colorNeutralBackground1Pressed,
-        },
-    },
-    connectionName: {
-        color: tokens.colorNeutralForeground1,
-        fontSize: tokens.fontSizeBase300,
-        fontWeight: tokens.fontWeightSemibold,
-        lineHeight: tokens.lineHeightBase300,
-        flex: 1,
-    },
     emptyState: {
         color: tokens.colorNeutralForeground3,
         fontSize: tokens.fontSizeBase200,
@@ -94,6 +75,14 @@ export const useConnectionsMenuStyles = makeStyles({
     modalForm: {
         display: "grid",
         gap: tokens.spacingVerticalM,
+    },
+    folderSelect: {
+        backgroundColor: tokens.colorNeutralBackground1,
+        color: tokens.colorNeutralForeground1,
+        ...shorthands.border(`1px solid ${tokens.colorNeutralStroke1}`),
+        ...shorthands.borderRadius(tokens.borderRadiusMedium),
+        ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
+        width: "100%",
     },
     modalStatusSlot: {
         minHeight: "24px",
@@ -105,5 +94,21 @@ export const useConnectionsMenuStyles = makeStyles({
     },
     modalStatusError: {
         color: tokens.colorPaletteRedForeground1,
+    },
+    contextMenu: {
+        position: "fixed",
+        minWidth: "180px",
+        zIndex: 80,
+        backgroundColor: tokens.colorNeutralBackground3,
+        ...shorthands.border(`1px solid ${tokens.colorNeutralStroke2}`),
+        ...shorthands.borderRadius(tokens.borderRadiusLarge),
+        boxShadow: tokens.shadow16,
+        ...shorthands.padding(tokens.spacingVerticalXS),
+        display: "flex",
+        flexDirection: "column",
+        gap: tokens.spacingVerticalXXS,
+    },
+    contextMenuButton: {
+        justifyContent: "flex-start",
     },
 });
