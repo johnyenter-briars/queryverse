@@ -43,7 +43,6 @@ import { exportCsv, exportExcel } from "../binding/function";
 
 const DEFAULT_COL_WIDTH = 300;
 const MIN_COL_WIDTH = 120;
-const ROW_NUMBER_COL_WIDTH = 40;
 const ROW_NUMBER_MIN_WIDTH = 40;
 const ROW_HEIGHT = 36;
 const HEADER_HEIGHT = 40;
@@ -460,11 +459,15 @@ export const ResultsWindow = React.memo(
                 measureContext.font = CELL_MEASURE_FONT;
             }
 
+            const largestRowNumberWidth =
+                measureTextWidth(String(Math.max(data.length, 1)), targetDocument, measureContext) +
+                CELL_HORIZONTAL_PADDING;
+
             return orderedAttributes.reduce<Record<string, number>>((widths, entry) => {
                 const isRowNumber = entry.dataKey === "__rownum";
 
                 if (isRowNumber) {
-                    widths[entry.key] = ROW_NUMBER_COL_WIDTH;
+                    widths[entry.key] = Math.max(ROW_NUMBER_MIN_WIDTH, largestRowNumberWidth);
                     return widths;
                 }
 
@@ -494,9 +497,9 @@ export const ResultsWindow = React.memo(
                 const isRowNumber = dataKey === "__rownum";
                 const width = computedColumnWidths[key] ?? DEFAULT_COL_WIDTH;
                 options[key] = {
-                    defaultWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : width,
+                    defaultWidth: width,
                     minWidth: isRowNumber ? ROW_NUMBER_MIN_WIDTH : MIN_COL_WIDTH,
-                    idealWidth: isRowNumber ? ROW_NUMBER_COL_WIDTH : width,
+                    idealWidth: width,
                 };
             }
             return options;
