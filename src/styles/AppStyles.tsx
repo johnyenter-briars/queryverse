@@ -154,15 +154,15 @@ export const useAppStyles = makeStyles({
         ...shorthands.padding(0, tokens.spacingHorizontalS, tokens.spacingHorizontalS),
     },
     resultsPanel: {
-        flex: "0 0 100%",
-        minWidth: 0,
+        minWidth: "320px",
+        maxWidth: "none",
         display: "flex",
         flexDirection: "column",
         minHeight: 0,
+        overflow: "hidden",
         backgroundColor: webDarkTheme.colorNeutralBackground2,
         border: `1px solid ${tokens.colorNeutralStroke1}`,
         borderRadius: tokens.borderRadiusLarge,
-        overflow: "hidden",
     },
     resultsPanelHeader: {
         flex: "0 0 auto",

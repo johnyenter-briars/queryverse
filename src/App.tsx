@@ -234,6 +234,7 @@ export default function App() {
     const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
     const [resultsPaneHeight, setResultsPaneHeight] = useState(320);
     const [isResizingResultsPane, setIsResizingResultsPane] = useState(false);
+    const [resultPaneWidths, setResultPaneWidths] = useState<Record<string, number>>({});
     const [tabContextMenu, setTabContextMenu] = useState<{
         open: boolean;
         x: number;
@@ -531,6 +532,12 @@ export default function App() {
 
     const activeResultPanes =
         activeTab && activeTab.kind === "query" ? getAllResultPanes(activeTab) : [];
+
+    const setResultPaneWidth = (paneId: string, width: number) => {
+        setResultPaneWidths((prev) =>
+            prev[paneId] === width ? prev : { ...prev, [paneId]: width }
+        );
+    };
 
     useEffect(() => {
         if (!tabContextMenu.open) return;
@@ -2137,10 +2144,14 @@ export default function App() {
                                     <div
                                         className={styles.resultsPanelsStrip}
                                         style={{
-                                            minWidth:
+                                            width:
                                                 activeResultPanes.length <= 2
                                                     ? "100%"
                                                     : "max-content",
+                                            minWidth:
+                                                activeResultPanes.length <= 2
+                                                    ? "100%"
+                                                    : undefined,
                                         }}
                                     >
                                         {activeResultPanes.map((pane) => (
@@ -2149,9 +2160,13 @@ export default function App() {
                                                 className={styles.resultsPanel}
                                                 style={{
                                                     flex:
-                                                        activeResultPanes.length <= 2
-                                                            ? "1 1 0"
-                                                            : "0 0 min(720px, 100%)",
+                                                        activeResultPanes.length === 1
+                                                            ? "0 0 auto"
+                                                            : "0 0 500px",
+                                                    width:
+                                                        activeResultPanes.length === 1
+                                                            ? `${resultPaneWidths[pane.id] ?? 640}px`
+                                                            : "500px",
                                                 }}
                                             >
                                                 <div className={styles.resultsPanelHeader}>
@@ -2173,6 +2188,12 @@ export default function App() {
                                                             selectedConnection?.auth.dataverseUrl
                                                         }
                                                         exportJobId={pane.currentJobId}
+                                                        stretchToContainer={
+                                                            activeResultPanes.length > 1
+                                                        }
+                                                        onPreferredWidthChange={(width) =>
+                                                            setResultPaneWidth(pane.id, width)
+                                                        }
                                                     />
                                                 </div>
                                             </div>
