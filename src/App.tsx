@@ -7,7 +7,7 @@ import {
     Button,
     Text,
 } from "@fluentui/react-components";
-import { Add24Regular, Copy24Regular } from "@fluentui/react-icons";
+import { Add24Regular, Copy24Regular, Link24Filled } from "@fluentui/react-icons";
 import { listen } from "@tauri-apps/api/event";
 import { ResultsWindow } from "./components/ResultsWindow";
 import { CustomEditor, type CustomEditorHandle } from "./components/CustomEditor";
@@ -83,6 +83,8 @@ type EditorTab = {
     isEditorDirty: boolean;
     results: ResultRow[];
     connectionId: string | null;
+    connectionName: string | null;
+    connectionDataverseUrl: string | null;
     fetchPreview: FetchXmlPreview | null;
     previewError: string | null;
     executeError: string | null;
@@ -115,6 +117,8 @@ const createQueryTab = (id: number): EditorTab => ({
     isEditorDirty: false,
     results: [],
     connectionId: null,
+    connectionName: null,
+    connectionDataverseUrl: null,
     fetchPreview: null,
     previewError: null,
     executeError: null,
@@ -128,8 +132,7 @@ const createQueryTab = (id: number): EditorTab => ({
 const createFetchXmlTab = (
     id: number,
     title: string,
-    fetchXml: string,
-    connectionId: string | null
+    fetchXml: string
 ): EditorTab => ({
     kind: "fetchxml",
     id,
@@ -140,7 +143,9 @@ const createFetchXmlTab = (
     lastSavedQuery: fetchXml,
     isEditorDirty: false,
     results: [],
-    connectionId,
+    connectionId: null,
+    connectionName: null,
+    connectionDataverseUrl: null,
     fetchPreview: null,
     previewError: null,
     executeError: null,
@@ -168,6 +173,8 @@ const createSchemaTab = (
     isEditorDirty: false,
     results: [],
     connectionId,
+    connectionName: null,
+    connectionDataverseUrl: null,
     fetchPreview: null,
     previewError: null,
     executeError: null,
@@ -178,6 +185,23 @@ const createSchemaTab = (
     queryMetadata: null,
     schemaLogicalName: logicalName,
     schemaDisplayName: displayName,
+});
+
+const getQueryTabFileLabel = (tab: EditorTab): string => tab.fileName ?? `Query ${tab.id}`;
+
+const getTabDisplayLabel = (tab: EditorTab): string => {
+    if (tab.kind !== "query") {
+        return tab.title;
+    }
+
+    const fileLabel = getQueryTabFileLabel(tab);
+    return tab.connectionName ? `${tab.connectionName} - ${fileLabel}` : fileLabel;
+};
+
+const getConnectionState = (connection?: Connection | null) => ({
+    connectionId: connection?.id ?? null,
+    connectionName: connection?.name ?? null,
+    connectionDataverseUrl: connection?.auth.dataverseUrl ?? null,
 });
 
 export default function App() {
@@ -194,7 +218,6 @@ export default function App() {
     const editorRef = useRef<CustomEditorHandle | null>(null);
     const queryPaneRef = useRef<HTMLDivElement | null>(null);
     const jobPollersRef = useRef<Map<string, number>>(new Map());
-    const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
     const [resultsPaneHeight, setResultsPaneHeight] = useState(320);
     const [isResizingResultsPane, setIsResizingResultsPane] = useState(false);
     const [tabContextMenu, setTabContextMenu] = useState<{
@@ -261,6 +284,7 @@ export default function App() {
     const editorFontSize = settings.fontSize;
 
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    const activeQueryConnectionId = activeTab?.kind === "query" ? activeTab.connectionId : null;
     const getEntityDisplayName = (entity: EntityDefinition): string =>
         ((entity.DisplayName as { UserLocalizedLabel?: { Label?: string } } | undefined)
             ?.UserLocalizedLabel?.Label ??
@@ -294,6 +318,40 @@ export default function App() {
             cancelled = true;
         };
     }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadEntityDefinitionsForActiveTab = async () => {
+            if (!activeQueryConnectionId) {
+                return;
+            }
+
+            try {
+                await setConnection(activeQueryConnectionId);
+                const response = await listEntityDefinitions();
+                if (!cancelled && response.success) {
+                    setEntityDefinitions(response.value);
+                    setEntityAttributesByLogical({});
+                    setEntityRelationshipsByLogical({});
+                    setEntityAttributesLoading({});
+                    setEntityAttributesError({});
+                }
+            } catch (error) {
+                logError(
+                    "Failed to load entity definitions for active tab",
+                    error,
+                    "queryverse::frontend::app"
+                );
+            }
+        };
+
+        void loadEntityDefinitionsForActiveTab();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [activeQueryConnectionId]);
 
     useEffect(() => {
         return () => {
@@ -819,18 +877,6 @@ export default function App() {
                         );
                         if (match) {
                             connectionToUse = match;
-                            setSelectedConnection(match);
-                            if (match.id) {
-                                await setConnection(match.id);
-                                const response = await listEntityDefinitions();
-                                if (response.success) {
-                                    setEntityDefinitions(response.value);
-                                    setEntityAttributesByLogical({});
-                                    setEntityRelationshipsByLogical({});
-                                    setEntityAttributesLoading({});
-                                    setEntityAttributesError({});
-                                }
-                            }
                         }
                     }
                 }
@@ -838,18 +884,16 @@ export default function App() {
                 if (context.sqlFilePath) {
                     try {
                         const file = await openSqlFilePath(context.sqlFilePath);
-                        const connectionName =
-                            connectionToUse?.name ?? "No connection";
                         const newId = nextTabId.current++;
                         const newTab = {
                             ...createQueryTab(newId),
-                            title: `${file.fileName} - ${connectionName}`,
+                            title: file.fileName,
                             query: file.contents,
                             filePath: file.path,
                             fileName: file.fileName,
                             lastSavedQuery: file.contents,
                             isEditorDirty: false,
-                            connectionId: connectionToUse?.id ?? null,
+                            ...getConnectionState(connectionToUse),
                         };
 
                         setTabs((prev) => [...prev, newTab]);
@@ -865,6 +909,15 @@ export default function App() {
                             `File not found: ${context.sqlFilePath}`
                         );
                     }
+                } else if (connectionToUse) {
+                    const newId = nextTabId.current++;
+                    const newTab = {
+                        ...createQueryTab(newId),
+                        ...getConnectionState(connectionToUse),
+                    };
+
+                    setTabs((prev) => [...prev, newTab]);
+                    setActiveTabId(newId);
                 }
             } catch (error) {
                 logError(
@@ -883,14 +936,10 @@ export default function App() {
     }, []);
 
     const openTab = (connection?: Connection | null) => {
-        const effectiveConnection = connection ?? selectedConnection;
         const newId = nextTabId.current++;
         const newTab = {
             ...createQueryTab(newId),
-            title: effectiveConnection?.name
-                ? `Query - ${effectiveConnection.name}`
-                : `Query ${newId}`,
-            connectionId: effectiveConnection?.id ?? null,
+            ...getConnectionState(connection),
         };
 
         setTabs((prev) => [...prev, newTab]);
@@ -902,10 +951,6 @@ export default function App() {
     };
 
     const handleAddTabWithFirstConnection = async () => {
-        if (selectedConnection) {
-            openTab(selectedConnection);
-            return;
-        }
         try {
             const response = await listConnections();
             const firstConnection = response.success ? response.value[0] : undefined;
@@ -936,13 +981,25 @@ export default function App() {
     const handleExecuteActiveTab = async () => {
         if (activeTabId === 0) return;
         const targetTab = tabs.find((tab) => tab.id === activeTabId);
-        if (!targetTab || targetTab.kind !== "query" || !selectedConnection?.id) {
+        if (!targetTab || targetTab.kind !== "query" || !targetTab.connectionId) {
             return;
         }
         if (targetTab.isEditorDirty) {
             updateTab(targetTab.id, (tab) => ({
                 ...tab,
                 executeError: "Save changes before executing the query.",
+            }));
+            return;
+        }
+
+        try {
+            await setConnection(targetTab.connectionId);
+        } catch (error) {
+            updateTab(targetTab.id, (tab) => ({
+                ...tab,
+                executeError: getErrorMessage(error),
+                isExecuting: false,
+                loadingMessage: null,
             }));
             return;
         }
@@ -1107,12 +1164,11 @@ export default function App() {
                 );
             }
             const previewId = nextTabId.current++;
-            const previewTitle = `FetchXML - ${targetTab.title}`;
+            const previewTitle = `FetchXML - ${getQueryTabFileLabel(targetTab)}`;
             const previewTab = createFetchXmlTab(
                 previewId,
                 previewTitle,
-                formattedFetchXml,
-                targetTab.connectionId
+                formattedFetchXml
             );
             setTabs((prev) => [...prev, previewTab]);
             setActiveTabId(previewId);
@@ -1147,17 +1203,19 @@ export default function App() {
             const response = await openSqlFile();
             if (!response) return;
 
-            const connectionName = selectedConnection?.name ?? "No connection";
             const newId = nextTabId.current++;
             const newTab = {
                 ...createQueryTab(newId),
-                title: `${response.fileName} - ${connectionName}`,
+                title: response.fileName,
                 query: response.contents,
                 filePath: response.path,
                 fileName: response.fileName,
                 lastSavedQuery: response.contents,
                 isEditorDirty: false,
-                connectionId: selectedConnection?.id ?? null,
+                connectionId: activeTab?.kind === "query" ? activeTab.connectionId : null,
+                connectionName: activeTab?.kind === "query" ? activeTab.connectionName : null,
+                connectionDataverseUrl:
+                    activeTab?.kind === "query" ? activeTab.connectionDataverseUrl : null,
             };
 
             setTabs((prev) => [...prev, newTab]);
@@ -1200,12 +1258,11 @@ export default function App() {
             });
             if (!response) return;
 
-            const connectionName = selectedConnection?.name ?? "No connection";
             updateTab(activeTab.id, (tab) => ({
                 ...tab,
                 filePath: response.path,
                 fileName: response.fileName,
-                title: `${response.fileName} - ${connectionName}`,
+                title: response.fileName,
                 query: editorContents,
                 lastSavedQuery: editorContents,
                 isEditorDirty: false,
@@ -1231,34 +1288,10 @@ export default function App() {
         setConnectionPickerOpen(false);
         setConnectionPickerTabId(null);
 
-        const connectionName = connection.name ?? "No connection";
         updateTab(targetTabId, (tab) => ({
             ...tab,
-            connectionId: connection.id ?? null,
-            title: tab.fileName
-                ? `${tab.fileName} - ${connectionName}`
-                : `Query - ${connectionName}`,
+            ...getConnectionState(connection),
         }));
-        setSelectedConnection(connection);
-        if (connection.id) {
-            await setConnection(connection.id);
-            try {
-                const response = await listEntityDefinitions();
-                if (response.success) {
-                    setEntityDefinitions(response.value);
-                    setEntityAttributesByLogical({});
-                    setEntityRelationshipsByLogical({});
-                    setEntityAttributesLoading({});
-                    setEntityAttributesError({});
-                }
-            } catch (error) {
-                logError(
-                    "Failed to load entity definitions",
-                    error,
-                    "queryverse::frontend::app"
-                );
-            }
-        }
     };
 
     const handleLoadEntityMetadata = async (
@@ -1400,7 +1433,7 @@ export default function App() {
             `Schema - ${displayName}`,
             logicalName,
             displayName,
-            selectedConnection?.id ?? null
+            activeTab?.kind === "query" ? activeTab.connectionId : null
         );
 
         setTabs((prev) => [...prev, newTab]);
@@ -1410,6 +1443,11 @@ export default function App() {
 
     const handleConfirmDataChange = async () => {
         if (!dataChangeConfirm.token || dataChangeConfirm.tabId === null) return;
+        const targetTab = tabs.find((tab) => tab.id === dataChangeConfirm.tabId);
+        if (!targetTab || targetTab.kind !== "query" || !targetTab.connectionId) {
+            resetDataChangeConfirm();
+            return;
+        }
         setDataChangeConfirm((prev) => ({ ...prev, isLoading: true }));
         updateTab(dataChangeConfirm.tabId, (tab) => ({
             ...tab,
@@ -1421,6 +1459,7 @@ export default function App() {
         }));
 
         try {
+            await setConnection(targetTab.connectionId);
             if (dataChangeConfirm.action === "delete") {
                 const response = await executeDeleteSql(dataChangeConfirm.token);
                 updateTab(dataChangeConfirm.tabId, (tab) => ({
@@ -1542,8 +1581,8 @@ export default function App() {
                     onCancelSql={handleCancelActiveTab}
                     onPreviewFetchXml={handlePreviewActiveTab}
                     canExecute={Boolean(
-                        selectedConnection?.id &&
-                            activeTab?.kind === "query" &&
+                        activeTab?.kind === "query" &&
+                            activeTab.connectionId &&
                             !activeTab?.isEditorDirty &&
                             !activeTab?.isExecuting
                     )}
@@ -1553,7 +1592,6 @@ export default function App() {
                     onSaveSqlFile={handleSaveActiveTab}
                     canSaveSqlFile={Boolean(activeTab?.kind === "query")}
                     onSaveSqlFileAs={handleSaveActiveTabAs}
-                    currentConnection={selectedConnection}
                 />
                 <ShortcutManager
                     handlers={{
@@ -1566,8 +1604,8 @@ export default function App() {
                         if (!keyBindingsEnabled) return false;
                         return id === "execute"
                             ? Boolean(
-                                  selectedConnection?.id &&
-                                      activeTab?.kind === "query" &&
+                                  activeTab?.kind === "query" &&
+                                      activeTab.connectionId &&
                                       !activeTab?.isEditorDirty &&
                                       !activeTab?.isExecuting
                               )
@@ -1675,7 +1713,7 @@ export default function App() {
                     onCancel={handleCancelDataChange}
                 />
                 <TabSwitcher
-                    tabs={tabs.map(({ id, title }) => ({ id, title }))}
+                    tabs={tabs.map((tab) => ({ id: tab.id, title: getTabDisplayLabel(tab) }))}
                     activeTabId={activeTabId}
                     onTabSelect={setActiveTabId}
                 />
@@ -1685,23 +1723,6 @@ export default function App() {
                         isOpen={connectionsEnabled}
                         onOpenConnection={async (connection) => {
                             openTab(connection);
-                            setSelectedConnection(connection);
-
-                            if (!connection.id) {
-                                setIsMenuOpen(false);
-                                return;
-                            }
-
-                            await setConnection(connection.id);
-
-                            const response = await listEntityDefinitions();
-                            //TODO: handle failure here
-                            setEntityDefinitions(response.value);
-                            setEntityAttributesByLogical({});
-                            setEntityRelationshipsByLogical({});
-                            setEntityAttributesLoading({});
-                            setEntityAttributesError({});
-
                             setIsMenuOpen(false);
                         }}
                     />
@@ -1754,14 +1775,35 @@ export default function App() {
                                             }}
                                         >
                                             <span className={styles.tabLabel}>
-                                                <span>{tab.title}</span>
+                                                {tab.kind === "query" && tab.connectionName ? (
+                                                    <>
+                                                        <Link24Filled
+                                                            className={styles.tabConnectionIcon}
+                                                        />
+                                                        <span
+                                                            className={styles.tabConnectionName}
+                                                        >
+                                                            {tab.connectionName}
+                                                        </span>
+                                                        <span
+                                                            className={styles.tabConnectionDivider}
+                                                        >
+                                                            /
+                                                        </span>
+                                                    </>
+                                                ) : null}
+                                                <span>
+                                                    {tab.kind === "query"
+                                                        ? getQueryTabFileLabel(tab)
+                                                        : tab.title}
+                                                </span>
                                                 <span
                                                     className={combineClasses(
                                                         styles.tabClose,
                                                         tab.isEditorDirty && styles.tabCloseDirty
                                                     )}
                                                     role="button"
-                                                    aria-label={`Close ${tab.title}`}
+                                                    aria-label={`Close ${getTabDisplayLabel(tab)}`}
                                                     onClick={(event) => {
                                                         event.preventDefault();
                                                         event.stopPropagation();
@@ -1876,7 +1918,7 @@ export default function App() {
                                     loadingMessage={activeTab.loadingMessage ?? undefined}
                                     layout={activeTab.resultLayout}
                                     errorMessage={activeTab.executeError}
-                                    dataverseUrl={selectedConnection?.auth.dataverseUrl}
+                                    dataverseUrl={activeTab.connectionDataverseUrl ?? undefined}
                                     exportJobId={activeTab.currentJobId}
                                 />
                             </div>

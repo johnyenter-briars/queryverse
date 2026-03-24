@@ -1,5 +1,4 @@
 import {
-    Text,
     makeStyles,
     shorthands,
     tokens,
@@ -19,28 +18,15 @@ import {
     Stop24Regular,
     DocumentText24Regular,
     Table24Regular,
-    Link24Filled,
     FolderOpen24Regular,
     Save24Regular,
     Document24Regular,
     SaveCopy24Regular,
 } from "@fluentui/react-icons";
-import { Connection } from "../binding/model/Connection";
 
 const useMenuBarStyles = makeStyles({
-    connectionInfo: {
+    toolbarSpacer: {
         marginLeft: "auto",
-        display: "flex",
-        alignItems: "center",
-        gap: tokens.spacingHorizontalXS,
-        color: tokens.colorNeutralForeground2,
-        ...shorthands.padding(0, tokens.spacingHorizontalS),
-    },
-    connectionName: {
-        color: tokens.colorNeutralForeground1,
-    },
-    connectionIcon: {
-        color: tokens.colorPaletteGreenForeground1,
     },
 });
 export interface IMenuBarProps {
@@ -59,7 +45,6 @@ export interface IMenuBarProps {
     onSaveSqlFile: () => void;
     canSaveSqlFile: boolean;
     onSaveSqlFileAs: () => void;
-    currentConnection: Connection | null;
 }
 
 export function MenuBar({
@@ -78,13 +63,8 @@ export function MenuBar({
     onSaveSqlFile,
     canSaveSqlFile,
     onSaveSqlFileAs,
-    currentConnection,
 }: IMenuBarProps) {
     const styles = useMenuBarStyles();
-    const connectionLabel = currentConnection?.name ?? "No connection";
-    const connectionTitle = currentConnection?.auth.dataverseUrl
-        ? `Connected to ${currentConnection.auth.dataverseUrl}`
-        : "No connection selected";
 
     return (
         <Toolbar
@@ -159,13 +139,7 @@ export function MenuBar({
             <ToolbarButton icon={<Settings24Filled />} title="Settings" onClick={onOpenSettings}>
                 Settings
             </ToolbarButton>
-            <div className={styles.connectionInfo} title={connectionTitle}>
-                <Link24Filled className={styles.connectionIcon} />
-                <Text size={200}>Connection:</Text>
-                <Text size={200} className={styles.connectionName}>
-                    {connectionLabel}
-                </Text>
-            </div>
+            <div className={styles.toolbarSpacer} />
         </Toolbar>
     );
 }

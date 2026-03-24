@@ -70,6 +70,22 @@ export const useAppStyles = makeStyles({
         alignItems: "center",
         gap: tokens.spacingHorizontalXS,
     },
+    tabConnectionIcon: {
+        color: tokens.colorPaletteGreenForeground1,
+        fontSize: "14px",
+        flexShrink: 0,
+    },
+    tabConnectionName: {
+        color: tokens.colorNeutralForeground1,
+        maxWidth: "160px",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+    },
+    tabConnectionDivider: {
+        color: tokens.colorNeutralForeground3,
+        flexShrink: 0,
+    },
     tabClose: {
         display: "inline-flex",
         alignItems: "center",
