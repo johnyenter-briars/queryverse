@@ -118,6 +118,74 @@ type JoinRelationshipSuggestion = {
     sortText: string;
 };
 
+const resolveEntityLogicalName = (
+    rawName: string | undefined,
+    entityDefinitions?: EntityDefinition[]
+): string | undefined => {
+    if (!rawName || !entityDefinitions?.length) return undefined;
+    const normalized = normalizeTableName(rawName);
+    const match = entityDefinitions.find((definition) => {
+        const logical = normalizeTableName(definition.LogicalName);
+        const schema = normalizeTableName(definition.SchemaName);
+        const entitySet = normalizeTableName(definition.EntitySetName);
+        return normalized === logical || normalized === schema || normalized === entitySet;
+    });
+    return match?.LogicalName;
+};
+
+const RESERVED_SQL_ALIAS_WORDS = new Set([
+    "inner",
+    "left",
+    "right",
+    "full",
+    "cross",
+    "outer",
+    "join",
+    "where",
+    "group",
+    "order",
+    "having",
+    "on",
+]);
+
+const buildFallbackParseContext = (
+    statementText: string,
+    entityDefinitions?: EntityDefinition[]
+): SqlParseContext | null => {
+    if (!statementText.trim() || !entityDefinitions?.length) return null;
+
+    const tables: SqlParseContext["tables"] = [];
+    const aliases: SqlParseContext["aliases"] = {};
+    const pattern =
+        /\b(from|join)\s+([A-Za-z0-9_\[\]\"]+)(?:\s+(?:as\s+)?([A-Za-z0-9_\[\]\"]+))?/gi;
+
+    for (const match of statementText.matchAll(pattern)) {
+        const raw = match[2];
+        if (!raw) continue;
+
+        const aliasCandidate = match[3];
+        const alias =
+            aliasCandidate &&
+            !RESERVED_SQL_ALIAS_WORDS.has(aliasCandidate.trim().toLowerCase())
+                ? aliasCandidate
+                : undefined;
+        const tableRef = {
+            raw,
+            normalized: normalizeTableName(raw),
+            logicalName: resolveEntityLogicalName(raw, entityDefinitions),
+            aliases: alias ? [alias] : [],
+        };
+
+        tables.push(tableRef);
+        aliases[tableRef.normalized] = tableRef;
+        if (alias) {
+            aliases[normalizeTableName(alias)] = tableRef;
+        }
+    }
+
+    return tables.length ? { tables, aliases } : null;
+};
+
 const buildJoinRelationshipSuggestions = (
     joinPrefix: string,
     parseContext: SqlParseContext | null | undefined,
@@ -517,10 +585,13 @@ export const getSqlCompletionItems = ({
     const statementText = statementSlice.text;
     const statementCursorOffset = Math.max(0, cursorOffset - statementSlice.startOffset);
     const textUpToCursor = statementText.slice(0, statementCursorOffset);
-    const activeParseContext =
+    const parsedStatementContext =
         parseContext && statementSlice.startOffset === 0 && statementSlice.endOffset === fullText.length
             ? parseContext
             : analyzeSql(statementText, entityDefinitions).context;
+    const activeParseContext =
+        parsedStatementContext ??
+        buildFallbackParseContext(statementText, entityDefinitions);
 
     // Table name suggestions after FROM/JOIN/UPDATE/DELETE targets.
     const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
