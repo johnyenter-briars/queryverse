@@ -14,6 +14,7 @@ use crate::{
         executesqlrequest::ExecuteSqlRequest,
         executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
         resultrow::ResultRow,
+        splitsqlpartsresponse::{SplitSqlPart, SplitSqlPartsResponse},
     },
     jobs::{complete_select_job, fail_job, insert_job, store_job_result_rows, update_job_progress},
     sql::{
@@ -61,6 +62,23 @@ pub async fn parse_sql_to_fetchxml(
         entity_set: parsed.entity_set,
         entity_logical: parsed.entity_logical,
         fetch_xml,
+    })
+}
+
+#[tauri::command]
+pub async fn split_sql_parts(sql: String) -> Result<SplitSqlPartsResponse, String> {
+    let parts = sql::split_statements(&sql)
+        .into_iter()
+        .enumerate()
+        .map(|(index, sql)| SplitSqlPart {
+            index: index + 1,
+            sql,
+        })
+        .collect::<Vec<_>>();
+
+    Ok(SplitSqlPartsResponse {
+        count: parts.len(),
+        parts,
     })
 }
 

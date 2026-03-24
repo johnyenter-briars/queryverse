@@ -121,6 +121,61 @@ export const useAppStyles = makeStyles({
         overflow: "hidden",
         minHeight: 0,
     },
+    resultsPanelsViewport: {
+        height: "100%",
+        overflowX: "auto",
+        overflowY: "hidden",
+        scrollbarColor: `${tokens.colorBrandBackground} ${tokens.colorNeutralBackground2}`,
+        scrollbarWidth: "thin",
+        "&::-webkit-scrollbar": {
+            width: "12px",
+            height: "12px",
+        },
+        "&::-webkit-scrollbar-track": {
+            backgroundColor: tokens.colorNeutralBackground2,
+        },
+        "&::-webkit-scrollbar-thumb": {
+            backgroundColor: tokens.colorBrandBackground,
+            borderRadius: tokens.borderRadiusMedium,
+            border: `3px solid ${tokens.colorNeutralBackground2}`,
+        },
+        "&::-webkit-scrollbar-thumb:hover": {
+            backgroundColor: tokens.colorBrandBackgroundHover,
+        },
+        "&::-webkit-scrollbar-corner": {
+            backgroundColor: tokens.colorNeutralBackground2,
+        },
+    },
+    resultsPanelsStrip: {
+        height: "100%",
+        display: "flex",
+        gap: tokens.spacingHorizontalM,
+        width: "max-content",
+        ...shorthands.padding(0, tokens.spacingHorizontalS, tokens.spacingHorizontalS),
+    },
+    resultsPanel: {
+        minWidth: "320px",
+        maxWidth: "none",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+        overflow: "hidden",
+        backgroundColor: webDarkTheme.colorNeutralBackground2,
+        border: `1px solid ${tokens.colorNeutralStroke1}`,
+        borderRadius: tokens.borderRadiusLarge,
+    },
+    resultsPanelHeader: {
+        flex: "0 0 auto",
+        fontWeight: tokens.fontWeightSemibold,
+        color: tokens.colorNeutralForeground2,
+        backgroundColor: webDarkTheme.colorNeutralBackground3,
+        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+        ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalM),
+    },
+    resultsPanelBody: {
+        flex: 1,
+        minHeight: 0,
+    },
     resultsResizeHandle: {
         height: "4px",
         flex: "0 0 auto",

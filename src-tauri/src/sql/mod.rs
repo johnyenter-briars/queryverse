@@ -61,6 +61,97 @@ pub fn sql_to_fetchxml(sql: &str) -> Result<FetchXmlQuery, SqlError> {
     Ok(to_fetchxml(&stmt)?)
 }
 
+pub fn split_statements(sql: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut start = 0usize;
+    let mut chars = sql.char_indices().peekable();
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut in_brackets = false;
+    let mut in_line_comment = false;
+    let mut in_block_comment = false;
+
+    while let Some((idx, ch)) = chars.next() {
+        if in_line_comment {
+            if ch == '\n' {
+                in_line_comment = false;
+            }
+            continue;
+        }
+
+        if in_block_comment {
+            if ch == '*'
+                && let Some((_, '/')) = chars.peek()
+            {
+                chars.next();
+                in_block_comment = false;
+            }
+            continue;
+        }
+
+        if in_single_quote {
+            if ch == '\''
+                && let Some((_, '\'')) = chars.peek()
+            {
+                chars.next();
+                continue;
+            }
+
+            if ch == '\'' {
+                in_single_quote = false;
+            }
+            continue;
+        }
+
+        if in_double_quote {
+            if ch == '"' {
+                in_double_quote = false;
+            }
+            continue;
+        }
+
+        if in_brackets {
+            if ch == ']' {
+                in_brackets = false;
+            }
+            continue;
+        }
+
+        match ch {
+            '\'' => in_single_quote = true,
+            '"' => in_double_quote = true,
+            '[' => in_brackets = true,
+            '-'
+                if matches!(chars.peek(), Some((_, '-'))) =>
+            {
+                chars.next();
+                in_line_comment = true;
+            }
+            '/'
+                if matches!(chars.peek(), Some((_, '*'))) =>
+            {
+                chars.next();
+                in_block_comment = true;
+            }
+            ';' => {
+                let statement = sql[start..idx].trim();
+                if !statement.is_empty() {
+                    parts.push(statement.to_string());
+                }
+                start = idx + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+
+    let trailing = sql[start..].trim();
+    if !trailing.is_empty() {
+        parts.push(trailing.to_string());
+    }
+
+    parts
+}
+
 pub fn update_to_fetchxml(
     stmt: &UpdateStmt,
     id_attribute: &str,
@@ -202,7 +293,7 @@ fn ends_with_any(name: &str, suffixes: &[&str]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse, sql_to_fetchxml, to_fetchxml};
+    use super::{parse, split_statements, sql_to_fetchxml, to_fetchxml};
 
     #[test]
     fn parses_simple_select() {
@@ -416,5 +507,28 @@ mod tests {
             .matches("attribute name=\"parentcustomerid\"")
             .count();
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn splits_multiple_statements() {
+        let sql = "select name from account;\n\nselect top 20 * from contact;";
+        let parts = split_statements(sql);
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], "select name from account");
+        assert_eq!(parts[1], "select top 20 * from contact");
+    }
+
+    #[test]
+    fn does_not_split_semicolons_inside_quotes() {
+        let sql = "select 'a;b' as name from account;\nselect \"x;y\" from contact";
+        let parts = split_statements(sql);
+        assert_eq!(parts.len(), 2);
+    }
+
+    #[test]
+    fn does_not_split_semicolons_inside_comments() {
+        let sql = "select name from account -- comment;\n;\nselect fullname from contact /* block;comment */";
+        let parts = split_statements(sql);
+        assert_eq!(parts.len(), 2);
     }
 }

@@ -225,6 +225,8 @@ export interface IResultsWindowProps {
     errorMessage?: string | null;
     dataverseUrl?: string | null;
     exportJobId?: string | null;
+    stretchToContainer?: boolean;
+    onPreferredWidthChange?: (width: number) => void;
 }
 
 function getRowId(row: ResultRow, primaryIdAttribute?: string): string {
@@ -298,6 +300,8 @@ export const ResultsWindow = React.memo(
         errorMessage,
         dataverseUrl,
         exportJobId,
+        stretchToContainer = true,
+        onPreferredWidthChange,
     }: IResultsWindowProps) => {
         const { targetDocument } = useFluent();
         const scrollbarWidth = useScrollbarWidth({ targetDocument }) ?? 0;
@@ -517,6 +521,12 @@ export const ResultsWindow = React.memo(
                 }, 0),
             [computedColumnWidths, orderedAttributes]
         );
+
+        useEffect(() => {
+            if (totalWidth > 0) {
+                onPreferredWidthChange?.(totalWidth);
+            }
+        }, [onPreferredWidthChange, totalWidth]);
         const bodyHeight = Math.max(200, containerHeight - HEADER_HEIGHT);
         const bodyWidth = containerWidth > 0 ? containerWidth : "100%";
 
@@ -708,7 +718,10 @@ export const ResultsWindow = React.memo(
                     resizableColumns
                     resizableColumnsOptions={{ autoFitColumns: AUTO_FIT_COLUMNS }}
                     columnSizingOptions={columnSizingOptions}
-                    style={{ minWidth: "auto", width: "100%" }}
+                    style={{
+                        minWidth: "auto",
+                        width: stretchToContainer ? "100%" : `${Math.max(totalWidth, 1)}px`,
+                    }}
                     getRowId={(row: ResultRow) =>
                         getRowId(row, primaryIdAttribute)
                     }
