@@ -16,7 +16,11 @@ import {
     getSqlCompletionItems,
     getSqlTableNames,
 } from "../utility/editorIntellisense";
-import { analyzeSql, SqlParseContext } from "../utility/sqlParser";
+import {
+    analyzeSql,
+    isolateSqlStatementAtOffset,
+    SqlParseContext,
+} from "../utility/sqlParser";
 
 const DEFAULT_FONT_SIZE = 16;
 const MIN_FONT_SIZE = 10;
@@ -64,6 +68,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     const editorRef = useRef<any>(null);
     const monacoRef = useRef<MonacoApi | null>(null);
     const completionDisposableRef = useRef<IDisposable | null>(null);
+    const cursorDisposableRef = useRef<IDisposable | null>(null);
     const [monacoReady, setMonacoReady] = useState(false);
     const wheelCleanupRef = useRef<(() => void) | null>(null);
     const [localFontSize, setLocalFontSize] = useState(
@@ -77,6 +82,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
     const lastSyncedValueRef = useRef<string>(value);
 
     const [localValue, setLocalValue] = useState<string>(value);
+    const [cursorOffset, setCursorOffset] = useState(0);
 
     useEffect(() => {
         const editor = editorRef.current;
@@ -166,6 +172,15 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                 domNode.removeEventListener("wheel", handleWheel);
             };
         }
+
+        cursorDisposableRef.current = editor.onDidChangeCursorPosition((event) => {
+            const model = editor.getModel();
+            if (!model) {
+                setCursorOffset(0);
+                return;
+            }
+            setCursorOffset(model.getOffsetAt(event.position));
+        });
     };
 
     useEffect(() => {
@@ -189,6 +204,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         return () => {
             if (vimModeRef.current) vimModeRef.current.dispose();
             if (completionDisposableRef.current) completionDisposableRef.current.dispose();
+            if (cursorDisposableRef.current) cursorDisposableRef.current.dispose();
             if (wheelCleanupRef.current) wheelCleanupRef.current();
         };
     }, []);
@@ -239,8 +255,9 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         if (!model) return;
 
         const handle = window.setTimeout(() => {
-                const { context, error } = analyzeSql(localValue, entityDefinitions);
-                parseContextRef.current = context;
+            const statement = isolateSqlStatementAtOffset(localValue, cursorOffset);
+            const { context, error } = analyzeSql(statement.text, entityDefinitions);
+            parseContextRef.current = context;
             if (context?.tables?.length && onEntitiesSelected) {
                 const logicalNames = context.tables
                     .map((table) => table.logicalName)
@@ -258,8 +275,13 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
             }
 
             if (error) {
-                const line = error.line ?? 1;
-                const column = error.column ?? 1;
+                const statementStartPosition = model.getPositionAt(statement.startOffset);
+                const line =
+                    (statementStartPosition.lineNumber - 1) + (error.line ?? 1);
+                const column =
+                    (error.line ?? 1) > 1
+                        ? error.column ?? 1
+                        : statementStartPosition.column + ((error.column ?? 1) - 1);
                 monaco.editor.setModelMarkers(model, "sql-intellisense", [
                     {
                         severity: monaco.MarkerSeverity.Error,
@@ -276,7 +298,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
         }, 300);
 
         return () => window.clearTimeout(handle);
-    }, [entityDefinitions, language, localValue, monacoReady, onEntitiesSelected]);
+    }, [cursorOffset, entityDefinitions, language, localValue, monacoReady, onEntitiesSelected]);
 
     return (
         <div
@@ -296,8 +318,13 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                     setLocalValue(nextValue);
                     lastSyncedValueRef.current = nextValue;
                     onChange(nextValue);
+                    const model = editorRef.current?.getModel?.();
+                    const position = editorRef.current?.getPosition?.();
+                    const offset =
+                        model && position ? model.getOffsetAt(position) : nextValue.length;
+                    const statement = isolateSqlStatementAtOffset(nextValue, offset);
                     const selected = findSelectedEntity(
-                        nextValue,
+                        statement.text,
                         entityDefinitions
                     );
                     if (selected !== lastEntityRef.current) {
@@ -308,7 +335,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                     }
 
                     const updateSelected = findUpdateEntity(
-                        nextValue,
+                        statement.text,
                         entityDefinitions
                     );
                     if (updateSelected !== lastUpdateEntityRef.current) {
@@ -319,7 +346,7 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
                     }
 
                     const deleteSelected = findDeleteEntity(
-                        nextValue,
+                        statement.text,
                         entityDefinitions
                     );
                     if (deleteSelected !== lastDeleteEntityRef.current) {

@@ -2,7 +2,7 @@ import type { editor as MonacoEditor, Position, languages } from "monaco-editor"
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { EntityAttribute } from "../binding/model/EntityAttribute";
 import { EntityRelationship } from "../binding/model/EntityRelationship";
-import { SqlParseContext } from "./sqlParser";
+import { analyzeSql, isolateSqlStatementAtOffset, SqlParseContext } from "./sqlParser";
 
 /**
  * Normalize a table or alias identifier for case-insensitive matching.
@@ -513,7 +513,14 @@ export const getSqlCompletionItems = ({
     const prefix = lineText.slice(0, Math.max(position.column - 1, 0));
     const fullText = model.getValue();
     const cursorOffset = model.getOffsetAt(position);
-    const textUpToCursor = fullText.slice(0, cursorOffset);
+    const statementSlice = isolateSqlStatementAtOffset(fullText, cursorOffset);
+    const statementText = statementSlice.text;
+    const statementCursorOffset = Math.max(0, cursorOffset - statementSlice.startOffset);
+    const textUpToCursor = statementText.slice(0, statementCursorOffset);
+    const activeParseContext =
+        parseContext && statementSlice.startOffset === 0 && statementSlice.endOffset === fullText.length
+            ? parseContext
+            : analyzeSql(statementText, entityDefinitions).context;
 
     // Table name suggestions after FROM/JOIN/UPDATE/DELETE targets.
     const match = prefix.match(/\bfrom\s+([A-Za-z0-9_\[\]\"]*)$/i);
@@ -541,7 +548,7 @@ export const getSqlCompletionItems = ({
             suggestions.push(
                 ...buildJoinRelationshipSuggestions(
                     current,
-                    parseContext,
+                    activeParseContext,
                     entityRelationships
                 ).map((suggestion) => ({
                     label: {
@@ -576,7 +583,7 @@ export const getSqlCompletionItems = ({
     const aliasContext = getAliasContext(textUpToCursor);
     if (aliasContext && entityAttributes) {
         const aliasKey = normalizeTableName(aliasContext.alias);
-        const target = parseContext?.aliases?.[aliasKey];
+        const target = activeParseContext?.aliases?.[aliasKey];
         const logicalName = target?.logicalName;
         const attributes = getAttributesForIntellisense(
             logicalName,
@@ -611,12 +618,12 @@ export const getSqlCompletionItems = ({
     }
 
     // Alias/table suggestions inside select/where/join-on clauses.
-    const isInJoinOn = isInJoinOnClause(fullText, cursorOffset);
-    const inGroupBy = isInGroupByClause(fullText, cursorOffset);
+    const isInJoinOn = isInJoinOnClause(statementText, statementCursorOffset);
+    const inGroupBy = isInGroupByClause(statementText, statementCursorOffset);
     if (
-        parseContext?.tables?.length &&
-        (isInSelectList(fullText, cursorOffset) ||
-            isInWhereClause(fullText, cursorOffset) ||
+        activeParseContext?.tables?.length &&
+        (isInSelectList(statementText, statementCursorOffset) ||
+            isInWhereClause(statementText, statementCursorOffset) ||
             inGroupBy ||
             isInJoinOn)
     ) {
@@ -630,7 +637,7 @@ export const getSqlCompletionItems = ({
         const current = word.word.toLowerCase();
 
         const aliasCandidates = new Map<string, string>();
-        for (const table of parseContext.tables) {
+        for (const table of activeParseContext.tables) {
             if (table.raw) {
                 aliasCandidates.set(table.raw, table.raw);
             }
@@ -654,13 +661,13 @@ export const getSqlCompletionItems = ({
     }
 
     // Column suggestions for SELECT/WHERE/GROUP BY/SET contexts without an alias prefix.
-    const inUpdateSet = isInSetClause(fullText, cursorOffset);
-    const inUpdateWhere = isInUpdateWhereClause(fullText, cursorOffset);
-    const inDeleteWhere = isInDeleteWhereClause(fullText, cursorOffset);
+    const inUpdateSet = isInSetClause(statementText, statementCursorOffset);
+    const inUpdateWhere = isInUpdateWhereClause(statementText, statementCursorOffset);
+    const inDeleteWhere = isInDeleteWhereClause(statementText, statementCursorOffset);
     if (
         entityAttributes &&
-        (isInSelectList(fullText, cursorOffset) ||
-            isInWhereClause(fullText, cursorOffset) ||
+        (isInSelectList(statementText, statementCursorOffset) ||
+            isInWhereClause(statementText, statementCursorOffset) ||
             inGroupBy ||
             inUpdateSet ||
             inUpdateWhere ||
@@ -668,9 +675,9 @@ export const getSqlCompletionItems = ({
     ) {
         if (inUpdateSet || inUpdateWhere || inDeleteWhere) {
             const updateTarget = inDeleteWhere
-                ? findDeleteEntity(fullText, entityDefinitions)
-                : parseContext?.tables?.[0]?.logicalName ??
-                  findUpdateTargetEntity(fullText, entityDefinitions);
+                ? findDeleteEntity(statementText, entityDefinitions)
+                : activeParseContext?.tables?.[0]?.logicalName ??
+                  findUpdateTargetEntity(statementText, entityDefinitions);
             const attributes = getAttributesForIntellisense(
                 updateTarget,
                 entityDefinitions,
@@ -707,8 +714,8 @@ export const getSqlCompletionItems = ({
         }
 
         // Default column suggestions for single-table or inferred entity context.
-        const tablesInScope = parseContext?.tables?.length
-            ? parseContext.tables
+        const tablesInScope = activeParseContext?.tables?.length
+            ? activeParseContext.tables
                   .map((table) => table.logicalName)
                   .filter((name): name is string => Boolean(name))
             : [];
@@ -716,7 +723,7 @@ export const getSqlCompletionItems = ({
         const selectedEntity =
             tablesInScope.length === 1
                 ? tablesInScope[0]
-                : findSelectedEntity(fullText, entityDefinitions);
+                : findSelectedEntity(statementText, entityDefinitions);
 
         const attributes = getAttributesForIntellisense(
             selectedEntity,
