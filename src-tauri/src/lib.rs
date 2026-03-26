@@ -13,8 +13,9 @@ use tauri::Manager;
 
 use crate::binding::function::{
     connection::{
-        create_connection, create_connection_folder, get_default_connection, list_connection_tree,
-        list_connections, set_connection, update_connection, update_connection_folder_color,
+        create_connection, create_connection_folder, delete_connection, delete_connection_folder,
+        get_default_connection, list_connection_tree, list_connections, set_connection,
+        update_connection, update_connection_folder, update_connection_folder_color,
     },
     export::{export_csv, export_excel},
     file::{open_sql_file, open_sql_file_path, save_sql_file, save_sql_file_as},
@@ -135,6 +136,9 @@ pub fn run() {
             list_connection_tree,
             create_connection_folder,
             update_connection_folder_color,
+            update_connection_folder,
+            delete_connection,
+            delete_connection_folder,
             export_csv,
             export_excel,
             set_connection,

@@ -16,10 +16,13 @@ import { combineClasses } from "../utility/class";
 import {
     createConnection,
     createConnectionFolder,
+    deleteConnection,
+    deleteConnectionFolder,
     getDefaultConnection,
     listConnections,
     listConnectionTree,
     updateConnection,
+    updateConnectionFolder,
     updateConnectionFolderColor,
 } from "../binding/function";
 import { Connection } from "../binding/model/Connection";
@@ -150,14 +153,24 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
     const [connectionTree, setConnectionTree] = useState<ConnectionTreeItem[]>([]);
     const [createOpen, setCreateOpen] = useState(false);
     const [createFolderOpen, setCreateFolderOpen] = useState(false);
+    const [editFolderOpen, setEditFolderOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [editIndex, setEditIndex] = useState<number | null>(null);
     const [createStatus, setCreateStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
     const [editStatus, setEditStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
     const [folderStatus, setFolderStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+    const [editFolderStatus, setEditFolderStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
     const [createFormState, setCreateFormState] = useState<ConnectionFormState>(emptyFormState());
     const [editFormState, setEditFormState] = useState<ConnectionFormState>(emptyFormState());
     const [folderFormState, setFolderFormState] = useState<FolderFormState>(emptyFolderFormState());
+    const [editFolderFormState, setEditFolderFormState] = useState<FolderFormState>(emptyFolderFormState());
+    const [editFolderId, setEditFolderId] = useState<string | null>(null);
+    const [connectionContextMenu, setConnectionContextMenu] = useState<{
+        open: boolean;
+        x: number;
+        y: number;
+        connection: Connection | null;
+    }>({ open: false, x: 0, y: 0, connection: null });
     const [folderContextMenu, setFolderContextMenu] = useState<{
         open: boolean;
         x: number;
@@ -165,6 +178,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         folder: ConnectionFolderTreeItem | null;
     }>({ open: false, x: 0, y: 0, folder: null });
     const colorInputRef = useRef<HTMLInputElement | null>(null);
+    const connectionContextMenuRef = useRef<HTMLDivElement | null>(null);
     const folderContextMenuRef = useRef<HTMLDivElement | null>(null);
 
     const flyoutClasses = combineClasses(styles.flyoutBase, isOpen && styles.flyoutOpen);
@@ -189,16 +203,18 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
     }, []);
 
     useEffect(() => {
-        if (!folderContextMenu.open) return;
+        if (!folderContextMenu.open && !connectionContextMenu.open) return;
 
         const handleClose = (event: MouseEvent | KeyboardEvent) => {
             if (
                 event instanceof MouseEvent &&
-                folderContextMenuRef.current?.contains(event.target as Node)
+                (folderContextMenuRef.current?.contains(event.target as Node) ||
+                    connectionContextMenuRef.current?.contains(event.target as Node))
             ) {
                 return;
             }
 
+            setConnectionContextMenu((prev) => ({ ...prev, open: false }));
             setFolderContextMenu((prev) => ({ ...prev, open: false }));
         };
         window.addEventListener("click", handleClose, true);
@@ -209,7 +225,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
             window.removeEventListener("contextmenu", handleClose, true);
             window.removeEventListener("keydown", handleClose, true);
         };
-    }, [folderContextMenu.open]);
+    }, [connectionContextMenu.open, folderContextMenu.open]);
 
     const loadDefaultConnection = async (method: ConnectionMethod = "ClientCredentials") => {
         const connection = await getDefaultConnection();
@@ -240,13 +256,32 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         setFolderStatus(null);
     };
 
+    const closeEditFolder = () => {
+        setEditFolderOpen(false);
+        setEditFolderId(null);
+        setEditFolderFormState(emptyFolderFormState());
+        setEditFolderStatus(null);
+    };
+
     const openEdit = (connection: Connection) => {
         const index = connections.findIndex((item) => item.id === connection.id);
         if (index < 0) return;
+        setConnectionContextMenu((prev) => ({ ...prev, open: false }));
         setEditIndex(index);
         setEditFormState(toFormState(connection));
         setEditStatus(null);
         setEditOpen(true);
+    };
+
+    const openEditFolder = (folder: ConnectionFolderTreeItem) => {
+        setFolderContextMenu((prev) => ({ ...prev, open: false }));
+        setEditFolderId(folder.id);
+        setEditFolderFormState({
+            name: folder.name ?? "",
+            parentFolderId: folder.parentFolderId ?? "",
+        });
+        setEditFolderStatus(null);
+        setEditFolderOpen(true);
     };
 
     const handleCreateConnection = async () => {
@@ -339,6 +374,46 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         }
     };
 
+    const handleSaveFolderEdit = async () => {
+        setEditFolderStatus(null);
+        const validationError = folderValidationErrorFor(editFolderFormState);
+        if (validationError) {
+            setEditFolderStatus({ type: "error", message: validationError });
+            return;
+        }
+
+        if (!editFolderId) {
+            setEditFolderStatus({ type: "error", message: "No folder selected." });
+            return;
+        }
+
+        try {
+            const response = await updateConnectionFolder(
+                editFolderId,
+                editFolderFormState.name.trim(),
+                editFolderFormState.parentFolderId || null
+            );
+
+            if (response.success) {
+                await loadData();
+                setEditFolderStatus({
+                    type: "success",
+                    message: response.message || "Folder updated.",
+                });
+            } else {
+                setEditFolderStatus({
+                    type: "error",
+                    message: response.message || "Failed to update folder.",
+                });
+            }
+        } catch (error) {
+            setEditFolderStatus({
+                type: "error",
+                message: error instanceof Error ? error.message : "Failed to update folder.",
+            });
+        }
+    };
+
     const openCreateConnectionInFolder = async (parentFolderId: string) => {
         setFolderContextMenu((prev) => ({ ...prev, open: false }));
         setCreateStatus(null);
@@ -348,6 +423,55 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
             parentFolderId,
         }));
         setCreateOpen(true);
+    };
+
+    const handleDeleteFolder = async () => {
+        if (!folderContextMenu.folder) return;
+
+        const folder = folderContextMenu.folder;
+        const shouldDelete = window.confirm(
+            `Delete folder "${folder.name}" and all nested folders and connections?`
+        );
+        if (!shouldDelete) {
+            return;
+        }
+
+        try {
+            await deleteConnectionFolder(folder.id);
+            setFolderContextMenu((prev) => ({ ...prev, open: false }));
+            await loadData();
+        } catch (error) {
+            setFolderStatus({
+                type: "error",
+                message: error instanceof Error ? error.message : "Failed to delete folder.",
+            });
+        }
+    };
+
+    const handleDeleteConnection = async () => {
+        const connection = connectionContextMenu.connection;
+        if (!connection?.id) return;
+
+        const shouldDelete = window.confirm(
+            `Delete connection "${connection.name}"?`
+        );
+        if (!shouldDelete) {
+            return;
+        }
+
+        try {
+            await deleteConnection(connection.id);
+            setConnectionContextMenu((prev) => ({ ...prev, open: false }));
+            if (connections[editIndex ?? -1]?.id === connection.id) {
+                closeEdit();
+            }
+            await loadData();
+        } catch (error) {
+            setEditStatus({
+                type: "error",
+                message: error instanceof Error ? error.message : "Failed to delete connection.",
+            });
+        }
     };
 
     const handleAssignFolderColor = () => {
@@ -510,7 +634,17 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                             <ConnectionTreeList
                                 items={connectionTree}
                                 onConnectionSelect={(connection) => openEdit(connection)}
+                                onConnectionContextMenu={(connection, x, y) => {
+                                    setFolderContextMenu((prev) => ({ ...prev, open: false }));
+                                    setConnectionContextMenu({
+                                        open: true,
+                                        x,
+                                        y,
+                                        connection,
+                                    });
+                                }}
                                 onFolderContextMenu={(folder, x, y) => {
+                                    setConnectionContextMenu((prev) => ({ ...prev, open: false }));
                                     setFolderContextMenu({ open: true, x, y, folder });
                                 }}
                                 renderConnectionActions={(connection) => (
@@ -525,6 +659,16 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                                         }}
                                     />
                                 )}
+                                highlightedConnectionId={
+                                    connectionContextMenu.connection?.id ??
+                                    editFormState.id ??
+                                    null
+                                }
+                                highlightedFolderId={
+                                    folderContextMenu.folder?.id ??
+                                    editFolderId ??
+                                    null
+                                }
                             />
                         </div>
                     )}
@@ -538,6 +682,39 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                 onChange={(event) => void handleFolderColorChange(event.target.value)}
             />
 
+            {connectionContextMenu.open && connectionContextMenu.connection ? (
+                <div
+                    ref={connectionContextMenuRef}
+                    className={styles.contextMenu}
+                    style={{ left: connectionContextMenu.x, top: connectionContextMenu.y }}
+                >
+                    <Button
+                        appearance="subtle"
+                        className={styles.contextMenuButton}
+                        onClick={() => {
+                            onOpenConnection(connectionContextMenu.connection as Connection);
+                            setConnectionContextMenu((prev) => ({ ...prev, open: false }));
+                        }}
+                    >
+                        Open query
+                    </Button>
+                    <Button
+                        appearance="subtle"
+                        className={styles.contextMenuButton}
+                        onClick={() => openEdit(connectionContextMenu.connection as Connection)}
+                    >
+                        Edit connection
+                    </Button>
+                    <Button
+                        appearance="subtle"
+                        className={styles.contextMenuButton}
+                        onClick={() => void handleDeleteConnection()}
+                    >
+                        Delete connection
+                    </Button>
+                </div>
+            ) : null}
+
             {folderContextMenu.open && folderContextMenu.folder ? (
                 <div
                     ref={folderContextMenuRef}
@@ -550,6 +727,13 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                         onClick={() => void openCreateConnectionInFolder(folderContextMenu.folder?.id ?? "")}
                     >
                         Add connection
+                    </Button>
+                    <Button
+                        appearance="subtle"
+                        className={styles.contextMenuButton}
+                        onClick={() => openEditFolder(folderContextMenu.folder as ConnectionFolderTreeItem)}
+                    >
+                        Edit folder
                     </Button>
                     <Button
                         appearance="subtle"
@@ -577,6 +761,13 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                     >
                         Clear color
                     </Button>
+                    <Button
+                        appearance="subtle"
+                        className={styles.contextMenuButton}
+                        onClick={() => void handleDeleteFolder()}
+                    >
+                        Delete folder
+                    </Button>
                 </div>
             ) : null}
 
@@ -594,7 +785,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                 </Button>
             </ModalDialog>
 
-            <ModalDialog open={editOpen} title="Edit Connection" onClose={closeEdit} closeLabel="Cancel">
+            <ModalDialog open={editOpen} title={`Edit Connection${editFormState.name ? `: ${editFormState.name}` : ""}`} onClose={closeEdit} closeLabel="Cancel">
                 {renderForm(editFormState, setEditFormState)}
                 <div className={styles.modalStatusSlot}>
                     {editStatus ? (
@@ -629,6 +820,30 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                 </div>
                 <Button appearance="primary" onClick={handleCreateFolder} disabled={folderCreateDisabled}>
                     Create Folder
+                </Button>
+            </ModalDialog>
+
+            <ModalDialog open={editFolderOpen} title={`Edit Folder${editFolderFormState.name ? `: ${editFolderFormState.name}` : ""}`} onClose={closeEditFolder} closeLabel="Cancel">
+                <div className={styles.modalForm}>
+                    <Field label="Folder name">
+                        <Input
+                            value={editFolderFormState.name}
+                            onChange={(_, data) => setEditFolderFormState((prev) => ({ ...prev, name: data.value }))}
+                        />
+                    </Field>
+                    {renderFolderSelect(editFolderFormState.parentFolderId, (value) =>
+                        setEditFolderFormState((prev) => ({ ...prev, parentFolderId: value }))
+                    )}
+                </div>
+                <div className={styles.modalStatusSlot}>
+                    {editFolderStatus ? (
+                        <Text className={editFolderStatus.type === "success" ? styles.modalStatusSuccess : styles.modalStatusError}>
+                            {editFolderStatus.message}
+                        </Text>
+                    ) : null}
+                </div>
+                <Button appearance="primary" onClick={handleSaveFolderEdit} disabled={folderValidationErrorFor(editFolderFormState) !== null}>
+                    Save Changes
                 </Button>
             </ModalDialog>
         </div>
