@@ -1,6 +1,7 @@
 import {
     Button,
     Divider,
+    Field,
     Input,
     Text,
     Title3,
@@ -9,17 +10,24 @@ import { useMemo, useState } from "react";
 import { Table24Filled } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
 import { useConnectionsMenuStyles } from "../styles/ConnectionsMenuStyles";
+import { Connection } from "../binding/model/Connection";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { useSchemaExplorerMenuStyles } from "../styles/SchemaExplorerMenuStyles";
 
 export interface ISchemaExplorerMenuProps {
     isOpen: boolean;
+    connections: Connection[];
+    selectedConnectionId: string | null;
+    onSelectedConnectionChange: (connectionId: string | null) => void;
     entityDefinitions: EntityDefinition[];
     onOpenEntity: (entity: EntityDefinition) => void;
 }
 
 export function SchemaExplorerMenu({
     isOpen,
+    connections,
+    selectedConnectionId,
+    onSelectedConnectionChange,
     entityDefinitions,
     onOpenEntity,
 }: ISchemaExplorerMenuProps) {
@@ -81,6 +89,25 @@ export function SchemaExplorerMenu({
                     </div>
                     <Divider className={styles.sectionDivider} />
                     <div className={localStyles.body}>
+                        <Field label="Connection">
+                            <select
+                                className={localStyles.connectionSelect}
+                                value={selectedConnectionId ?? ""}
+                                onChange={(event) =>
+                                    onSelectedConnectionChange(event.target.value || null)
+                                }
+                            >
+                                <option value="">Select connection</option>
+                                {connections.map((connection) => (
+                                    <option
+                                        key={connection.id ?? connection.name}
+                                        value={connection.id ?? ""}
+                                    >
+                                        {connection.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </Field>
                         <Input
                             value={filterText}
                             onChange={(_, data) => setFilterText(data.value)}

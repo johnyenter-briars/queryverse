@@ -190,6 +190,10 @@ const createSchemaTab = (
 const getQueryTabFileLabel = (tab: EditorTab): string => tab.fileName ?? `Query ${tab.id}`;
 
 const getTabDisplayLabel = (tab: EditorTab): string => {
+    if (tab.kind === "schema") {
+        return tab.connectionName ? `${tab.connectionName} - ${tab.title}` : tab.title;
+    }
+
     if (tab.kind !== "query") {
         return tab.title;
     }
@@ -259,7 +263,22 @@ export default function App() {
     const [entityAttributesLoading, setEntityAttributesLoading] = useState<
         Record<string, boolean>
     >({});
-    const [entityAttributesError, setEntityAttributesError] = useState<
+    const [, setEntityAttributesError] = useState<
+        Record<string, string | null>
+    >({});
+    const [schemaConnections, setSchemaConnections] = useState<Connection[]>([]);
+    const [schemaConnectionId, setSchemaConnectionId] = useState<string | null>(null);
+    const [schemaEntityDefinitions, setSchemaEntityDefinitions] = useState<EntityDefinition[]>([]);
+    const [schemaEntityAttributesByLogical, setSchemaEntityAttributesByLogical] = useState<
+        Record<string, EntityAttribute[]>
+    >({});
+    const [schemaEntityRelationshipsByLogical, setSchemaEntityRelationshipsByLogical] = useState<
+        Record<string, EntityRelationship[]>
+    >({});
+    const [schemaEntityAttributesLoading, setSchemaEntityAttributesLoading] = useState<
+        Record<string, boolean>
+    >({});
+    const [schemaEntityAttributesError, setSchemaEntityAttributesError] = useState<
         Record<string, string | null>
     >({});
     const [deviceCodeModal, setDeviceCodeModal] = useState<DeviceCodeAuthModalState>({
@@ -297,6 +316,11 @@ export default function App() {
             (definition) =>
                 definition.LogicalName.toLowerCase() === logicalName.toLowerCase()
         );
+    const getSchemaEntityDefinition = (logicalName: string): EntityDefinition | undefined =>
+        schemaEntityDefinitions.find(
+            (definition) =>
+                definition.LogicalName.toLowerCase() === logicalName.toLowerCase()
+        );
 
     useEffect(() => {
         let cancelled = false;
@@ -313,6 +337,31 @@ export default function App() {
         };
 
         loadSettings();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadSchemaConnections = async () => {
+            try {
+                const response = await listConnections();
+                if (!cancelled && response.success) {
+                    setSchemaConnections(response.value);
+                }
+            } catch (error) {
+                logError(
+                    "Failed to load schema connections",
+                    error,
+                    "queryverse::frontend::app"
+                );
+            }
+        };
+
+        void loadSchemaConnections();
 
         return () => {
             cancelled = true;
@@ -352,6 +401,45 @@ export default function App() {
             cancelled = true;
         };
     }, [activeQueryConnectionId]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadSchemaEntityDefinitions = async () => {
+            if (!schemaConnectionId) {
+                setSchemaEntityDefinitions([]);
+                setSchemaEntityAttributesByLogical({});
+                setSchemaEntityRelationshipsByLogical({});
+                setSchemaEntityAttributesLoading({});
+                setSchemaEntityAttributesError({});
+                return;
+            }
+
+            try {
+                await setConnection(schemaConnectionId);
+                const response = await listEntityDefinitions();
+                if (!cancelled && response.success) {
+                    setSchemaEntityDefinitions(response.value);
+                    setSchemaEntityAttributesByLogical({});
+                    setSchemaEntityRelationshipsByLogical({});
+                    setSchemaEntityAttributesLoading({});
+                    setSchemaEntityAttributesError({});
+                }
+            } catch (error) {
+                logError(
+                    "Failed to load schema entity definitions",
+                    error,
+                    "queryverse::frontend::app"
+                );
+            }
+        };
+
+        void loadSchemaEntityDefinitions();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [schemaConnectionId]);
 
     useEffect(() => {
         return () => {
@@ -877,6 +965,7 @@ export default function App() {
                         );
                         if (match) {
                             connectionToUse = match;
+                            setSchemaConnectionId(match.id ?? null);
                         }
                     }
                 }
@@ -1328,6 +1417,14 @@ export default function App() {
         }
 
         try {
+            const metadataConnectionId =
+                source === "editor" && activeTab?.kind === "query"
+                    ? activeTab.connectionId
+                    : activeQueryConnectionId;
+            if (metadataConnectionId) {
+                await setConnection(metadataConnectionId);
+            }
+
             const requests: Promise<any>[] = [
                 listEntityAttributes(logicalName),
                 listEntityRelationships(logicalName),
@@ -1411,14 +1508,117 @@ export default function App() {
         }
     };
 
+    const handleLoadSchemaEntityMetadata = async (logicalName: string) => {
+        if (!logicalName || !schemaConnectionId) return;
+        const definition = getSchemaEntityDefinition(logicalName);
+        const shouldAlsoLoadActivityPointer =
+            Boolean(definition?.IsActivity) &&
+            logicalName.toLowerCase() !== "activitypointer";
+
+        const isEntityLoaded =
+            schemaEntityAttributesByLogical[logicalName] &&
+            schemaEntityRelationshipsByLogical[logicalName];
+        const isActivityPointerLoaded =
+            !shouldAlsoLoadActivityPointer ||
+            (schemaEntityAttributesByLogical.activitypointer &&
+                schemaEntityRelationshipsByLogical.activitypointer);
+
+        if (isEntityLoaded && isActivityPointerLoaded) {
+            return;
+        }
+        if (schemaEntityAttributesLoading[logicalName]) return;
+        if (shouldAlsoLoadActivityPointer && schemaEntityAttributesLoading.activitypointer) return;
+
+        setSchemaEntityAttributesLoading((prev) => ({ ...prev, [logicalName]: true }));
+        if (shouldAlsoLoadActivityPointer) {
+            setSchemaEntityAttributesLoading((prev) => ({ ...prev, activitypointer: true }));
+        }
+        setSchemaEntityAttributesError((prev) => ({ ...prev, [logicalName]: null }));
+        if (shouldAlsoLoadActivityPointer) {
+            setSchemaEntityAttributesError((prev) => ({ ...prev, activitypointer: null }));
+        }
+
+        try {
+            await setConnection(schemaConnectionId);
+            const requests: Promise<any>[] = [
+                listEntityAttributes(logicalName),
+                listEntityRelationships(logicalName),
+            ];
+            if (shouldAlsoLoadActivityPointer) {
+                requests.push(
+                    listEntityAttributes("activitypointer"),
+                    listEntityRelationships("activitypointer")
+                );
+            }
+
+            const responses = await Promise.all(requests);
+            const [
+                attributesResponse,
+                relationshipsResponse,
+                activityAttributesResponse,
+                activityRelationshipsResponse,
+            ] = responses;
+
+            if (
+                attributesResponse.success &&
+                relationshipsResponse.success &&
+                (!shouldAlsoLoadActivityPointer ||
+                    (activityAttributesResponse.success && activityRelationshipsResponse.success))
+            ) {
+                setSchemaEntityAttributesByLogical((prev) => ({
+                    ...prev,
+                    [logicalName]: attributesResponse.value,
+                    ...(shouldAlsoLoadActivityPointer
+                        ? { activitypointer: activityAttributesResponse.value }
+                        : {}),
+                }));
+                setSchemaEntityRelationshipsByLogical((prev) => ({
+                    ...prev,
+                    [logicalName]: relationshipsResponse.value,
+                    ...(shouldAlsoLoadActivityPointer
+                        ? { activitypointer: activityRelationshipsResponse.value }
+                        : {}),
+                }));
+            } else {
+                const message =
+                    attributesResponse.message ||
+                    relationshipsResponse.message ||
+                    activityAttributesResponse?.message ||
+                    activityRelationshipsResponse?.message ||
+                    "Failed to load entity metadata.";
+                setSchemaEntityAttributesError((prev) => ({
+                    ...prev,
+                    [logicalName]: message,
+                    ...(shouldAlsoLoadActivityPointer ? { activitypointer: message } : {}),
+                }));
+            }
+        } catch (error) {
+            const message = getErrorMessage(error);
+            setSchemaEntityAttributesError((prev) => ({
+                ...prev,
+                [logicalName]: message,
+                ...(shouldAlsoLoadActivityPointer ? { activitypointer: message } : {}),
+            }));
+        } finally {
+            setSchemaEntityAttributesLoading((prev) => ({
+                ...prev,
+                [logicalName]: false,
+                ...(shouldAlsoLoadActivityPointer ? { activitypointer: false } : {}),
+            }));
+        }
+    };
+
     const handleOpenSchemaEntity = async (entity: EntityDefinition) => {
         const logicalName = entity.LogicalName;
-        if (!logicalName) return;
+        if (!logicalName || !schemaConnectionId) return;
 
-        await handleLoadEntityMetadata(logicalName);
+        await handleLoadSchemaEntityMetadata(logicalName);
 
         const existingTab = tabs.find(
-            (tab) => tab.kind === "schema" && tab.schemaLogicalName === logicalName
+            (tab) =>
+                tab.kind === "schema" &&
+                tab.schemaLogicalName === logicalName &&
+                tab.connectionId === schemaConnectionId
         );
         if (existingTab) {
             setActiveTabId(existingTab.id);
@@ -1433,8 +1633,11 @@ export default function App() {
             `Schema - ${displayName}`,
             logicalName,
             displayName,
-            activeTab?.kind === "query" ? activeTab.connectionId : null
+            schemaConnectionId
         );
+        newTab.connectionName = schemaConnections.find(
+            (connection) => connection.id === schemaConnectionId
+        )?.name ?? null;
 
         setTabs((prev) => [...prev, newTab]);
         setActiveTabId(newId);
@@ -1728,7 +1931,10 @@ export default function App() {
                     />
                     <SchemaExplorerMenu
                         isOpen={schemaEnabled}
-                        entityDefinitions={entityDefinitions}
+                        connections={schemaConnections}
+                        selectedConnectionId={schemaConnectionId}
+                        onSelectedConnectionChange={setSchemaConnectionId}
+                        entityDefinitions={schemaEntityDefinitions}
                         onOpenEntity={handleOpenSchemaEntity}
                     />
 
@@ -1795,7 +2001,7 @@ export default function App() {
                                                 <span>
                                                     {tab.kind === "query"
                                                         ? getQueryTabFileLabel(tab)
-                                                        : tab.title}
+                                                        : getTabDisplayLabel(tab)}
                                                 </span>
                                                 <span
                                                     className={combineClasses(
@@ -1834,27 +2040,27 @@ export default function App() {
                                     logicalName={activeTab.schemaLogicalName ?? ""}
                                     attributes={
                                         activeTab.schemaLogicalName
-                                            ? entityAttributesByLogical[
+                                            ? schemaEntityAttributesByLogical[
                                                   activeTab.schemaLogicalName
                                               ]
                                             : undefined
                                     }
                                     relationships={
                                         activeTab.schemaLogicalName
-                                            ? entityRelationshipsByLogical[
+                                            ? schemaEntityRelationshipsByLogical[
                                                   activeTab.schemaLogicalName
                                               ]
                                             : undefined
                                     }
                                     isLoading={Boolean(
                                         activeTab.schemaLogicalName &&
-                                            entityAttributesLoading[
+                                            schemaEntityAttributesLoading[
                                                 activeTab.schemaLogicalName
                                             ]
                                     )}
                                     error={
                                         activeTab.schemaLogicalName
-                                            ? entityAttributesError[
+                                            ? schemaEntityAttributesError[
                                                   activeTab.schemaLogicalName
                                               ]
                                             : null
