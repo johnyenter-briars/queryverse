@@ -1,8 +1,10 @@
 import {
     Button,
     Divider,
+    Dropdown,
     Field,
     Input,
+    Option,
     Text,
     Title3,
 } from "@fluentui/react-components";
@@ -90,23 +92,30 @@ export function SchemaExplorerMenu({
                     <Divider className={styles.sectionDivider} />
                     <div className={localStyles.body}>
                         <Field label="Connection">
-                            <select
+                            <Dropdown
                                 className={localStyles.connectionSelect}
-                                value={selectedConnectionId ?? ""}
-                                onChange={(event) =>
-                                    onSelectedConnectionChange(event.target.value || null)
+                                placeholder="Select connection"
+                                selectedOptions={
+                                    selectedConnectionId ? [selectedConnectionId] : []
+                                }
+                                value={
+                                    connections.find(
+                                        (connection) => connection.id === selectedConnectionId
+                                    )?.name ?? ""
+                                }
+                                onOptionSelect={(_, data) =>
+                                    onSelectedConnectionChange(data.optionValue || null)
                                 }
                             >
-                                <option value="">Select connection</option>
                                 {connections.map((connection) => (
-                                    <option
+                                    <Option
                                         key={connection.id ?? connection.name}
                                         value={connection.id ?? ""}
                                     >
                                         {connection.name}
-                                    </option>
+                                    </Option>
                                 ))}
-                            </select>
+                            </Dropdown>
                         </Field>
                         <Input
                             value={filterText}

@@ -10,11 +10,6 @@ export const useSchemaExplorerMenuStyles = makeStyles({
         width: "100%",
     },
     connectionSelect: {
-        backgroundColor: tokens.colorNeutralBackground1,
-        color: tokens.colorNeutralForeground1,
-        ...shorthands.border(`1px solid ${tokens.colorNeutralStroke1}`),
-        ...shorthands.borderRadius(tokens.borderRadiusMedium),
-        ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
         width: "100%",
     },
     tableList: {
