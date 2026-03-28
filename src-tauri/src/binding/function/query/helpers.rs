@@ -1,7 +1,7 @@
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 
-use crate::sql;
+use crate::sql::ast::{Literal, UpdateAssignment};
 use powerplatform_dataverse_client::dataverse::{
     entity::Value, entityattribute::EntityAttribute, entitydefinition::EntityDefinition,
 };
@@ -27,7 +27,7 @@ pub(crate) fn resolve_primary_id_attribute(
 }
 
 pub(crate) fn build_update_attributes(
-    assignments: &[sql::UpdateAssignment],
+    assignments: &[UpdateAssignment],
     entity: &str,
     entity_alias: Option<&str>,
 ) -> Result<HashMap<String, JsonValue>, String> {
@@ -41,7 +41,7 @@ pub(crate) fn build_update_attributes(
 }
 
 pub(crate) fn validate_update_attributes(
-    assignments: &[sql::UpdateAssignment],
+    assignments: &[UpdateAssignment],
     entity: &str,
     entity_alias: Option<&str>,
     attributes: &[EntityAttribute],
@@ -98,12 +98,12 @@ fn split_qualified(value: &str) -> Option<(Option<&str>, &str)> {
     }
 }
 
-fn literal_to_json(literal: &sql::Literal) -> Result<JsonValue, String> {
+fn literal_to_json(literal: &Literal) -> Result<JsonValue, String> {
     match literal {
-        sql::Literal::String(value) => Ok(JsonValue::String(value.clone())),
-        sql::Literal::Number(value) => Ok(JsonValue::Number((*value).into())),
-        sql::Literal::Boolean(value) => Ok(JsonValue::Bool(*value)),
-        sql::Literal::Null => Ok(JsonValue::Null),
+        Literal::String(value) => Ok(JsonValue::String(value.clone())),
+        Literal::Number(value) => Ok(JsonValue::Number((*value).into())),
+        Literal::Boolean(value) => Ok(JsonValue::Bool(*value)),
+        Literal::Null => Ok(JsonValue::Null),
     }
 }
 

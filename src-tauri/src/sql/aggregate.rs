@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
 
 use crate::binding::model::resultrow::ResultRow;
-use crate::sql::{
+use crate::sql::ast::{
     AggregateExpr, AggregateFunction, AggregateTarget, CompareOp, Expr, Literal, OrderBy,
     Predicate, PredicateTarget, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
 };
@@ -944,7 +944,7 @@ mod tests {
         apply_having, apply_where, sort_rows_by_order,
     };
     use crate::binding::model::resultrow::ResultRow;
-    use crate::sql::{
+    use crate::sql::ast::{
         AggregateExpr, AggregateFunction, CompareOp, Expr, Literal, Predicate, PredicateTarget,
         SelectItem, SelectItemKind, SelectStmt,
     };
