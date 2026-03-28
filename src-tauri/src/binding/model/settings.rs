@@ -48,3 +48,22 @@ impl Default for Settings {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Settings;
+
+    #[test]
+    fn default_settings_match_expected_defaults() {
+        let settings = Settings::default();
+        assert!(settings.vim_enabled);
+        assert!(settings.key_bindings_enabled);
+        assert_eq!(settings.font_size, 16);
+        assert!(settings.fetch_xml_single_quotes);
+        assert_eq!(settings.dataverse_default_batch_size, 200);
+        assert!(!settings.bypass_business_logic_execution_custom_sync);
+        assert!(!settings.bypass_business_logic_execution_custom_async);
+        assert!(!settings.bypass_custom_plugin_execution);
+        assert!(!settings.suppress_callback_registration_expander_job);
+    }
+}

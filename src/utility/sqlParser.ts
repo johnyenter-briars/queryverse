@@ -138,6 +138,9 @@ const collectTablesFromAst = (
             return;
         }
 
+        // node-sql-parser reuses FROM-like records for base tables, joins, and nested subqueries.
+        // This walker intentionally accepts all of them and merges the discovered aliases into one
+        // flat context for downstream intellisense.
         if ("table" in record) {
             const raw = record.table as string | undefined;
             const alias = (record.as ?? record.alias) as string | undefined;
@@ -175,6 +178,9 @@ export const isolateSqlStatementAtOffset = (
     const segmentText = sql.slice(segmentStart, segmentEnd);
     const cursorInSegment = boundedCursor - segmentStart;
 
+    // Multi-query files are first split by semicolons, then by statement-start keywords inside the
+    // active segment. That keeps intellisense tied to the statement around the cursor rather than
+    // the first query in the editor.
     const starts: number[] = [];
     for (const match of segmentText.matchAll(STATEMENT_START_PATTERN)) {
         const keywordOffset = match.index ?? 0;

@@ -266,6 +266,8 @@ export default function App() {
     const [, setEntityAttributesError] = useState<
         Record<string, string | null>
     >({});
+    // Schema explorer metadata is kept separate from query-tab metadata so browsing one
+    // environment's schema does not clobber editor intellisense state for another connection.
     const [schemaConnections, setSchemaConnections] = useState<Connection[]>([]);
     const [schemaConnectionId, setSchemaConnectionId] = useState<string | null>(null);
     const [schemaEntityDefinitions, setSchemaEntityDefinitions] = useState<EntityDefinition[]>([]);
@@ -377,6 +379,9 @@ export default function App() {
             }
 
             try {
+                // The backend metadata commands still resolve against the currently selected
+                // connection, so query-tab schema refreshes temporarily point that global backend
+                // selector at the active tab's connection before loading definitions.
                 await setConnection(activeQueryConnectionId);
                 const response = await listEntityDefinitions();
                 if (!cancelled && response.success) {
@@ -416,6 +421,9 @@ export default function App() {
             }
 
             try {
+                // Schema explorer uses the same backend command surface as the editor, but writes
+                // into a dedicated frontend cache so changing the schema connection stays isolated
+                // from open query tabs.
                 await setConnection(schemaConnectionId);
                 const response = await listEntityDefinitions();
                 if (!cancelled && response.success) {

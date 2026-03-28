@@ -49,7 +49,7 @@ pub async fn parse_sql_to_fetchxml(
     _window: tauri::Window,
     sql: String,
 ) -> Result<FetchXmlPreview, String> {
-    let parsed = sql::sql_to_fetchxml(&sql).map_err(|e| e.to_string())?;
+    let parsed = sql::api::sql_to_fetchxml(&sql).map_err(|e| e.to_string())?;
     let settings = load_settings().unwrap_or_default();
     let fetch_xml = if settings.fetch_xml_single_quotes {
         parsed.fetchxml.replace('"', "'")
@@ -88,8 +88,8 @@ pub async fn execute_sql(
     let service_client =
         get_or_create_service_client(&connection, &database, context.log_level, Some(&window))
             .await?;
-    let stmt = sql::parse(&request.sql).map_err(|e| e.to_string())?;
-    let (_, entity_logical) = sql::resolve_entity_names(&stmt.entity);
+    let stmt = sql::api::parse(&request.sql).map_err(|e| e.to_string())?;
+    let (_, entity_logical) = sql::names::resolve_entity_names(&stmt.entity);
     let _ = get_entity_definitions_cached(&service_client, &database, connection_id).await;
     let entity_attributes = get_entity_attributes_cached(
         &service_client,
@@ -219,7 +219,7 @@ where
         debug!("SQL: {}", sql_text);
     }
 
-    let stmt = sql::parse(sql_text).map_err(|e| e.to_string())?;
+    let stmt = sql::api::parse(sql_text).map_err(|e| e.to_string())?;
     let lookup_bases = entity_attributes.map(lookup_attribute_set);
     let mut execution_stmt = stmt.clone();
     if let Some(lookup_bases) = &lookup_bases {
@@ -236,7 +236,7 @@ where
     } else {
         execution_stmt.clone()
     };
-    let parsed = sql::to_fetchxml_with_lookup_bases(&fetch_stmt, lookup_bases.as_ref())
+    let parsed = sql::api::to_fetchxml_with_lookup_bases(&fetch_stmt, lookup_bases.as_ref())
         .map_err(|e| e.to_string())?;
 
     let columns_order = parsed

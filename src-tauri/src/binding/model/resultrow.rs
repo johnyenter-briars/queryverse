@@ -21,3 +21,14 @@ impl ResultRow {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ResultRow;
+
+    #[test]
+    fn new_creates_empty_attribute_map() {
+        assert!(ResultRow::new().attributes.is_empty());
+        assert!(ResultRow::default().attributes.is_empty());
+    }
+}

@@ -45,6 +45,7 @@ export function SchemaExplorerMenu({
         if (!displayName || typeof displayName !== "object") {
             return null;
         }
+        // Dataverse returns display labels in two common shapes depending on the metadata call.
         const label =
             (displayName as { UserLocalizedLabel?: { Label?: string } })
                 ?.UserLocalizedLabel?.Label ??

@@ -90,3 +90,63 @@ fn escape_csv(value: &str) -> String {
         value.to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::render_csv;
+    use crate::binding::model::{
+        executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
+        resultrow::ResultRow,
+    };
+    use powerplatform_dataverse_client::dataverse::entity::Value;
+
+    #[test]
+    fn render_csv_prefers_column_order_and_omits_rownum() {
+        let mut row = ResultRow::new();
+        row.attributes
+            .insert("__rownum".to_string(), Value::Int(1));
+        row.attributes
+            .insert("name".to_string(), Value::String("Acme".to_string()));
+        row.attributes
+            .insert("city".to_string(), Value::String("Austin".to_string()));
+
+        let csv = render_csv(&ExecuteSqlResponse {
+            message: String::new(),
+            success: true,
+            value: vec![row],
+            metadata: SqlQueryMetadata {
+                columns_selected: true,
+                columns_order: vec!["__rownum".to_string(), "city".to_string(), "name".to_string()],
+                entity_logical_name: Some("account".to_string()),
+            },
+        });
+
+        assert_eq!(csv, "city,name\r\nAustin,Acme");
+    }
+
+    #[test]
+    fn render_csv_discovers_headers_and_escapes_values() {
+        let mut first = ResultRow::new();
+        first
+            .attributes
+            .insert("notes".to_string(), Value::String("Hello, \"world\"".to_string()));
+
+        let mut second = ResultRow::new();
+        second
+            .attributes
+            .insert("name".to_string(), Value::String("Beta".to_string()));
+
+        let csv = render_csv(&ExecuteSqlResponse {
+            message: String::new(),
+            success: true,
+            value: vec![first, second],
+            metadata: SqlQueryMetadata {
+                columns_selected: false,
+                columns_order: Vec::new(),
+                entity_logical_name: None,
+            },
+        });
+
+        assert_eq!(csv, "notes,name\r\n\"Hello, \"\"world\"\"\",\r\n,Beta");
+    }
+}

@@ -30,3 +30,32 @@ impl Connection {
         &self.auth
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Connection;
+    use powerplatform_dataverse_client::auth::config::AuthConfig;
+    use uuid::Uuid;
+
+    #[test]
+    fn accessors_return_stored_values() {
+        let id = Uuid::new_v4();
+        let auth = AuthConfig::DeviceCode {
+            client_id: "client".to_string(),
+            tenant_id: "tenant".to_string(),
+            dataverse_url: "https://example.crm.dynamics.com".to_string(),
+            token_cache_store_path: Some("cache.json".to_string()),
+        };
+        let connection = Connection {
+            id: Some(id),
+            name: "dev".to_string(),
+            parent_folder_id: None,
+            auth: auth.clone(),
+            generated_on: String::new(),
+        };
+
+        assert_eq!(connection.id(), Some(id));
+        assert_eq!(connection.dataverse_url(), "https://example.crm.dynamics.com");
+        assert!(matches!(connection.auth(), AuthConfig::DeviceCode { .. }));
+    }
+}

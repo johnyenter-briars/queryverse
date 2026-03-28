@@ -258,6 +258,8 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
             const statement = isolateSqlStatementAtOffset(localValue, cursorOffset);
             const { context, error } = analyzeSql(statement.text, entityDefinitions);
             parseContextRef.current = context;
+            // The editor only publishes entities from the active statement slice so multi-query
+            // files do not cause intellisense and metadata prefetching to stick to the first query.
             if (context?.tables?.length && onEntitiesSelected) {
                 const logicalNames = context.tables
                     .map((table) => table.logicalName)
@@ -275,6 +277,8 @@ export const CustomEditor = forwardRef<CustomEditorHandle, ICustomEditor>(({
             }
 
             if (error) {
+                // Parser errors are reported relative to the isolated statement, so remap them back
+                // onto the full Monaco model before placing the marker.
                 const statementStartPosition = model.getPositionAt(statement.startOffset);
                 const line =
                     (statementStartPosition.lineNumber - 1) + (error.line ?? 1);

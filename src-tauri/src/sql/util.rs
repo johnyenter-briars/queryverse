@@ -3,9 +3,7 @@ use powerplatform_dataverse_client::dataverse::entityattribute::EntityAttribute;
 
 use crate::binding::model::resultrow::ResultRow;
 use crate::sql::ast::{JoinClause, JoinOn, JoinType};
-use crate::sql::{
-    CompareOp, Expr, Literal, Predicate, PredicateTarget, SelectStmt,
-};
+use crate::sql::ast::{CompareOp, Expr, Literal, Predicate, PredicateTarget, SelectStmt};
 
 pub const ROW_NUMBER_ATTRIBUTE: &str = "__rownum";
 
@@ -367,13 +365,10 @@ mod tests {
     use uuid::Uuid;
 
     use crate::binding::model::resultrow::ResultRow;
-    use crate::sql::{
-        CompareOp, Expr, Literal, Predicate, PredicateTarget,
-        util::{
-            fill_entity_reference_names, filter_requires_local_companion_evaluation,
-            push_down_lookup_type_filters,
-        },
-        SelectColumns, SelectStmt,
+    use crate::sql::ast::{CompareOp, Expr, Literal, Predicate, PredicateTarget, SelectColumns, SelectStmt};
+    use crate::sql::util::{
+        fill_entity_reference_names, filter_requires_local_companion_evaluation,
+        push_down_lookup_type_filters,
     };
 
     fn lookup_attributes(values: &[&str]) -> std::collections::HashSet<String> {

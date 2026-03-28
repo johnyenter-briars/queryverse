@@ -51,6 +51,8 @@ const getAttributesForIntellisense = (
 
     const definition = getEntityDefinition(logicalName, entityDefinitions);
 
+    // Dataverse activity tables inherit columns from activitypointer, so completion needs the
+    // merged surface to match what queries can actually project/filter.
     if (definition?.IsActivity) {
         pushAttributes(entityAttributes.activitypointer);
     }
@@ -61,6 +63,8 @@ const getAttributesForIntellisense = (
 const createCompanionIntellisenseAttributes = (attribute: EntityAttribute): EntityAttribute[] => {
     const attributes: EntityAttribute[] = [];
 
+    // Dataverse exposes synthetic `<lookup>name` / `<lookup>type` companions in result sets even
+    // though they are not first-class metadata attributes, so we synthesize them for completion.
     if (supportsNameCompanionAttribute(attribute.AttributeType)) {
         attributes.push({
             ...attribute,
@@ -123,6 +127,9 @@ const resolveEntityLogicalName = (
     entityDefinitions?: EntityDefinition[]
 ): string | undefined => {
     if (!rawName || !entityDefinitions?.length) return undefined;
+    // Users may type logical names, schema names, or entity set names interchangeably. Normalize
+    // all of them back to the logical name so downstream attribute/relationship caches stay keyed
+    // to one canonical identifier.
     const normalized = normalizeTableName(rawName);
     const match = entityDefinitions.find((definition) => {
         const logical = normalizeTableName(definition.LogicalName);
@@ -159,6 +166,9 @@ const buildFallbackParseContext = (
     const pattern =
         /\b(from|join)\s+([A-Za-z0-9_\[\]\"]+)(?:\s+(?:as\s+)?([A-Za-z0-9_\[\]\"]+))?/gi;
 
+    // Monaco asks for completions while the user is in the middle of typing invalid SQL. This
+    // fallback scan recovers enough table/alias context to keep join and column suggestions alive
+    // until the full parser can understand the statement again.
     for (const match of statementText.matchAll(pattern)) {
         const raw = match[2];
         if (!raw) continue;
@@ -197,6 +207,8 @@ const buildJoinRelationshipSuggestions = (
     const seen = new Set<string>();
     const suggestions: JoinRelationshipSuggestion[] = [];
 
+    // Relationship suggestions are anchored to tables already present in the active statement so
+    // the generated ON clause points back to the correct source alias/table reference.
     for (const table of parseContext.tables) {
         const sourceLogicalName = table.logicalName;
         if (!sourceLogicalName) continue;
@@ -589,6 +601,9 @@ export const getSqlCompletionItems = ({
         parseContext && statementSlice.startOffset === 0 && statementSlice.endOffset === fullText.length
             ? parseContext
             : analyzeSql(statementText, entityDefinitions).context;
+    // Reuse the editor's last full-document parse only when the active statement spans the whole
+    // model. Multi-query files otherwise need a fresh statement-scoped parse to avoid leaking
+    // aliases/entities from neighboring statements into the current completion request.
     const activeParseContext =
         parsedStatementContext ??
         buildFallbackParseContext(statementText, entityDefinitions);
@@ -749,6 +764,8 @@ export const getSqlCompletionItems = ({
                 ? findDeleteEntity(statementText, entityDefinitions)
                 : activeParseContext?.tables?.[0]?.logicalName ??
                   findUpdateTargetEntity(statementText, entityDefinitions);
+            // UPDATE/DELETE intellisense should prefer the mutation target entity even if the
+            // statement contains additional aliases later in the text.
             const attributes = getAttributesForIntellisense(
                 updateTarget,
                 entityDefinitions,

@@ -4,11 +4,16 @@ use std::collections::HashMap;
 use powerplatform_dataverse_client::dataverse::entity::{Entity, Value};
 
 use crate::binding::model::resultrow::ResultRow;
-use crate::sql::{
+use crate::sql::ast::{
     AggregateExpr, AggregateFunction, AggregateTarget, CompareOp, Expr, Literal, OrderBy,
     Predicate, PredicateTarget, SelectColumns, SelectItem, SelectItemKind, SelectStmt,
 };
 
+/// Normalize a Dataverse entity payload into the flat row shape expected by the result grid and
+/// local aggregate evaluator.
+///
+/// Dataverse returns a mix of raw attributes, formatted-value companions, and aggregate aliases.
+/// This helper collapses those variants into a single attribute map before the row reaches the UI.
 pub fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultRow {
     let mut attributes = std::collections::HashMap::new();
     for (key, value) in entity.attributes {
@@ -44,12 +49,18 @@ pub fn entity_to_result_row(entity: Entity, columns_order: &[String]) -> ResultR
     ResultRow { attributes }
 }
 
+/// Ensure projected columns always exist in the output row even when Dataverse omitted them from
+/// the payload. The result grid and local filters assume a stable column set.
 pub fn ensure_columns(attributes: &mut HashMap<String, Value>, columns_order: &[String]) {
     for column in columns_order {
         attributes.entry(column.clone()).or_insert(Value::Null);
     }
 }
 
+/// Execution plan for QueryVerse's in-memory aggregate fallback.
+///
+/// We use this when a SQL aggregate shape is valid for QueryVerse but not fully representable in
+/// FetchXML. The plan keeps only the information needed to regroup raw rows locally.
 pub struct AggregatePlan {
     group_columns: Vec<GroupColumn>,
     aggregates: Vec<AggregateSpec>,
@@ -73,6 +84,8 @@ impl AggregatePlan {
         &self,
         lookup_bases: Option<&std::collections::HashSet<String>>,
     ) -> Vec<String> {
+        // When we demote an aggregate FetchXML request back to a raw row query, these are the
+        // physical columns we still need from Dataverse in order to rebuild the grouped result.
         let mut columns: Vec<String> = self
             .group_columns
             .iter()
@@ -103,6 +116,10 @@ impl AggregatePlan {
     }
 }
 
+/// Try to build a local aggregate execution plan from the parsed SELECT list.
+///
+/// Returning `None` means the statement can stay in the normal non-aggregate path; returning
+/// `Some(plan)` means we need to fetch raw rows and aggregate them client-side.
 pub fn aggregate_fallback_plan(stmt: &SelectStmt) -> Option<AggregatePlan> {
     let items = match &stmt.columns {
         SelectColumns::Columns(items) => items,
@@ -178,12 +195,17 @@ fn aggregate_output_name(item: &SelectItem) -> String {
     }
 }
 
+/// Convert a FetchXML aggregate COUNT query back into a plain row query that can be evaluated
+/// locally. This is used when the SQL shape is accepted by QueryVerse but Dataverse cannot execute
+/// it directly as an aggregate.
 pub fn demote_count_fetchxml(fetchxml: &str) -> Result<String, String> {
     let mut updated = fetchxml.replace(" aggregate=\"true\"", "");
     updated = updated.replace(" aggregate=\"count\"", "");
     strip_order_clauses(&updated)
 }
 
+/// Strip aggregate/group-by markers from generated FetchXML while preserving enough attribute
+/// coverage for the local fallback evaluator to rebuild the grouped projection.
 pub fn demote_aggregate_fetchxml(
     fetchxml: &str,
     plan: &AggregatePlan,
@@ -277,6 +299,9 @@ fn strip_order_clauses(fetchxml: &str) -> Result<String, String> {
     Ok(output)
 }
 
+/// Ensure the demoted FetchXML still requests every column needed by grouping, aggregates, or
+/// lookup companion expansion. Without this step the client-side aggregate pass would see partial
+/// rows and produce incorrect results.
 fn ensure_attributes(
     fetchxml: &str,
     columns: &[String],
@@ -430,6 +455,8 @@ pub fn aggregate_rows(
     plan: &AggregatePlan,
     columns_order: &[String],
 ) -> Vec<ResultRow> {
+    // Groups are keyed by normalized stringified values so mixed scalar/null combinations can be
+    // compared consistently across Dataverse value variants.
     let mut groups: HashMap<Vec<String>, AggregateGroup> = HashMap::new();
 
     for entity in entities {
@@ -459,6 +486,8 @@ pub fn aggregate_rows(
     rows
 }
 
+/// Apply ORDER BY after local aggregation. This mirrors the Dataverse ordering path for aggregate
+/// fallbacks so result presentation stays consistent regardless of where evaluation happened.
 pub fn sort_rows_by_order(rows: &mut [ResultRow], order_by: &[OrderBy]) {
     if order_by.is_empty() || rows.len() <= 1 {
         return;
@@ -481,17 +510,21 @@ pub fn sort_rows_by_order(rows: &mut [ResultRow], order_by: &[OrderBy]) {
     });
 }
 
+/// Grouping key metadata: which source column feeds the group and which output name it should use
+/// once the aggregate row is materialized.
 struct GroupColumn {
     source: String,
     output: String,
 }
 
+/// One aggregate computation requested by the SELECT list.
 struct AggregateSpec {
     function: AggregateFunction,
     target: Option<String>,
     output: String,
 }
 
+/// Incremental aggregate state for a single output column inside one grouped row.
 struct AggregateAccumulator {
     output: String,
     function: AggregateFunction,
@@ -911,7 +944,7 @@ mod tests {
         apply_having, apply_where, sort_rows_by_order,
     };
     use crate::binding::model::resultrow::ResultRow;
-    use crate::sql::{
+    use crate::sql::ast::{
         AggregateExpr, AggregateFunction, CompareOp, Expr, Literal, Predicate, PredicateTarget,
         SelectItem, SelectItemKind, SelectStmt,
     };

@@ -36,7 +36,7 @@ pub async fn prepare_delete_sql(
         debug!("SQL: {}", sql);
     }
 
-    let stmt = sql::parse_delete(&sql).map_err(|e| e.to_string())?;
+    let stmt = sql::api::parse_delete(&sql).map_err(|e| e.to_string())?;
 
     if stmt.filter.is_none() {
         return Err("DELETE statements must include a WHERE clause.".to_string());
@@ -60,13 +60,14 @@ pub async fn prepare_delete_sql(
         get_or_create_service_client(&connection, &database, context.log_level, Some(&window))
             .await?;
 
-    let (entity_set, entity_logical) = sql::resolve_entity_names(&stmt.entity);
+    let (entity_set, entity_logical) = sql::names::resolve_entity_names(&stmt.entity);
     let definitions =
         get_entity_definitions_cached(&service_client, &database, connection_id).await?;
     let primary_id_attribute =
         resolve_primary_id_attribute(&definitions, &entity_logical, &entity_set)?;
 
-    let fetch = sql::delete_to_fetchxml(&stmt, &primary_id_attribute).map_err(|e| e.to_string())?;
+    let fetch =
+        sql::api::delete_to_fetchxml(&stmt, &primary_id_attribute).map_err(|e| e.to_string())?;
 
     let entities = service_client
         .retrieve_multiple_fetchxml_paging(&fetch.entity_set, &fetch.fetchxml)
