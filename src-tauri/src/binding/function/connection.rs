@@ -1,4 +1,5 @@
 use log::error;
+use std::collections::HashSet;
 use uuid::Uuid;
 
 use crate::Database;
@@ -17,6 +18,7 @@ use crate::binding::model::{
     setconnectionrequest::SetConnectionRequest,
     updateconnectionrequest::UpdateConnectionRequest,
     updateconnectionfoldercolorresponse::UpdateConnectionFolderColorResponse,
+    updateconnectionfolderresponse::UpdateConnectionFolderResponse,
     updateconnectionresponse::UpdateConnectionResponse,
 };
 use powerplatform_dataverse_client::auth::config::AuthConfig;
@@ -165,6 +167,228 @@ pub async fn update_connection_folder_color(
         success: true,
         value: updated_folder,
     })
+}
+
+#[tauri::command]
+pub async fn update_connection_folder(
+    _window: tauri::Window,
+    folder_id: Uuid,
+    name: String,
+    parent_folder_id: Option<Uuid>,
+) -> Result<UpdateConnectionFolderResponse, String> {
+    let trimmed_name = name.trim();
+    if trimmed_name.is_empty() {
+        return Err("Folder name is required.".to_string());
+    }
+
+    validate_folder_parent(parent_folder_id)?;
+
+    let mut folders = load_connection_folders()?;
+    let target_index = folders
+        .iter()
+        .position(|folder| folder.id == folder_id)
+        .ok_or("Folder not found".to_string())?;
+
+    if parent_folder_id == Some(folder_id) {
+        return Err("Folder cannot be its own parent.".to_string());
+    }
+
+    let descendant_ids = collect_descendant_folder_ids(&folders, folder_id);
+    if let Some(parent_id) = parent_folder_id
+        && descendant_ids.contains(&parent_id)
+    {
+        return Err("Folder cannot be moved inside one of its descendants.".to_string());
+    }
+
+    folders[target_index].name = trimmed_name.to_string();
+    folders[target_index].parent_folder_id = parent_folder_id;
+    let updated_folder = folders[target_index].clone();
+
+    save_connection_folders(&folders)?;
+
+    Ok(UpdateConnectionFolderResponse {
+        message: "Folder updated.".to_string(),
+        success: true,
+        value: updated_folder,
+    })
+}
+
+#[tauri::command]
+pub async fn delete_connection_folder(
+    _window: tauri::Window,
+    folder_id: Uuid,
+) -> Result<bool, String> {
+    let folders = load_connection_folders()?;
+    if !folders.iter().any(|folder| folder.id == folder_id) {
+        return Err("Folder not found".to_string());
+    }
+
+    let descendant_ids = collect_descendant_folder_ids(&folders, folder_id);
+    let connections = load_connections()?;
+
+    let remaining_folders: Vec<_> = folders
+        .into_iter()
+        .filter(|folder| !descendant_ids.contains(&folder.id))
+        .collect();
+    let remaining_connections: Vec<_> = connections
+        .into_iter()
+        .filter(|connection| {
+            connection
+                .parent_folder_id
+                .map(|parent_id| !descendant_ids.contains(&parent_id))
+                .unwrap_or(true)
+        })
+        .collect();
+
+    save_connection_folders(&remaining_folders)?;
+    save_connections(&remaining_connections)?;
+
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn delete_connection(
+    _window: tauri::Window,
+    connection_id: Uuid,
+    database: tauri::State<'_, Database>,
+) -> Result<bool, String> {
+    let mut connections = load_connections()?;
+    let target_index = connections
+        .iter()
+        .position(|connection| connection.id() == Some(connection_id))
+        .ok_or("Connection not found".to_string())?;
+
+    connections.remove(target_index);
+    save_connections(&connections)?;
+
+    remove_service_client(connection_id, &database.service_clients).await?;
+
+    {
+        let mut selected = database
+            .selected_connection_id
+            .lock()
+            .map_err(|_| "Failed to lock connection state".to_string())?;
+        if *selected == Some(connection_id) {
+            *selected = None;
+        }
+    }
+
+    {
+        let mut definitions = database
+            .entity_definitions_cache
+            .lock()
+            .map_err(|_| "Failed to lock metadata cache".to_string())?;
+        definitions.remove(&connection_id);
+    }
+
+    {
+        let mut attributes = database
+            .entity_attributes_cache
+            .lock()
+            .map_err(|_| "Failed to lock metadata cache".to_string())?;
+        attributes.retain(|(cached_connection_id, _), _| *cached_connection_id != connection_id);
+    }
+
+    {
+        let mut relationships = database
+            .entity_relationships_cache
+            .lock()
+            .map_err(|_| "Failed to lock metadata cache".to_string())?;
+        relationships
+            .retain(|(cached_connection_id, _), _| *cached_connection_id != connection_id);
+    }
+
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn move_connection(
+    _window: tauri::Window,
+    connection_id: Uuid,
+    direction: String,
+) -> Result<bool, String> {
+    let mut connections = load_connections()?;
+    let target_index = connections
+        .iter()
+        .position(|connection| connection.id() == Some(connection_id))
+        .ok_or("Connection not found".to_string())?;
+
+    let parent_folder_id = connections[target_index].parent_folder_id;
+    let sibling_indexes: Vec<usize> = connections
+        .iter()
+        .enumerate()
+        .filter_map(|(index, connection)| {
+            (connection.parent_folder_id == parent_folder_id).then_some(index)
+        })
+        .collect();
+
+    let sibling_position = sibling_indexes
+        .iter()
+        .position(|index| *index == target_index)
+        .ok_or("Connection not found".to_string())?;
+
+    let swap_with = match direction.trim().to_ascii_lowercase().as_str() {
+        "up" if sibling_position > 0 => Some(sibling_indexes[sibling_position - 1]),
+        "down" if sibling_position + 1 < sibling_indexes.len() => {
+            Some(sibling_indexes[sibling_position + 1])
+        }
+        "up" | "down" => None,
+        _ => return Err("Direction must be 'up' or 'down'.".to_string()),
+    };
+
+    let Some(swap_index) = swap_with else {
+        return Ok(true);
+    };
+
+    connections.swap(target_index, swap_index);
+    save_connections(&connections)?;
+
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn move_connection_folder(
+    _window: tauri::Window,
+    folder_id: Uuid,
+    direction: String,
+) -> Result<bool, String> {
+    let mut folders = load_connection_folders()?;
+    let target_index = folders
+        .iter()
+        .position(|folder| folder.id == folder_id)
+        .ok_or("Folder not found".to_string())?;
+
+    let parent_folder_id = folders[target_index].parent_folder_id;
+    let sibling_indexes: Vec<usize> = folders
+        .iter()
+        .enumerate()
+        .filter_map(|(index, folder)| {
+            (folder.parent_folder_id == parent_folder_id).then_some(index)
+        })
+        .collect();
+
+    let sibling_position = sibling_indexes
+        .iter()
+        .position(|index| *index == target_index)
+        .ok_or("Folder not found".to_string())?;
+
+    let swap_with = match direction.trim().to_ascii_lowercase().as_str() {
+        "up" if sibling_position > 0 => Some(sibling_indexes[sibling_position - 1]),
+        "down" if sibling_position + 1 < sibling_indexes.len() => {
+            Some(sibling_indexes[sibling_position + 1])
+        }
+        "up" | "down" => None,
+        _ => return Err("Direction must be 'up' or 'down'.".to_string()),
+    };
+
+    let Some(swap_index) = swap_with else {
+        return Ok(true);
+    };
+
+    folders.swap(target_index, swap_index);
+    save_connection_folders(&folders)?;
+
+    Ok(true)
 }
 
 #[tauri::command]
@@ -332,4 +556,24 @@ fn validate_folder_parent(parent_folder_id: Option<Uuid>) -> Result<(), String> 
     }
 
     Ok(())
+}
+
+fn collect_descendant_folder_ids(folders: &[crate::binding::model::connectionfolder::ConnectionFolder], root_id: Uuid) -> HashSet<Uuid> {
+    let mut ids = HashSet::new();
+    let mut stack = vec![root_id];
+
+    while let Some(current_id) = stack.pop() {
+        if !ids.insert(current_id) {
+            continue;
+        }
+
+        for child in folders
+            .iter()
+            .filter(|folder| folder.parent_folder_id == Some(current_id))
+        {
+            stack.push(child.id);
+        }
+    }
+
+    ids
 }

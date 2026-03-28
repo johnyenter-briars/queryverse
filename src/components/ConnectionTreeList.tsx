@@ -35,6 +35,14 @@ const useStyles = makeStyles({
             backgroundColor: "rgba(255, 255, 255, 0.05)",
         },
     },
+    rowActive: {
+        backgroundColor: "rgba(34, 211, 238, 0.14)",
+        borderTopColor: "rgba(34, 211, 238, 0.4)",
+        borderRightColor: "rgba(34, 211, 238, 0.4)",
+        borderBottomColor: "rgba(34, 211, 238, 0.4)",
+        borderLeftColor: "rgba(34, 211, 238, 0.4)",
+        boxShadow: "0 0 0 1px rgba(34, 211, 238, 0.15)",
+    },
     rowButton: {
         backgroundColor: "transparent",
         border: "none",
@@ -105,6 +113,8 @@ export interface ConnectionTreeListProps {
     onConnectionContextMenu?: (connection: Connection, x: number, y: number) => void;
     onFolderContextMenu?: (folder: ConnectionFolderTreeItem, x: number, y: number) => void;
     renderConnectionActions?: (connection: Connection) => ReactNode;
+    highlightedConnectionId?: string | null;
+    highlightedFolderId?: string | null;
 }
 
 export function ConnectionTreeList({
@@ -113,6 +123,8 @@ export function ConnectionTreeList({
     onConnectionContextMenu,
     onFolderContextMenu,
     renderConnectionActions,
+    highlightedConnectionId,
+    highlightedFolderId,
 }: ConnectionTreeListProps) {
     const styles = useStyles();
     const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
@@ -142,11 +154,15 @@ export function ConnectionTreeList({
             if (item.kind === "folder") {
                 const color = item.color ?? inheritedColor ?? undefined;
                 const isExpanded = expandedFolders[item.id] !== false;
+                const rowClassName =
+                    item.id === highlightedFolderId
+                        ? `${styles.row} ${styles.rowActive}`
+                        : styles.row;
 
                 return (
                     <div key={`folder-${item.id}`}>
                         <div
-                            className={styles.row}
+                            className={rowClassName}
                             style={{ paddingLeft: `${12 + depth * 18}px` }}
                             onContextMenu={(event) => {
                                 if (!onFolderContextMenu) return;
@@ -180,7 +196,11 @@ export function ConnectionTreeList({
             return (
                 <div
                     key={`connection-${item.id ?? item.name}`}
-                    className={styles.row}
+                    className={
+                        item.id === highlightedConnectionId
+                            ? `${styles.row} ${styles.rowActive}`
+                            : styles.row
+                    }
                     style={{ paddingLeft: `${12 + depth * 18}px` }}
                     onContextMenu={(event) => {
                         if (!onConnectionContextMenu) return;

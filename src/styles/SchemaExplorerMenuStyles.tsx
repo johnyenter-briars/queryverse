@@ -9,6 +9,9 @@ export const useSchemaExplorerMenuStyles = makeStyles({
     filterInput: {
         width: "100%",
     },
+    connectionSelect: {
+        width: "100%",
+    },
     tableList: {
         display: "flex",
         flexDirection: "column",

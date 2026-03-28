@@ -123,24 +123,22 @@ fn build_connection_tree(
 ) -> Result<Vec<ConnectionTreeItem>, String> {
     let mut items = Vec::new();
 
-    let mut child_folders: Vec<ConnectionFolder> = folders
+    let child_folders: Vec<ConnectionFolder> = folders
         .iter()
         .filter(|folder| folder.parent_folder_id == parent_folder_id)
         .cloned()
         .collect();
-    child_folders.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
 
     for folder in child_folders {
         let children = build_connection_tree(folders, connections, Some(folder.id))?;
         items.push(ConnectionTreeItem::Folder(ConnectionFolderTreeItem { folder, children }));
     }
 
-    let mut child_connections: Vec<Connection> = connections
+    let child_connections: Vec<Connection> = connections
         .iter()
         .filter(|connection| connection.parent_folder_id == parent_folder_id)
         .cloned()
         .collect();
-    child_connections.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
 
     for connection in child_connections {
         items.push(ConnectionTreeItem::Connection(connection));

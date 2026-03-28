@@ -30,6 +30,7 @@ pub mod settings;
 pub mod settingsresponse;
 pub mod updateconnectionrequest;
 pub mod updateconnectionfoldercolorresponse;
+pub mod updateconnectionfolderresponse;
 pub mod updateconnectionresponse;
 pub mod updatesqlexecuteresponse;
 pub mod updatesqljobstartresponse;

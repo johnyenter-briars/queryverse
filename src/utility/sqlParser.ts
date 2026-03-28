@@ -25,6 +25,12 @@ export type SqlParseError = {
     column?: number;
 };
 
+export type SqlStatementSlice = {
+    text: string;
+    startOffset: number;
+    endOffset: number;
+};
+
 const buildEntityNameMap = (entityDefinitions?: EntityDefinition[]) => {
     const map = new Map<string, string>();
     if (!entityDefinitions?.length) return map;
@@ -151,6 +157,60 @@ const collectTablesFromAst = (
     return { tables, aliases };
 };
 
+const STATEMENT_START_PATTERN = /(^|[\r\n])(\s*)(select|update|delete|insert)\b/gi;
+
+export const isolateSqlStatementAtOffset = (
+    sql: string,
+    cursorOffset: number
+): SqlStatementSlice => {
+    if (!sql.length) {
+        return { text: "", startOffset: 0, endOffset: 0 };
+    }
+
+    const boundedCursor = Math.max(0, Math.min(cursorOffset, sql.length));
+    const previousSemicolon = sql.lastIndexOf(";", Math.max(boundedCursor - 1, 0));
+    const nextSemicolon = sql.indexOf(";", boundedCursor);
+    const segmentStart = previousSemicolon === -1 ? 0 : previousSemicolon + 1;
+    const segmentEnd = nextSemicolon === -1 ? sql.length : nextSemicolon;
+    const segmentText = sql.slice(segmentStart, segmentEnd);
+    const cursorInSegment = boundedCursor - segmentStart;
+
+    const starts: number[] = [];
+    for (const match of segmentText.matchAll(STATEMENT_START_PATTERN)) {
+        const keywordOffset = match.index ?? 0;
+        const leadingBoundary = match[1]?.length ?? 0;
+        const indentation = match[2]?.length ?? 0;
+        starts.push(keywordOffset + leadingBoundary + indentation);
+    }
+
+    if (starts.length === 0) {
+        return {
+            text: segmentText,
+            startOffset: segmentStart,
+            endOffset: segmentEnd,
+        };
+    }
+
+    let activeStart = starts[0];
+    for (const start of starts) {
+        if (start <= cursorInSegment) {
+            activeStart = start;
+        } else {
+            break;
+        }
+    }
+
+    const nextStart = starts.find((start) => start > Math.max(cursorInSegment, activeStart));
+    const statementStart = segmentStart + activeStart;
+    const statementEnd = nextStart === undefined ? segmentEnd : segmentStart + nextStart;
+
+    return {
+        text: sql.slice(statementStart, statementEnd),
+        startOffset: statementStart,
+        endOffset: statementEnd,
+    };
+};
+
 export const analyzeSql = (
     sql: string,
     entityDefinitions?: EntityDefinition[]
@@ -161,9 +221,17 @@ export const analyzeSql = (
 
     try {
         const ast = parser.astify(sql, PARSE_OPTIONS);
-        const root = Array.isArray(ast) ? ast[0] : ast;
         const nameMap = buildEntityNameMap(entityDefinitions);
-        const context = collectTablesFromAst(root, nameMap);
+        const nodes = Array.isArray(ast) ? ast : [ast];
+        const mergedContext: SqlParseContext = { tables: [], aliases: {} };
+
+        for (const node of nodes) {
+            const context = collectTablesFromAst(node, nameMap);
+            mergedContext.tables.push(...context.tables);
+            Object.assign(mergedContext.aliases, context.aliases);
+        }
+
+        const context = mergedContext;
         return { context };
     } catch (error) {
         return { context: null, error: extractParserError(error) };

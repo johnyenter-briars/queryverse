@@ -1,7 +1,10 @@
 import {
     Button,
     Divider,
+    Dropdown,
+    Field,
     Input,
+    Option,
     Text,
     Title3,
 } from "@fluentui/react-components";
@@ -9,17 +12,24 @@ import { useMemo, useState } from "react";
 import { Table24Filled } from "@fluentui/react-icons";
 import { combineClasses } from "../utility/class";
 import { useConnectionsMenuStyles } from "../styles/ConnectionsMenuStyles";
+import { Connection } from "../binding/model/Connection";
 import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { useSchemaExplorerMenuStyles } from "../styles/SchemaExplorerMenuStyles";
 
 export interface ISchemaExplorerMenuProps {
     isOpen: boolean;
+    connections: Connection[];
+    selectedConnectionId: string | null;
+    onSelectedConnectionChange: (connectionId: string | null) => void;
     entityDefinitions: EntityDefinition[];
     onOpenEntity: (entity: EntityDefinition) => void;
 }
 
 export function SchemaExplorerMenu({
     isOpen,
+    connections,
+    selectedConnectionId,
+    onSelectedConnectionChange,
     entityDefinitions,
     onOpenEntity,
 }: ISchemaExplorerMenuProps) {
@@ -81,6 +91,32 @@ export function SchemaExplorerMenu({
                     </div>
                     <Divider className={styles.sectionDivider} />
                     <div className={localStyles.body}>
+                        <Field label="Connection">
+                            <Dropdown
+                                className={localStyles.connectionSelect}
+                                placeholder="Select connection"
+                                selectedOptions={
+                                    selectedConnectionId ? [selectedConnectionId] : []
+                                }
+                                value={
+                                    connections.find(
+                                        (connection) => connection.id === selectedConnectionId
+                                    )?.name ?? ""
+                                }
+                                onOptionSelect={(_, data) =>
+                                    onSelectedConnectionChange(data.optionValue || null)
+                                }
+                            >
+                                {connections.map((connection) => (
+                                    <Option
+                                        key={connection.id ?? connection.name}
+                                        value={connection.id ?? ""}
+                                    >
+                                        {connection.name}
+                                    </Option>
+                                ))}
+                            </Dropdown>
+                        </Field>
                         <Input
                             value={filterText}
                             onChange={(_, data) => setFilterText(data.value)}

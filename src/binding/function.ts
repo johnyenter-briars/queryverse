@@ -29,6 +29,7 @@ import { CreateConnectionFolderResponse } from "./model/CreateConnectionFolderRe
 import { BackgroundJobStatusResponse } from "./model/BackgroundJobStatusResponse";
 import { BackgroundJobResultResponse } from "./model/BackgroundJobResultResponse";
 import { UpdateConnectionFolderColorResponse } from "./model/UpdateConnectionFolderColorResponse";
+import { UpdateConnectionFolderResponse } from "./model/UpdateConnectionFolderResponse";
 import { logDebug } from "../utility/logging";
 
 const summarizeResponse = (response: unknown): unknown => {
@@ -161,6 +162,69 @@ export const updateConnectionFolderColor = async (
     );
 
     logBindingResponse("update_connection_folder_color", response);
+
+    return response;
+};
+
+export const updateConnectionFolder = async (
+    folderId: string,
+    name: string,
+    parentFolderId?: string | null
+): Promise<UpdateConnectionFolderResponse> => {
+    const response: UpdateConnectionFolderResponse = await invoke(
+        "update_connection_folder",
+        {
+            folderId,
+            name,
+            parentFolderId: parentFolderId ?? null,
+        }
+    );
+
+    logBindingResponse("update_connection_folder", response);
+
+    return response;
+};
+
+export const deleteConnectionFolder = async (folderId: string): Promise<boolean> => {
+    const response: boolean = await invoke("delete_connection_folder", { folderId });
+
+    logBindingResponse("delete_connection_folder", response);
+
+    return response;
+};
+
+export const deleteConnection = async (connectionId: string): Promise<boolean> => {
+    const response: boolean = await invoke("delete_connection", { connectionId });
+
+    logBindingResponse("delete_connection", response);
+
+    return response;
+};
+
+export const moveConnection = async (
+    connectionId: string,
+    direction: "up" | "down"
+): Promise<boolean> => {
+    const response: boolean = await invoke("move_connection", {
+        connectionId,
+        direction,
+    });
+
+    logBindingResponse("move_connection", response);
+
+    return response;
+};
+
+export const moveConnectionFolder = async (
+    folderId: string,
+    direction: "up" | "down"
+): Promise<boolean> => {
+    const response: boolean = await invoke("move_connection_folder", {
+        folderId,
+        direction,
+    });
+
+    logBindingResponse("move_connection_folder", response);
 
     return response;
 };
