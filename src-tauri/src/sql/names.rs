@@ -71,6 +71,10 @@ fn pluralize(name: &str) -> String {
 }
 
 fn looks_plural(name: &str) -> bool {
+    if matches!(name, "people" | "children") {
+        return true;
+    }
+
     if ends_with_any(name, &["ies", "ses", "xes", "zes", "ches", "shes"]) {
         return true;
     }
@@ -89,4 +93,37 @@ fn looks_plural(name: &str) -> bool {
 
 fn ends_with_any(name: &str, suffixes: &[&str]) -> bool {
     suffixes.iter().any(|suffix| name.ends_with(suffix))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{entity_names, resolve_entity_names};
+
+    #[test]
+    fn resolves_singular_name_to_plural_entity_set() {
+        let (entity_set, entity_logical) = resolve_entity_names("account");
+        assert_eq!(entity_set, "accounts");
+        assert_eq!(entity_logical, "account");
+    }
+
+    #[test]
+    fn preserves_existing_plural_entity_set() {
+        let names = entity_names("contacts");
+        assert_eq!(names.entity_set, "contacts");
+        assert_eq!(names.entity_logical, "contact");
+    }
+
+    #[test]
+    fn handles_irregular_plurals() {
+        let (entity_set, entity_logical) = resolve_entity_names("people");
+        assert_eq!(entity_set, "people");
+        assert_eq!(entity_logical, "person");
+    }
+
+    #[test]
+    fn trims_and_normalizes_case() {
+        let (entity_set, entity_logical) = resolve_entity_names("  Accounts  ");
+        assert_eq!(entity_set, "accounts");
+        assert_eq!(entity_logical, "account");
+    }
 }

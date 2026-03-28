@@ -129,3 +129,103 @@ pub(crate) fn normalize_ident(value: &str) -> String {
         .trim_matches(|ch| ch == '[' || ch == ']' || ch == '"' || ch == '`')
         .to_ascii_lowercase()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        build_update_attributes, normalize_ident, resolve_primary_id_attribute,
+        validate_update_attributes, value_to_string,
+    };
+    use crate::sql::ast::{Literal, UpdateAssignment};
+    use powerplatform_dataverse_client::dataverse::{
+        entity::{EntityReference, Value},
+        entityattribute::EntityAttribute,
+        entitydefinition::EntityDefinition,
+    };
+    use std::collections::HashMap;
+    use uuid::Uuid;
+
+    #[test]
+    fn resolve_primary_id_prefers_matching_definition() {
+        let definitions = vec![EntityDefinition {
+            odata_context: None,
+            logical_name: "account".to_string(),
+            schema_name: "Account".to_string(),
+            display_name: None,
+            entity_set_name: "accounts".to_string(),
+            is_custom_entity: false,
+            is_activity: None,
+            primary_id_attribute: Some("accountid".to_string()),
+            extra: HashMap::new(),
+        }];
+
+        let id = resolve_primary_id_attribute(&definitions, "account", "accounts").expect("id");
+        assert_eq!(id, "accountid");
+    }
+
+    #[test]
+    fn resolve_primary_id_falls_back_to_logical_name() {
+        let id = resolve_primary_id_attribute(&[], "contact", "contacts").expect("id");
+        assert_eq!(id, "contactid");
+    }
+
+    #[test]
+    fn build_update_attributes_strips_base_entity_alias() {
+        let assignments = vec![
+            UpdateAssignment {
+                column: "contact.firstname".to_string(),
+                value: Literal::String("Ada".to_string()),
+            },
+            UpdateAssignment {
+                column: "c.lastname".to_string(),
+                value: Literal::String("Lovelace".to_string()),
+            },
+        ];
+
+        let updates =
+            build_update_attributes(&assignments, "contact", Some("c")).expect("updates");
+
+        assert_eq!(updates.get("firstname"), Some(&serde_json::Value::String("Ada".to_string())));
+        assert_eq!(updates.get("lastname"), Some(&serde_json::Value::String("Lovelace".to_string())));
+    }
+
+    #[test]
+    fn validate_update_attributes_rejects_read_only_columns() {
+        let assignments = vec![UpdateAssignment {
+            column: "fullname".to_string(),
+            value: Literal::String("Ada Lovelace".to_string()),
+        }];
+        let attributes = vec![EntityAttribute {
+            logical_name: "fullname".to_string(),
+            schema_name: "FullName".to_string(),
+            attribute_type: None,
+            attribute_type_name: None,
+            is_custom_attribute: None,
+            is_valid_odata_attribute: None,
+            is_valid_for_read: None,
+            is_valid_for_update: Some(false),
+        }];
+
+        let error =
+            validate_update_attributes(&assignments, "contact", None, &attributes).expect_err("error");
+        assert!(error.contains("fullname"));
+    }
+
+    #[test]
+    fn value_to_string_handles_entity_reference_and_null() {
+        let reference = Value::EntityReference(EntityReference {
+            id: Uuid::nil(),
+            logical_name: "contact".to_string(),
+            name: Some("Ada".to_string()),
+        });
+
+        assert_eq!(value_to_string(&reference), Some(Uuid::nil().to_string()));
+        assert_eq!(value_to_string(&Value::Null), None);
+    }
+
+    #[test]
+    fn normalize_ident_trims_wrappers_and_lowercases() {
+        assert_eq!(normalize_ident("[AccountId]"), "accountid");
+        assert_eq!(normalize_ident("`CONTACT`"), "contact");
+    }
+}

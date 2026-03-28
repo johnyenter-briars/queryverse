@@ -190,3 +190,142 @@ pub async fn fail_job(
         job.result = None;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        BackgroundJobResult, BackgroundJobState, BackgroundJobStatus, complete_select_job,
+        create_job_result_store, create_job_store, fail_job, get_job, get_job_result, insert_job,
+        request_job_cancellation, store_job_result_rows, update_job_progress,
+    };
+    use crate::binding::model::{
+        executesqlresponse::{ExecuteSqlResponse, SqlQueryMetadata},
+        resultrow::ResultRow,
+    };
+
+    fn make_job(state: BackgroundJobState) -> BackgroundJobStatus {
+        BackgroundJobStatus {
+            job_id: "job-1".to_string(),
+            kind: "select".to_string(),
+            state,
+            current_batch: 0,
+            total_batches: 3,
+            processed: 0,
+            total: 10,
+            message: "queued".to_string(),
+            result: None,
+        }
+    }
+
+    fn make_select_response(rows: usize, success: bool, message: &str) -> ExecuteSqlResponse {
+        ExecuteSqlResponse {
+            message: message.to_string(),
+            success,
+            value: (0..rows).map(|_| ResultRow::new()).collect(),
+            metadata: SqlQueryMetadata {
+                columns_selected: true,
+                columns_order: vec!["name".to_string()],
+                entity_logical_name: Some("account".to_string()),
+            },
+        }
+    }
+
+    #[test]
+    fn insert_and_get_job_round_trip() {
+        tauri::async_runtime::block_on(async {
+            let store = create_job_store();
+            insert_job(&store, make_job(BackgroundJobState::Running)).await;
+
+            let job = get_job(&store, "job-1").await.expect("job");
+            assert_eq!(job.job_id, "job-1");
+            assert_eq!(job.state, BackgroundJobState::Running);
+        });
+    }
+
+    #[test]
+    fn terminal_jobs_ignore_progress_updates() {
+        tauri::async_runtime::block_on(async {
+            let store = create_job_store();
+            insert_job(&store, make_job(BackgroundJobState::Success)).await;
+
+            update_job_progress(
+                &store,
+                "job-1",
+                BackgroundJobState::Running,
+                1,
+                3,
+                4,
+                10,
+                "updated".to_string(),
+            )
+            .await;
+
+            let job = get_job(&store, "job-1").await.expect("job");
+            assert_eq!(job.state, BackgroundJobState::Success);
+            assert_eq!(job.message, "queued");
+        });
+    }
+
+    #[test]
+    fn cancellation_marks_running_job_and_clears_result() {
+        tauri::async_runtime::block_on(async {
+            let store = create_job_store();
+            let mut job = make_job(BackgroundJobState::Running);
+            job.result = Some(BackgroundJobResult::Select(make_select_response(1, true, "done")));
+            insert_job(&store, job).await;
+
+            let canceled = request_job_cancellation(&store, "job-1").await;
+            let job = get_job(&store, "job-1").await.expect("job");
+
+            assert!(canceled);
+            assert_eq!(job.state, BackgroundJobState::Canceled);
+            assert_eq!(job.message, "Job canceled.");
+            assert!(job.result.is_none());
+        });
+    }
+
+    #[test]
+    fn complete_select_job_sets_terminal_state_and_result() {
+        tauri::async_runtime::block_on(async {
+            let store = create_job_store();
+            insert_job(&store, make_job(BackgroundJobState::Running)).await;
+
+            complete_select_job(&store, "job-1", make_select_response(2, true, "ok")).await;
+
+            let job = get_job(&store, "job-1").await.expect("job");
+            assert_eq!(job.state, BackgroundJobState::Success);
+            assert_eq!(job.processed, 2);
+            assert_eq!(job.total, 2);
+            match job.result.expect("result") {
+                BackgroundJobResult::Select(response) => assert_eq!(response.value.len(), 2),
+                _ => panic!("expected select result"),
+            }
+        });
+    }
+
+    #[test]
+    fn fail_job_does_not_override_canceled_state() {
+        tauri::async_runtime::block_on(async {
+            let store = create_job_store();
+            insert_job(&store, make_job(BackgroundJobState::Canceled)).await;
+
+            fail_job(&store, "job-1", 1, 3, 4, 10, "boom".to_string()).await;
+
+            let job = get_job(&store, "job-1").await.expect("job");
+            assert_eq!(job.state, BackgroundJobState::Canceled);
+            assert_eq!(job.message, "queued");
+        });
+    }
+
+    #[test]
+    fn result_store_round_trip() {
+        tauri::async_runtime::block_on(async {
+            let store = create_job_result_store();
+            let result = BackgroundJobResult::Select(make_select_response(1, true, "ok"));
+            store_job_result_rows(&store, "job-1", result).await;
+
+            let stored = get_job_result(&store, "job-1").await;
+            assert!(matches!(stored, Some(BackgroundJobResult::Select(_))));
+        });
+    }
+}
