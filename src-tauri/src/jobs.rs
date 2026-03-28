@@ -12,14 +12,17 @@ use crate::binding::model::{
 pub type JobStore = Arc<AsyncMutex<HashMap<String, BackgroundJobStatus>>>;
 pub type JobResultStore = Arc<AsyncMutex<HashMap<String, BackgroundJobResult>>>;
 
+/// Create the shared in-memory progress store used by long-running background commands.
 pub fn create_job_store() -> JobStore {
     Arc::new(AsyncMutex::new(HashMap::new()))
 }
 
+/// Create the shared in-memory result store that survives until the frontend fetches job output.
 pub fn create_job_result_store() -> JobResultStore {
     Arc::new(AsyncMutex::new(HashMap::new()))
 }
 
+/// Insert or replace the current status record for a queued background job.
 pub async fn insert_job(job_store: &JobStore, job: BackgroundJobStatus) {
     job_store.lock().await.insert(job.job_id.clone(), job);
 }
@@ -46,6 +49,7 @@ pub async fn get_job_result(
     job_result_store.lock().await.get(job_id).cloned()
 }
 
+/// Update observable job progress while preserving terminal states once they have been reached.
 #[allow(clippy::too_many_arguments)]
 pub async fn update_job_progress(
     job_store: &JobStore,
@@ -58,6 +62,8 @@ pub async fn update_job_progress(
     message: String,
 ) {
     if let Some(job) = job_store.lock().await.get_mut(job_id) {
+        // Cancellation / failure / success are terminal from the UI's perspective. Workers may
+        // still unwind after that, but we do not allow stale progress updates to resurrect the job.
         if matches!(
             job.state,
             BackgroundJobState::Success | BackgroundJobState::Failed | BackgroundJobState::Canceled
@@ -73,6 +79,7 @@ pub async fn update_job_progress(
     }
 }
 
+/// Mark a running job as canceled. Workers poll this state and stop cooperatively.
 pub async fn request_job_cancellation(job_store: &JobStore, job_id: &str) -> bool {
     if let Some(job) = job_store.lock().await.get_mut(job_id) {
         if matches!(
@@ -91,6 +98,7 @@ pub async fn request_job_cancellation(job_store: &JobStore, job_id: &str) -> boo
     false
 }
 
+/// Finalize an update job once execution has completed and attach the response payload.
 pub async fn complete_update_job(
     job_store: &JobStore,
     job_id: &str,
@@ -113,6 +121,7 @@ pub async fn complete_update_job(
     }
 }
 
+/// Finalize a select job once rows have been materialized and stored.
 pub async fn complete_select_job(
     job_store: &JobStore,
     job_id: &str,
@@ -135,6 +144,7 @@ pub async fn complete_select_job(
     }
 }
 
+/// Finalize a delete job once execution has completed and attach the response payload.
 pub async fn complete_delete_job(
     job_store: &JobStore,
     job_id: &str,
@@ -157,6 +167,7 @@ pub async fn complete_delete_job(
     }
 }
 
+/// Transition a running job into a failed terminal state with the last known progress snapshot.
 pub async fn fail_job(
     job_store: &JobStore,
     job_id: &str,

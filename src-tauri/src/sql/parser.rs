@@ -12,6 +12,7 @@ pub struct Parser {
 }
 
 impl Parser {
+    /// Tokenize the input once up front so the parser can operate with simple indexed lookups.
     pub fn new(input: &str) -> Result<Self, ParseError> {
         let mut lexer = Lexer::new(input);
         let tokens = lexer.tokenize()?;
@@ -38,6 +39,9 @@ impl Parser {
         self.parse_delete()
     }
 
+    /// Parse QueryVerse's SELECT subset and normalize aggregate / GROUP BY expectations before
+    /// returning the AST. Any trailing tokens after the statement are treated as an error so the
+    /// caller can safely assume the whole input was consumed.
     fn parse_select(&mut self) -> Result<SelectStmt, ParseError> {
         self.expect_keyword(Keyword::Select)?;
 
@@ -242,6 +246,8 @@ impl Parser {
     }
 
     fn parse_optional_alias(&mut self) -> Result<Option<String>, ParseError> {
+        // SQL allows both explicit `AS alias` and bare aliases. We only reach this helper in
+        // positions where a trailing identifier can safely be interpreted as an alias.
         if self.consume_keyword(Keyword::As) {
             return Ok(Some(self.parse_identifier()?));
         }
@@ -256,6 +262,8 @@ impl Parser {
     fn parse_joins(&mut self) -> Result<Vec<JoinClause>, ParseError> {
         let mut joins = Vec::new();
         loop {
+            // Normalize the different textual forms (`JOIN`, `INNER JOIN`, `LEFT OUTER JOIN`)
+            // into the smaller join model used by FetchXML translation.
             let join_type = match &self.current().kind {
                 TokenKind::Keyword(Keyword::Join) => JoinType::Inner,
                 TokenKind::Keyword(Keyword::Inner) => {
@@ -348,6 +356,9 @@ impl Parser {
     }
 
     fn apply_group_by_rules(&self, stmt: &mut SelectStmt) -> Result<(), ParseError> {
+        // GROUP BY / HAVING are only meaningful once at least one aggregate or grouping key is
+        // present in the projection. We validate that here so later translation stages can rely
+        // on a coherent aggregate shape.
         if stmt.group_by.is_empty() && stmt.having.is_none() {
             return Ok(());
         }
@@ -491,6 +502,8 @@ impl Parser {
         };
 
         if self.is_predicate_target_start() {
+            // Column-to-column comparisons are preserved so JOIN-like predicates in HAVING can be
+            // evaluated locally even though they are not always translatable to FetchXML.
             let right = self.parse_predicate_target()?;
             return Ok(Predicate::ColumnCompare {
                 left,
@@ -580,6 +593,8 @@ impl Parser {
             _ => return Err(self.error_at_current("Expected identifier")),
         };
 
+        // Dotted identifiers are kept as a single logical path (`alias.column`) because later
+        // translation and fallback logic resolves qualification from the combined string.
         while self.consume_kind(TokenKind::Dot) {
             match &self.current().kind {
                 TokenKind::Identifier(value) => {
@@ -718,6 +733,8 @@ impl Parser {
     }
 }
 
+/// Match the synthetic default alias shape used throughout QueryVerse when an aggregate output
+/// is referenced later in ORDER BY / HAVING without an explicit SQL alias.
 fn aggregate_default_alias(function: AggregateFunction, target: &AggregateTarget) -> String {
     let function_name = match function {
         AggregateFunction::Min => "min",
@@ -733,6 +750,8 @@ fn aggregate_default_alias(function: AggregateFunction, target: &AggregateTarget
     }
 }
 
+/// Aggregate validation only cares whether the projection contains any aggregate semantics, not
+/// whether the statement is otherwise valid. The parser uses this to gate HAVING/GROUP BY usage.
 fn select_has_aggregates_or_grouping(stmt: &SelectStmt) -> bool {
     if !stmt.group_by.is_empty() {
         return true;

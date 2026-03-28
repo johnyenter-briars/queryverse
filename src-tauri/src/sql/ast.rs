@@ -1,3 +1,7 @@
+/// Canonical SELECT statement shape understood by QueryVerse's custom SQL pipeline.
+///
+/// This AST is intentionally narrower than full SQL: it only models the constructs we
+/// can translate to FetchXML or evaluate in the local aggregate fallback path.
 #[derive(Debug, Clone)]
 pub struct SelectStmt {
     pub columns: SelectColumns,
@@ -12,6 +16,7 @@ pub struct SelectStmt {
     pub order_by: Vec<OrderBy>,
 }
 
+/// UPDATE statement model used by the staged update-preview / execute flow.
 #[derive(Debug, Clone)]
 pub struct UpdateStmt {
     pub entity: String,
@@ -20,12 +25,14 @@ pub struct UpdateStmt {
     pub filter: Option<Expr>,
 }
 
+/// Single `SET column = literal` assignment in an UPDATE statement.
 #[derive(Debug, Clone)]
 pub struct UpdateAssignment {
     pub column: String,
     pub value: Literal,
 }
 
+/// DELETE statement model used by the staged delete-preview / execute flow.
 #[derive(Debug, Clone)]
 pub struct DeleteStmt {
     pub entity: String,
@@ -33,6 +40,7 @@ pub struct DeleteStmt {
     pub filter: Option<Expr>,
 }
 
+/// Join metadata captured from the SQL parser before FetchXML translation.
 #[derive(Debug, Clone)]
 pub struct JoinClause {
     pub join_type: JoinType,
@@ -41,12 +49,14 @@ pub struct JoinClause {
     pub on: JoinOn,
 }
 
+/// Only join types that can currently be expressed against Dataverse.
 #[derive(Debug, Clone, Copy)]
 pub enum JoinType {
     Inner,
     Left,
 }
 
+/// Simplified join predicate model. v1 only supports a single column-to-column comparison.
 #[derive(Debug, Clone)]
 pub struct JoinOn {
     pub left: String,
@@ -54,30 +64,35 @@ pub struct JoinOn {
     pub right: String,
 }
 
+/// Projection shape for the SELECT list.
 #[derive(Debug, Clone)]
 pub enum SelectColumns {
     All,
     Columns(Vec<SelectItem>),
 }
 
+/// One projected item in the SELECT list, optionally renamed with an alias.
 #[derive(Debug, Clone)]
 pub struct SelectItem {
     pub kind: SelectItemKind,
     pub alias: Option<String>,
 }
 
+/// QueryVerse supports projecting either a plain attribute or a supported aggregate.
 #[derive(Debug, Clone)]
 pub enum SelectItemKind {
     Attribute(String),
     Aggregate(AggregateExpr),
 }
 
+/// Aggregate expression reused across SELECT, ORDER BY, and HAVING parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregateExpr {
     pub function: AggregateFunction,
     pub target: AggregateTarget,
 }
 
+/// Aggregate functions supported by both FetchXML translation and local fallback evaluation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AggregateFunction {
     Min,
@@ -87,18 +102,21 @@ pub enum AggregateFunction {
     Avg,
 }
 
+/// Aggregate target is either `*` or a single column reference.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggregateTarget {
     Star,
     Column(String),
 }
 
+/// ORDER BY item after aliases and aggregate output names have been resolved.
 #[derive(Debug, Clone)]
 pub struct OrderBy {
     pub column: String,
     pub descending: bool,
 }
 
+/// Boolean expression tree used by WHERE and HAVING clauses.
 #[derive(Debug, Clone)]
 pub enum Expr {
     And(Box<Expr>, Box<Expr>),
@@ -106,6 +124,7 @@ pub enum Expr {
     Predicate(Predicate),
 }
 
+/// Supported predicate forms for QueryVerse's SQL subset.
 #[derive(Debug, Clone)]
 pub enum Predicate {
     Compare {
@@ -140,12 +159,14 @@ pub enum Predicate {
     },
 }
 
+/// Left/right side of a predicate: either a column or an aggregate output.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PredicateTarget {
     Column(String),
     Aggregate(AggregateExpr),
 }
 
+/// Comparison operators shared by regular predicates and JOIN conditions.
 #[derive(Debug, Clone, Copy)]
 pub enum CompareOp {
     Eq,
@@ -156,6 +177,7 @@ pub enum CompareOp {
     Gte,
 }
 
+/// Literal values accepted by the parser without parameter binding.
 #[derive(Debug, Clone)]
 pub enum Literal {
     String(String),

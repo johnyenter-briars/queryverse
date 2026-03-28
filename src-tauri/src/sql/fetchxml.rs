@@ -7,11 +7,18 @@ use crate::sql::errors::TranslationError;
 
 #[derive(Debug, Clone)]
 pub struct FetchXmlTranslation {
+    /// Final FetchXML payload sent to Dataverse.
     pub fetchxml: String,
+    /// Output column names in SQL projection order.
     pub column_outputs: Vec<String>,
+    /// Indicates whether the generated FetchXML is using aggregate mode.
     pub aggregate: bool,
 }
 
+/// Translate QueryVerse's SQL AST into the constrained FetchXML shape Dataverse accepts.
+///
+/// This function centralizes aliasing, aggregate naming, and join restrictions so later stages can
+/// treat translated queries and locally-evaluated fallbacks the same way.
 pub fn to_fetchxml(
     stmt: &SelectStmt,
     entity_name: &str,
@@ -41,6 +48,8 @@ pub fn to_fetchxml(
     out.push_str(&escape_xml(entity_name));
     out.push_str("\">");
 
+    // Track base/join aliases separately so qualified projections can be written to the correct
+    // `<entity>` or `<link-entity>` node during translation.
     let join_map = build_join_map(stmt);
     let projected_attributes = collect_projected_attribute_names(stmt);
     let mut join_attributes: std::collections::HashMap<String, Vec<SelectItem>> =
@@ -197,6 +206,7 @@ fn write_order(
     group_by: &std::collections::HashSet<String>,
     out: &mut String,
 ) {
+    // Aggregate FetchXML orders by alias, while normal FetchXML orders directly by attribute.
     if aggregate_mode {
         if let Some(alias) = alias_map.get(&order.column) {
             out.push_str("<order alias=\"");
@@ -440,8 +450,11 @@ fn strip_base_prefix(value: &str, base_entity: &str, base_alias: Option<&str>) -
 
 #[derive(Debug)]
 struct JoinMap {
+    /// Lowercased base entity logical name.
     base: String,
+    /// Optional SQL alias assigned to the base entity.
     base_alias: Option<String>,
+    /// Joined entities tracked as `(logical_name, alias)` pairs for projection routing.
     joins: Vec<(String, Option<String>)>,
 }
 
@@ -499,6 +512,8 @@ fn write_join(
     attributes: Option<Vec<SelectItem>>,
     out: &mut String,
 ) -> Result<(), TranslationError> {
+    // v1 translation only supports joins that compare the base entity to one linked entity. More
+    // complex join chains are rejected here instead of producing misleading FetchXML.
     let (left_table, left_col) = split_qualified(&join.on.left)
         .and_then(|(table, col)| table.map(|table| (table, col)))
         .ok_or_else(|| TranslationError::new("JOIN condition must use qualified columns"))?;
@@ -587,6 +602,8 @@ fn build_alias_map(
     aggregate_mode: bool,
     group_by: &std::collections::HashSet<String>,
 ) -> Result<std::collections::HashMap<String, String>, TranslationError> {
+    // ORDER BY / HAVING can reference display aliases, but FetchXML aggregate ordering needs the
+    // synthetic fetch alias. This map bridges those two naming schemes.
     let mut map = std::collections::HashMap::new();
 
     if !aggregate_mode {
@@ -643,6 +660,8 @@ fn group_by_matches_item(item: &SelectItem, group_by: &std::collections::HashSet
 fn validate_group_by(
     stmt: &SelectStmt,
 ) -> Result<std::collections::HashSet<String>, TranslationError> {
+    // Dataverse aggregate queries require every grouped column to also appear in the projection.
+    // We enforce that here so translation can assume the group list is projection-backed.
     if stmt.group_by.is_empty() {
         return Ok(std::collections::HashSet::new());
     }
