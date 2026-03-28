@@ -302,6 +302,96 @@ pub async fn delete_connection(
 }
 
 #[tauri::command]
+pub async fn move_connection(
+    _window: tauri::Window,
+    connection_id: Uuid,
+    direction: String,
+) -> Result<bool, String> {
+    let mut connections = load_connections()?;
+    let target_index = connections
+        .iter()
+        .position(|connection| connection.id() == Some(connection_id))
+        .ok_or("Connection not found".to_string())?;
+
+    let parent_folder_id = connections[target_index].parent_folder_id;
+    let sibling_indexes: Vec<usize> = connections
+        .iter()
+        .enumerate()
+        .filter_map(|(index, connection)| {
+            (connection.parent_folder_id == parent_folder_id).then_some(index)
+        })
+        .collect();
+
+    let sibling_position = sibling_indexes
+        .iter()
+        .position(|index| *index == target_index)
+        .ok_or("Connection not found".to_string())?;
+
+    let swap_with = match direction.trim().to_ascii_lowercase().as_str() {
+        "up" if sibling_position > 0 => Some(sibling_indexes[sibling_position - 1]),
+        "down" if sibling_position + 1 < sibling_indexes.len() => {
+            Some(sibling_indexes[sibling_position + 1])
+        }
+        "up" | "down" => None,
+        _ => return Err("Direction must be 'up' or 'down'.".to_string()),
+    };
+
+    let Some(swap_index) = swap_with else {
+        return Ok(true);
+    };
+
+    connections.swap(target_index, swap_index);
+    save_connections(&connections)?;
+
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn move_connection_folder(
+    _window: tauri::Window,
+    folder_id: Uuid,
+    direction: String,
+) -> Result<bool, String> {
+    let mut folders = load_connection_folders()?;
+    let target_index = folders
+        .iter()
+        .position(|folder| folder.id == folder_id)
+        .ok_or("Folder not found".to_string())?;
+
+    let parent_folder_id = folders[target_index].parent_folder_id;
+    let sibling_indexes: Vec<usize> = folders
+        .iter()
+        .enumerate()
+        .filter_map(|(index, folder)| {
+            (folder.parent_folder_id == parent_folder_id).then_some(index)
+        })
+        .collect();
+
+    let sibling_position = sibling_indexes
+        .iter()
+        .position(|index| *index == target_index)
+        .ok_or("Folder not found".to_string())?;
+
+    let swap_with = match direction.trim().to_ascii_lowercase().as_str() {
+        "up" if sibling_position > 0 => Some(sibling_indexes[sibling_position - 1]),
+        "down" if sibling_position + 1 < sibling_indexes.len() => {
+            Some(sibling_indexes[sibling_position + 1])
+        }
+        "up" | "down" => None,
+        _ => return Err("Direction must be 'up' or 'down'.".to_string()),
+    };
+
+    let Some(swap_index) = swap_with else {
+        return Ok(true);
+    };
+
+    folders.swap(target_index, swap_index);
+    save_connection_folders(&folders)?;
+
+    Ok(true)
+}
+
+#[tauri::command]
 pub async fn set_connection(
     _window: tauri::Window,
     request: SetConnectionRequest,

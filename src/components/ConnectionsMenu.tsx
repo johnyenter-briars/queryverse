@@ -21,6 +21,8 @@ import {
     getDefaultConnection,
     listConnections,
     listConnectionTree,
+    moveConnection,
+    moveConnectionFolder,
     updateConnection,
     updateConnectionFolder,
     updateConnectionFolderColor,
@@ -142,6 +144,30 @@ const flattenFolderOptions = (items: ConnectionTreeItem[], depth = 0): FolderOpt
         ];
     });
 
+const findSiblingFolders = (
+    items: ConnectionTreeItem[],
+    folderId: string,
+    parentFolderId?: string | null
+): ConnectionFolderTreeItem[] => {
+    const siblings = items.filter(
+        (item): item is ConnectionFolderTreeItem =>
+            item.kind === "folder" && (item.parentFolderId ?? null) === (parentFolderId ?? null)
+    );
+    if (siblings.some((folder) => folder.id === folderId)) {
+        return siblings;
+    }
+
+    for (const item of items) {
+        if (item.kind !== "folder") continue;
+        const nested = findSiblingFolders(item.children, folderId, parentFolderId);
+        if (nested.length) {
+            return nested;
+        }
+    }
+
+    return [];
+};
+
 export interface IConnectionsMenuProps {
     isOpen: boolean;
     onOpenConnection: (connection: Connection) => void;
@@ -183,6 +209,35 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
 
     const flyoutClasses = combineClasses(styles.flyoutBase, isOpen && styles.flyoutOpen);
     const folderOptions = useMemo(() => flattenFolderOptions(connectionTree), [connectionTree]);
+    const selectedContextConnection = connectionContextMenu.connection;
+    const siblingConnections = useMemo(() => {
+        if (!selectedContextConnection) {
+            return [];
+        }
+
+        const parentFolderId = selectedContextConnection.parentFolderId ?? null;
+        return connections.filter(
+            (connection) => (connection.parentFolderId ?? null) === parentFolderId
+        );
+    }, [connections, selectedContextConnection]);
+    const selectedContextConnectionIndex = siblingConnections.findIndex(
+        (connection) => connection.id === selectedContextConnection?.id
+    );
+    const selectedContextFolder = folderContextMenu.folder;
+    const siblingFolders = useMemo(() => {
+        if (!selectedContextFolder) {
+            return [];
+        }
+
+        return findSiblingFolders(
+            connectionTree,
+            selectedContextFolder.id,
+            selectedContextFolder.parentFolderId ?? null
+        );
+    }, [connectionTree, selectedContextFolder]);
+    const selectedContextFolderIndex = siblingFolders.findIndex(
+        (folder) => folder.id === selectedContextFolder?.id
+    );
 
     const loadData = async () => {
         try {
@@ -474,6 +529,36 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
         }
     };
 
+    const handleMoveConnection = async (direction: "up" | "down") => {
+        const connection = connectionContextMenu.connection;
+        if (!connection?.id) return;
+
+        try {
+            await moveConnection(connection.id, direction);
+            await loadData();
+        } catch (error) {
+            setEditStatus({
+                type: "error",
+                message: error instanceof Error ? error.message : "Failed to reorder connection.",
+            });
+        }
+    };
+
+    const handleMoveFolder = async (direction: "up" | "down") => {
+        const folder = folderContextMenu.folder;
+        if (!folder?.id) return;
+
+        try {
+            await moveConnectionFolder(folder.id, direction);
+            await loadData();
+        } catch (error) {
+            setEditFolderStatus({
+                type: "error",
+                message: error instanceof Error ? error.message : "Failed to reorder folder.",
+            });
+        }
+    };
+
     const handleAssignFolderColor = () => {
         setFolderContextMenu((prev) => ({ ...prev, open: false }));
         colorInputRef.current?.click();
@@ -708,6 +793,25 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                     <Button
                         appearance="subtle"
                         className={styles.contextMenuButton}
+                        disabled={selectedContextConnectionIndex <= 0}
+                        onClick={() => void handleMoveConnection("up")}
+                    >
+                        Move up
+                    </Button>
+                    <Button
+                        appearance="subtle"
+                        className={styles.contextMenuButton}
+                        disabled={
+                            selectedContextConnectionIndex === -1 ||
+                            selectedContextConnectionIndex >= siblingConnections.length - 1
+                        }
+                        onClick={() => void handleMoveConnection("down")}
+                    >
+                        Move down
+                    </Button>
+                    <Button
+                        appearance="subtle"
+                        className={styles.contextMenuButton}
                         onClick={() => void handleDeleteConnection()}
                     >
                         Delete connection
@@ -746,6 +850,25 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                         }}
                     >
                         New subfolder
+                    </Button>
+                    <Button
+                        appearance="subtle"
+                        className={styles.contextMenuButton}
+                        disabled={selectedContextFolderIndex <= 0}
+                        onClick={() => void handleMoveFolder("up")}
+                    >
+                        Move up
+                    </Button>
+                    <Button
+                        appearance="subtle"
+                        className={styles.contextMenuButton}
+                        disabled={
+                            selectedContextFolderIndex === -1 ||
+                            selectedContextFolderIndex >= siblingFolders.length - 1
+                        }
+                        onClick={() => void handleMoveFolder("down")}
+                    >
+                        Move down
                     </Button>
                     <Button
                         appearance="subtle"
