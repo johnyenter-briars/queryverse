@@ -3036,7 +3036,9 @@ checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 
 [[package]]
 name = "powerplatform-dataverse-client"
-version = "0.1.0"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ccfe7c34ffaad8b77508109c8305670ec367b88865a6794dd5c24cf7345018f"
 dependencies = [
  "base64 0.22.1",
  "chrono",
