@@ -53,6 +53,13 @@ fn singularize(name: &str) -> String {
 }
 
 fn pluralize(name: &str) -> String {
+    // Dataverse entity-set names are metadata, not grammatical plurals. Keep known
+    // platform exceptions here so connection-free FetchXML previews are accurate;
+    // connected execution replaces this inference with EntityDefinition metadata.
+    if name == "webresource" {
+        return "webresourceset".to_string();
+    }
+
     if name.ends_with('y')
         && name.len() > 1
         && !matches!(
@@ -118,6 +125,13 @@ mod tests {
         let (entity_set, entity_logical) = resolve_entity_names("people");
         assert_eq!(entity_set, "people");
         assert_eq!(entity_logical, "person");
+    }
+
+    #[test]
+    fn handles_dataverse_webresource_entity_set() {
+        let (entity_set, entity_logical) = resolve_entity_names("webresource");
+        assert_eq!(entity_set, "webresourceset");
+        assert_eq!(entity_logical, "webresource");
     }
 
     #[test]
