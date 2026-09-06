@@ -1,8 +1,8 @@
 [package]
 name = "QueryVerse"
-version = "0.1.0"
+version = "0.9.0"
 description = "QueryVerse"
-authors = ["J + P"]
+authors = ["J + P + S"]
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

@@ -34,7 +34,10 @@ use powerplatform_dataverse_client::{
 };
 use uuid::Uuid;
 
-use super::metadata::{get_entity_attributes_cached, get_entity_definitions_cached};
+use super::{
+    helpers::resolve_entity_set_name,
+    metadata::{get_entity_attributes_cached, get_entity_definitions_cached},
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,8 +92,11 @@ pub async fn execute_sql(
         get_or_create_service_client(&connection, &database, context.log_level, Some(&window))
             .await?;
     let stmt = sql::api::parse(&request.sql).map_err(|e| e.to_string())?;
-    let (_, entity_logical) = sql::names::resolve_entity_names(&stmt.entity);
-    let _ = get_entity_definitions_cached(&service_client, &database, connection_id).await;
+    let (inferred_entity_set, entity_logical) = sql::names::resolve_entity_names(&stmt.entity);
+    let definitions =
+        get_entity_definitions_cached(&service_client, &database, connection_id).await?;
+    let entity_set =
+        resolve_entity_set_name(&definitions, &entity_logical, &inferred_entity_set);
     let entity_attributes = get_entity_attributes_cached(
         &service_client,
         &database,
@@ -141,6 +147,7 @@ pub async fn execute_sql(
             &sql_text,
             log_level,
             Some(&entity_attributes),
+            Some(&entity_set),
             |processed, total, current_batch, total_batches, message| {
                 let job_store = job_store.clone();
                 let job_id = queued_job_id.clone();
@@ -198,6 +205,7 @@ pub async fn execute_sql_with_client(
         sql_text,
         log_level,
         entity_attributes,
+        None,
         |_, _, _, _, _| {},
     )
     .await
@@ -210,6 +218,7 @@ pub async fn execute_sql_with_client_and_progress<F>(
     entity_attributes: Option<
         &[powerplatform_dataverse_client::dataverse::entityattribute::EntityAttribute],
     >,
+    entity_set_override: Option<&str>,
     mut on_progress: F,
 ) -> Result<ExecuteSqlResponse, String>
 where
@@ -236,8 +245,11 @@ where
     } else {
         execution_stmt.clone()
     };
-    let parsed = sql::api::to_fetchxml_with_lookup_bases(&fetch_stmt, lookup_bases.as_ref())
+    let mut parsed = sql::api::to_fetchxml_with_lookup_bases(&fetch_stmt, lookup_bases.as_ref())
         .map_err(|e| e.to_string())?;
+    if let Some(entity_set) = entity_set_override {
+        parsed.entity_set = entity_set.to_string();
+    }
 
     let columns_order = parsed
         .column_outputs

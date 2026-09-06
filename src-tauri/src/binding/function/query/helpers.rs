@@ -26,6 +26,26 @@ pub(crate) fn resolve_primary_id_attribute(
         .unwrap_or_else(|| format!("{}id", entity_logical)))
 }
 
+pub(crate) fn resolve_entity_set_name(
+    definitions: &[EntityDefinition],
+    entity_logical: &str,
+    inferred_entity_set: &str,
+) -> String {
+    let target_logical = normalize_ident(entity_logical);
+    let target_set = normalize_ident(inferred_entity_set);
+
+    definitions
+        .iter()
+        .find(|definition| {
+            normalize_ident(&definition.logical_name) == target_logical
+                || normalize_ident(&definition.schema_name) == target_logical
+                || normalize_ident(&definition.entity_set_name) == target_logical
+                || normalize_ident(&definition.entity_set_name) == target_set
+        })
+        .map(|definition| definition.entity_set_name.clone())
+        .unwrap_or_else(|| inferred_entity_set.to_string())
+}
+
 pub(crate) fn build_update_attributes(
     assignments: &[UpdateAssignment],
     entity: &str,
@@ -133,7 +153,8 @@ pub(crate) fn normalize_ident(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_update_attributes, normalize_ident, resolve_primary_id_attribute,
+        build_update_attributes, normalize_ident, resolve_entity_set_name,
+        resolve_primary_id_attribute,
         validate_update_attributes, value_to_string,
     };
     use crate::sql::ast::{Literal, UpdateAssignment};
@@ -167,6 +188,26 @@ mod tests {
     fn resolve_primary_id_falls_back_to_logical_name() {
         let id = resolve_primary_id_attribute(&[], "contact", "contacts").expect("id");
         assert_eq!(id, "contactid");
+    }
+
+    #[test]
+    fn resolve_entity_set_uses_dataverse_metadata_for_irregular_names() {
+        let definitions = vec![EntityDefinition {
+            odata_context: None,
+            logical_name: "webresource".to_string(),
+            schema_name: "WebResource".to_string(),
+            display_name: None,
+            entity_set_name: "webresourceset".to_string(),
+            is_custom_entity: false,
+            is_activity: None,
+            primary_id_attribute: Some("webresourceid".to_string()),
+            extra: HashMap::new(),
+        }];
+
+        assert_eq!(
+            resolve_entity_set_name(&definitions, "webresource", "webresources"),
+            "webresourceset"
+        );
     }
 
     #[test]
