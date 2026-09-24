@@ -9,6 +9,7 @@ pub mod sql;
 extern crate tauri;
 extern crate tauri_plugin_opener;
 
+#[cfg(debug_assertions)]
 use tauri::Manager;
 
 use crate::binding::function::{
@@ -169,13 +170,19 @@ pub fn run() {
             cancel_background_job,
             log_frontend
         ])
-        .setup(move |app| {
-            let windows = app.webview_windows();
-            let window = windows.get("QueryVerse").unwrap();
+        .setup(move |_app| {
             if launch_context.open_webview_console {
-                // Tauri only exposes opening devtools directly, so close it immediately to avoid focus theft.
-                window.open_devtools();
-                window.close_devtools(); // Dev tools starts open but not steal focus
+                #[cfg(debug_assertions)]
+                {
+                    let windows = _app.webview_windows();
+                    let window = windows.get("QueryVerse").unwrap();
+                    // Tauri only exposes opening devtools directly, so close it immediately to avoid focus theft.
+                    window.open_devtools();
+                    window.close_devtools(); // Dev tools starts open but not steal focus
+                }
+
+                #[cfg(not(debug_assertions))]
+                log::warn!("--open-webview-console is only available in debug builds");
             }
             Ok(())
         })
