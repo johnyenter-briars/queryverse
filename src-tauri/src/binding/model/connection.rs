@@ -23,6 +23,7 @@ impl Connection {
         match &self.auth {
             AuthConfig::ClientCredentials { dataverse_url, .. } => dataverse_url,
             AuthConfig::DeviceCode { dataverse_url, .. } => dataverse_url,
+            AuthConfig::InteractiveBrowser { dataverse_url, .. } => dataverse_url,
         }
     }
 
@@ -57,5 +58,28 @@ mod tests {
         assert_eq!(connection.id(), Some(id));
         assert_eq!(connection.dataverse_url(), "https://example.crm.dynamics.com");
         assert!(matches!(connection.auth(), AuthConfig::DeviceCode { .. }));
+    }
+
+    #[test]
+    fn browser_connection_round_trips_with_cache_path() {
+        let connection = Connection {
+            id: Some(Uuid::new_v4()),
+            name: "browser".to_string(),
+            parent_folder_id: None,
+            auth: AuthConfig::InteractiveBrowser {
+                client_id: "app".to_string(),
+                tenant_id: "organizations".to_string(),
+                dataverse_url: "https://example.crm.dynamics.com".to_string(),
+                token_cache_store_path: Some("cache/browser".to_string()),
+            },
+            generated_on: String::new(),
+        };
+        let restored: Connection = serde_json::from_value(serde_json::to_value(&connection).unwrap()).unwrap();
+        assert_eq!(restored.dataverse_url(), connection.dataverse_url());
+        assert!(matches!(
+            restored.auth,
+            AuthConfig::InteractiveBrowser { token_cache_store_path: Some(path), .. }
+                if path == "cache/browser"
+        ));
     }
 }

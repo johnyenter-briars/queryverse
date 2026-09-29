@@ -94,6 +94,36 @@ pub async fn create_connection(
                 })?;
             connection
         }
+        CreateConnectionPayload::InteractiveBrowser {
+            id,
+            name,
+            client_id,
+            tenant_id,
+            dataverse_url,
+            token_cache_store_path,
+            parent_folder_id,
+        } => {
+            validate_folder_parent(parent_folder_id)?;
+            let connection = Connection {
+                id: Some(id.unwrap_or_else(Uuid::new_v4)),
+                name,
+                parent_folder_id,
+                auth: AuthConfig::InteractiveBrowser {
+                    client_id,
+                    tenant_id,
+                    dataverse_url,
+                    token_cache_store_path,
+                },
+                generated_on: utc_timestamp(),
+            };
+            let _ = ServiceClient::new_with_auth(connection.auth.clone(), LogLevel::Error)
+                .await
+                .map_err(|error| {
+                    error!("create_connection browser sign-in validation failed: {error}");
+                    error
+                })?;
+            connection
+        }
     };
 
     save_connection(&connection).map_err(|error| {
@@ -500,6 +530,36 @@ pub async fn update_connection(
                 .await
                 .map_err(|error| {
                     error!("update_connection device code validation failed: {error}");
+                    error
+                })?;
+            connection
+        }
+        CreateConnectionPayload::InteractiveBrowser {
+            id: _,
+            name,
+            client_id,
+            tenant_id,
+            dataverse_url,
+            token_cache_store_path,
+            parent_folder_id,
+        } => {
+            validate_folder_parent(parent_folder_id)?;
+            let connection = Connection {
+                id: existing_id,
+                name,
+                parent_folder_id,
+                auth: AuthConfig::InteractiveBrowser {
+                    client_id,
+                    tenant_id,
+                    dataverse_url,
+                    token_cache_store_path,
+                },
+                generated_on: utc_timestamp(),
+            };
+            let _ = ServiceClient::new_with_auth(connection.auth.clone(), LogLevel::Error)
+                .await
+                .map_err(|error| {
+                    error!("update_connection browser sign-in validation failed: {error}");
                     error
                 })?;
             connection
