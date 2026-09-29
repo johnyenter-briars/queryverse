@@ -35,9 +35,14 @@ import { EntityDefinition } from "../binding/model/EntityDefinition";
 import { SqlQueryMetadata } from "../binding/model/SqlQueryMetadata";
 import {
     buildResultColumnDescriptors,
-    getPrimaryIdAttributeForQuery,
+    getEntityDefinitionForQuery,
 } from "../utility/resultsColumns";
-import { buildResultsClipboardText, formatResultValue } from "../utility/resultsClipboard";
+import {
+    buildEntityReferenceRecordUrl,
+    buildResultsClipboardText,
+    formatResultValue,
+    primaryIdToRecordReference,
+} from "../utility/resultsClipboard";
 import { useResultsWindowStyles } from "../styles/ResultsWindowStyles";
 import { useAppToast } from "../utility/toast";
 import { exportCsv, exportExcel } from "../binding/function";
@@ -179,22 +184,8 @@ function measureTextWidth(
     return context.measureText(text).width;
 }
 
-function buildEntityReferenceRecordUrl(
-    value: EntityReference,
-    dataverseUrl?: string | null
-): string {
-    if (!dataverseUrl) {
-        return value.id;
-    }
-
-    const trimmedBaseUrl = dataverseUrl.replace(/\/+$/, "");
-    return `${trimmedBaseUrl}/main.aspx?pagetype=entityrecord&etn=${encodeURIComponent(
-        value.logical_name
-    )}&id=${encodeURIComponent(value.id)}`;
-}
-
 function valueToClipboardText(value: Value, dataverseUrl?: string | null): string {
-    if (isEntityReference(value)) {
+    if (isEntityReference(value) && dataverseUrl) {
         return buildEntityReferenceRecordUrl(value, dataverseUrl);
     }
 
@@ -293,6 +284,7 @@ export const ResultsWindow = React.memo(
 
         const containerRef = useRef<HTMLDivElement>(null);
         const exportMenuRef = useRef<HTMLDivElement>(null);
+        const cellMenuRef = useRef<HTMLDivElement>(null);
         const [containerHeight, setContainerHeight] = useState<number>(800);
         const [containerWidth, setContainerWidth] = useState<number>(0);
         const [exportMenu, setExportMenu] = useState<{
@@ -300,6 +292,11 @@ export const ResultsWindow = React.memo(
             x: number;
             y: number;
         }>({ open: false, x: 0, y: 0 });
+        const [cellMenu, setCellMenu] = useState<{
+            x: number;
+            y: number;
+            reference: EntityReference;
+        } | null>(null);
         const [sortState, setSortState] = useState<{
             sortColumn: TableColumnId | undefined;
             sortDirection: SortDirection;
@@ -353,6 +350,29 @@ export const ResultsWindow = React.memo(
                 window.removeEventListener("keydown", handleClose, true);
             };
         }, [exportMenu.open]);
+
+        useEffect(() => {
+            if (!cellMenu) return;
+
+            const handleClose = (event: MouseEvent | KeyboardEvent) => {
+                if (
+                    event instanceof MouseEvent &&
+                    cellMenuRef.current?.contains(event.target as Node)
+                ) {
+                    return;
+                }
+                setCellMenu(null);
+            };
+
+            window.addEventListener("click", handleClose, true);
+            window.addEventListener("contextmenu", handleClose, true);
+            window.addEventListener("keydown", handleClose, true);
+            return () => {
+                window.removeEventListener("click", handleClose, true);
+                window.removeEventListener("contextmenu", handleClose, true);
+                window.removeEventListener("keydown", handleClose, true);
+            };
+        }, [cellMenu]);
 
         const orderedAttributes = useMemo(() => {
             if (data.length === 0) return [];
@@ -492,10 +512,13 @@ export const ResultsWindow = React.memo(
             return options;
         }, [computedColumnWidths, orderedAttributes]);
 
-        const primaryIdAttribute = useMemo(
-            () => getPrimaryIdAttributeForQuery(entityDefinitions, query),
-            [entityDefinitions, query]
-        );
+        const primaryEntity = useMemo(() => {
+            const logicalName = queryMetadata?.entityLogicalName?.toLowerCase();
+            return entityDefinitions.find(
+                (definition) => definition.LogicalName.toLowerCase() === logicalName
+            ) ?? getEntityDefinitionForQuery(entityDefinitions, query);
+        }, [entityDefinitions, query, queryMetadata?.entityLogicalName]);
+        const primaryIdAttribute = primaryEntity?.PrimaryIdAttribute;
 
         const totalWidth = useMemo(
             () =>
@@ -510,6 +533,7 @@ export const ResultsWindow = React.memo(
         function openExportMenu(event: React.MouseEvent<HTMLElement>) {
             event.preventDefault();
             event.stopPropagation();
+            setCellMenu(null);
             setExportMenu({
                 open: true,
                 x: event.clientX,
@@ -569,6 +593,30 @@ export const ResultsWindow = React.memo(
             }
         };
 
+        const copyCellText = async (text: string) => {
+            try {
+                await navigator.clipboard.writeText(text);
+                notifySuccess("Copied to clipboard.");
+            } catch {
+                notifyError("Could not copy to clipboard.");
+            }
+        };
+
+        const handleCopyReference = (kind: "value" | "link") => {
+            if (!cellMenu) return;
+            const { reference } = cellMenu;
+            setCellMenu(null);
+            if (kind === "link") {
+                if (!dataverseUrl?.trim()) {
+                    notifyWarning("Dataverse URL unavailable; cannot copy record link.");
+                    return;
+                }
+                void copyCellText(buildEntityReferenceRecordUrl(reference, dataverseUrl));
+            } else {
+                void copyCellText(reference.id);
+            }
+        };
+
         const innerElementType = useMemo(() => {
             return React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
                 (props, ref) => {
@@ -609,23 +657,29 @@ export const ResultsWindow = React.memo(
             <DataGridRow<ResultRow> key={rowId} style={style}>
                 {({ renderCell, columnId }) => {
                     const column = orderedAttributes.find((entry) => entry.key === columnId);
-                    const cellValue = column
-                        ? valueToClipboardText(
-                              item.attributes[column.dataKey],
-                              dataverseUrl
-                          )
-                        : "";
+                    const rawValue = column ? item.attributes[column.dataKey] : null;
 
                     return (
                         <DataGridCell
-                            onDoubleClick={async () => {
-                                try {
-                                    await navigator.clipboard.writeText(cellValue);
-                                    notifySuccess("Coped to clipboard");
-                                } catch {
-                                    notifyError("Could not copy to clipboard.");
+                            onContextMenu={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setExportMenu({ open: false, x: 0, y: 0 });
+                                const reference = isEntityReference(rawValue)
+                                    ? rawValue
+                                    : primaryIdToRecordReference(rawValue, column?.dataKey, primaryEntity);
+                                if (reference) {
+                                    setCellMenu({
+                                        x: event.clientX,
+                                        y: event.clientY,
+                                        reference,
+                                    });
+                                } else {
+                                    setCellMenu(null);
+                                    void copyCellText(formatResultValue(rawValue));
                                 }
                             }}
+                            onDoubleClick={() => void copyCellText(valueToClipboardText(rawValue, dataverseUrl))}
                         >
                             {renderCell(item)}
                         </DataGridCell>
@@ -699,6 +753,30 @@ export const ResultsWindow = React.memo(
                             <Button appearance="subtle" className={styles.resultsContextMenuButton}>
                                 JSON (TODO)
                             </Button>
+                    </div>
+                ) : null}
+                {cellMenu ? (
+                    <div
+                        ref={cellMenuRef}
+                        className={styles.resultsContextMenu}
+                        style={{ left: cellMenu.x, top: cellMenu.y }}
+                    >
+                        <Button
+                            appearance="subtle"
+                            className={styles.resultsContextMenuButton}
+                            onClick={() => handleCopyReference("value")}
+                        >
+                            Copy value
+                        </Button>
+                        <Button
+                            appearance="subtle"
+                            className={styles.resultsContextMenuButton}
+                            disabled={!dataverseUrl?.trim()}
+                            title={!dataverseUrl?.trim() ? "Dataverse URL unavailable" : undefined}
+                            onClick={() => handleCopyReference("link")}
+                        >
+                            Copy record link
+                        </Button>
                     </div>
                 ) : null}
                 {isLoading ? (
