@@ -37,6 +37,7 @@ import {
     buildResultColumnDescriptors,
     getPrimaryIdAttributeForQuery,
 } from "../utility/resultsColumns";
+import { buildResultsClipboardText, formatResultValue } from "../utility/resultsClipboard";
 import { useResultsWindowStyles } from "../styles/ResultsWindowStyles";
 import { useAppToast } from "../utility/toast";
 import { exportCsv, exportExcel } from "../binding/function";
@@ -83,22 +84,8 @@ function isOptionSetValueCollection(value: Value): value is OptionSetValueCollec
     );
 }
 
-function formatValue(value: Value): string {
-    if (value === null || value === undefined) return "NULL";
-    if (isEntityReference(value)) {
-        return value.id;
-    }
-    if (isOptionSetValueCollection(value)) {
-        return value.values.join(", ");
-    }
-    if (isOptionSetValue(value) || isMoneyValue(value)) {
-        return String(value.value);
-    }
-    return String(value);
-}
-
 function renderValue(value: Value): React.ReactNode {
-    return formatValue(value);
+    return formatResultValue(value);
 }
 
 function getSortableValue(value: Value): number | string | null {
@@ -119,7 +106,7 @@ function getSortableValue(value: Value): number | string | null {
     }
 
     if (isEntityReference(value)) {
-        return formatValue(value);
+        return formatResultValue(value);
     }
 
     if (isOptionSetValueCollection(value)) {
@@ -211,7 +198,7 @@ function valueToClipboardText(value: Value, dataverseUrl?: string | null): strin
         return buildEntityReferenceRecordUrl(value, dataverseUrl);
     }
 
-    return formatValue(value);
+    return formatResultValue(value);
 }
 
 export interface IResultsWindowProps {
@@ -399,7 +386,7 @@ export const ResultsWindow = React.memo(
                                 className={styles.resultsHeaderActionButton}
                                 onClick={openExportMenu}
                                 onContextMenu={openExportMenu}
-                                title="Export results"
+                                title="Results actions"
                             />
                         ) : dataKey === "__rownum" ? null : (
                             <span className={styles.headerContent}>{attribute}</span>
@@ -476,7 +463,7 @@ export const ResultsWindow = React.memo(
                     CELL_HORIZONTAL_PADDING;
 
                 const valueWidth = sampledRows.reduce((maxWidth, row) => {
-                    const displayValue = formatValue(row.attributes[entry.dataKey]);
+                    const displayValue = formatResultValue(row.attributes[entry.dataKey]);
                     const nextWidth =
                         measureTextWidth(displayValue, targetDocument, measureContext) +
                         CELL_HORIZONTAL_PADDING;
@@ -563,6 +550,22 @@ export const ResultsWindow = React.memo(
                 }
             } catch (error) {
                 notifyError(error instanceof Error ? error.message : "Could not export Excel.");
+            }
+        };
+
+        const handleCopyWithHeaders = async () => {
+            setExportMenu({ open: false, x: 0, y: 0 });
+            const text = buildResultsClipboardText(sortedData, orderedAttributes);
+            if (!text) {
+                notifyWarning("No results to copy.");
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(text);
+                notifySuccess("Results copied with headers.");
+            } catch {
+                notifyError("Could not copy results to clipboard.");
             }
         };
 
@@ -686,6 +689,13 @@ export const ResultsWindow = React.memo(
                             >
                                 Excel
                             </Button>
+                            <Button
+                                appearance="subtle"
+                                className={styles.resultsContextMenuButton}
+                                onClick={() => void handleCopyWithHeaders()}
+                            >
+                                Copy with headers
+                            </Button>
                             <Button appearance="subtle" className={styles.resultsContextMenuButton}>
                                 JSON (TODO)
                             </Button>
@@ -723,8 +733,16 @@ export const ResultsWindow = React.memo(
                         }}
                     >
                         <DataGridRow>
-                            {({ renderHeaderCell }) => (
-                                <DataGridHeaderCell>
+                            {({ renderHeaderCell, columnId }) => (
+                                <DataGridHeaderCell
+                                    onContextMenu={
+                                        !isLoading && orderedAttributes.some(
+                                            (entry) => entry.key === columnId && entry.dataKey === "__rownum"
+                                        )
+                                            ? openExportMenu
+                                            : undefined
+                                    }
+                                >
                                     {renderHeaderCell()}
                                 </DataGridHeaderCell>
                             )}
