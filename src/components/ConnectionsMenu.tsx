@@ -35,7 +35,9 @@ import { ModalDialog } from "./ModalDialog";
 import { logError } from "../utility/logging";
 import { ConnectionTreeList } from "./ConnectionTreeList";
 
-type ConnectionMethod = "ClientCredentials" | "DeviceCode";
+type ConnectionMethod = "ClientCredentials" | "DeviceCode" | "InteractiveBrowser";
+
+const MICROSOFT_DEFAULT_CLIENT_ID = "51f81489-12ee-4a9e-aaae-a2591f45987d";
 
 type ConnectionFormState = {
     id: string;
@@ -59,9 +61,9 @@ const emptyFormState = (method: ConnectionMethod = "ClientCredentials"): Connect
     method,
     name: "",
     parentFolderId: "",
-    clientId: "",
+    clientId: method === "InteractiveBrowser" ? MICROSOFT_DEFAULT_CLIENT_ID : "",
     clientSecret: "",
-    tenantId: method === "DeviceCode" ? "organizations" : "",
+    tenantId: method === "ClientCredentials" ? "" : "organizations",
     dataverseUrl: "",
     tokenCacheStorePath: "",
 });
@@ -120,7 +122,7 @@ const buildPayload = (state: ConnectionFormState) =>
           }
         : {
               id: state.id.trim(),
-              method: "DeviceCode" as const,
+              method: state.method,
               name: state.name.trim(),
               parentFolderId: state.parentFolderId || null,
               clientId: state.clientId.trim(),
@@ -184,6 +186,8 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
     const [editIndex, setEditIndex] = useState<number | null>(null);
     const [createStatus, setCreateStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
     const [editStatus, setEditStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+    const [createPending, setCreatePending] = useState(false);
+    const [editPending, setEditPending] = useState(false);
     const [folderStatus, setFolderStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
     const [editFolderStatus, setEditFolderStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
     const [createFormState, setCreateFormState] = useState<ConnectionFormState>(emptyFormState());
@@ -288,7 +292,8 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
             ...toFormState(connection),
             method,
             parentFolderId: "",
-            tenantId: method === "DeviceCode" ? "organizations" : "",
+            clientId: method === "InteractiveBrowser" ? MICROSOFT_DEFAULT_CLIENT_ID : "",
+            tenantId: method === "ClientCredentials" ? "" : "organizations",
             clientSecret: "",
         });
     };
@@ -340,6 +345,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
     };
 
     const handleCreateConnection = async () => {
+        if (createPending) return;
         setCreateStatus(null);
         const validationError = validationErrorFor(createFormState);
         if (validationError) {
@@ -347,6 +353,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
             return;
         }
 
+        setCreatePending(true);
         try {
             const response = await createConnection({
                 requestType: RequestType.Create,
@@ -364,10 +371,13 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                 type: "error",
                 message: error instanceof Error ? error.message : "Failed to create connection.",
             });
+        } finally {
+            setCreatePending(false);
         }
     };
 
     const handleSaveEdit = async () => {
+        if (editPending) return;
         setEditStatus(null);
         const validationError = validationErrorFor(editFormState);
         if (validationError) {
@@ -380,6 +390,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
             return;
         }
 
+        setEditPending(true);
         try {
             const response = await updateConnection({
                 id: connections[editIndex]?.id ?? null,
@@ -398,6 +409,8 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                 type: "error",
                 message: error instanceof Error ? error.message : "Failed to update connection.",
             });
+        } finally {
+            setEditPending(false);
         }
     };
 
@@ -614,7 +627,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                         id: prev.id,
                         name: prev.name,
                         parentFolderId: prev.parentFolderId,
-                        clientId: prev.clientId,
+                        clientId: prev.clientId || emptyFormState(data.value as ConnectionMethod).clientId,
                         dataverseUrl: prev.dataverseUrl,
                         tokenCacheStorePath: prev.tokenCacheStorePath,
                     }))
@@ -622,6 +635,7 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
             >
                 <Radio value="ClientCredentials" label="Client Credentials" />
                 <Radio value="DeviceCode" label="Device Code" />
+                <Radio value="InteractiveBrowser" label="Browser sign-in" />
             </RadioGroup>
 
             <Field label="Connection name">
@@ -633,7 +647,30 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
             )}
 
             <Field label="Client ID / App ID">
-                <Input value={formState.clientId} onChange={(_, data) => setFormState((prev) => ({ ...prev, clientId: data.value }))} />
+                <div className={styles.clientIdRow}>
+                    <Input
+                        className={styles.clientIdInput}
+                        value={formState.clientId}
+                        onChange={(_, data) =>
+                            setFormState((prev) => ({ ...prev, clientId: data.value }))
+                        }
+                    />
+                    {formState.method !== "ClientCredentials" ? (
+                        <Button
+                            appearance="secondary"
+                            size="small"
+                            title={MICROSOFT_DEFAULT_CLIENT_ID}
+                            onClick={() =>
+                                setFormState((prev) => ({
+                                    ...prev,
+                                    clientId: MICROSOFT_DEFAULT_CLIENT_ID,
+                                }))
+                            }
+                        >
+                            Use Microsoft default
+                        </Button>
+                    ) : null}
+                </div>
             </Field>
 
             {formState.method === "ClientCredentials" ? (
@@ -666,7 +703,9 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
             </Field>
 
             <Text size={200}>
-                {formState.method === "DeviceCode"
+                {formState.method === "InteractiveBrowser"
+                    ? "Browser sign-in opens your default browser when no usable cached token is available. The token stays in this connection's cache path, and you can paste the sign-in URL into another browser profile."
+                    : formState.method === "DeviceCode"
                     ? "Device code sign-in will open in the browser flow when the connection is validated or used. The device code itself is still logged to the backend console."
                     : "Client credentials connections are validated immediately using the supplied client ID, secret, tenant, and Dataverse URL."}
             </Text>
@@ -903,8 +942,8 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                         </Text>
                     ) : null}
                 </div>
-                <Button appearance="primary" onClick={handleCreateConnection} disabled={createDisabled}>
-                    Create Connection
+                <Button appearance="primary" onClick={handleCreateConnection} disabled={createDisabled || createPending}>
+                    {createPending ? "Validating connection..." : "Create Connection"}
                 </Button>
             </ModalDialog>
 
@@ -917,8 +956,8 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
                         </Text>
                     ) : null}
                 </div>
-                <Button appearance="primary" onClick={handleSaveEdit}>
-                    Save Changes
+                <Button appearance="primary" onClick={handleSaveEdit} disabled={editPending}>
+                    {editPending ? "Validating connection..." : "Save Changes"}
                 </Button>
             </ModalDialog>
 

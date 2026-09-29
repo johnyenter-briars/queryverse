@@ -1,4 +1,4 @@
-export type AuthConfig = ClientCredentialsAuthConfig | DeviceCodeAuthConfig;
+export type AuthConfig = ClientCredentialsAuthConfig | DeviceCodeAuthConfig | InteractiveBrowserAuthConfig;
 
 export type ClientCredentialsAuthConfig = {
     method: "ClientCredentials";
@@ -11,6 +11,14 @@ export type ClientCredentialsAuthConfig = {
 
 export type DeviceCodeAuthConfig = {
     method: "DeviceCode";
+    clientId: string;
+    tenantId: string;
+    dataverseUrl: string;
+    tokenCacheStorePath?: string | null;
+};
+
+export type InteractiveBrowserAuthConfig = {
+    method: "InteractiveBrowser";
     clientId: string;
     tenantId: string;
     dataverseUrl: string;

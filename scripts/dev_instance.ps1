@@ -18,4 +18,4 @@ if ($Connection) { $appArgs += "--connection"; $appArgs += $Connection }
 if ($LogLevel) { $appArgs += "--log-level"; $appArgs += $LogLevel }
 if ($OpenWebviewConsole) { $appArgs += "--open-webview-console" }
 
-npm run tauri dev -- --no-dev-server --no-dev-server-wait -- -- @appArgs
+npm run tauri dev -- --no-dev-server --no-dev-server-wait -- -- -- @appArgs
