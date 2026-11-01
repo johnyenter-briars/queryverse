@@ -1,3 +1,8 @@
+> [!WARNING]
+> **⚠️ Project status: Paused indefinitely**
+>
+> Active development is paused indefinitely. New features, fixes, and support are not currently planned. The code remains available for reference and use as-is.
+
 <h1 align="left">QueryVerse
   <img align="left" src="./img/app-icon.png" alt="QueryVerse app icon" style="height: 1.5em;" />
 </h1>
