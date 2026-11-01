@@ -2,111 +2,96 @@
   <img align="left" src="./img/app-icon.png" alt="QueryVerse app icon" style="height: 1.5em;" />
 </h1>
 
-
-Perform SQL queries against [Microsoft Dataverse](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/data-platform-intro) — ⚡blazingly⚡fast.
+Perform SQL queries against [Microsoft Dataverse](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/data-platform-intro) from a desktop client tuned for fast everyday workflows.
 
 ## What is QueryVerse?
-QueryVerse is a [Dataverse](https://www.microsoft.com/en-us/power-platform/dataverse)-focused SQL client with fast query execution and a workflow tuned for everyday data access.
+
+QueryVerse is a Dataverse-focused SQL client. It emphasizes:
+
+- fast SQL-to-Fetch execution
+- practical multi-connection desktop workflows
+- schema-aware query authoring
+- safe update/delete flows with preview and confirmation
+
+This README is the product index. Detailed breakdowns live in [`doc/`](doc).
 
 ## Who is it For?
-- **Developers:** iterate quickly with SQL-to-Fetch, paging, and TDS-aware performance.
-- **Functional consultants:** validate data models, troubleshoot integrations, and share saved SQL with clients.
-- **Business users:** run safe, repeatable queries and export results without a heavy setup.
 
-## High-Level Objectives
-- Drop-in replacement for a SQL client
-  - Read and update
-  - SQL-to-Fetch engine
-  - Paging
-  - JSON-to-entity conversion
-  - TDS optimization
-- Convert to FetchXML
-- Save SQL files
-- Save multiple connections
-- Tabs
-  - Each tab is a different connection
-- Results window
-  - Copy to JSON
-  - Open JSON in a new window
+- Developers who need a fast Dataverse-native query tool without living in raw FetchXML.
+- Functional consultants who want to inspect data, validate joins, and save reusable SQL.
+- Power users who need a desktop workflow for query execution, schema browsing, and export.
 
-## Current Features
+## Features
+
+### Query Editor and Tabs
+
+SQL editing, multi-query files, per-tab connections, FetchXML preview tabs, and statement-scoped intellisense.
+
+See [doc/query-editor.md](doc/query-editor.md).
+
+### Connections and Project Organization
+
+Saved Dataverse connections, folders, per-tab connection binding, context menus, editing, deleting, and manual reordering.
+
+See [doc/connections.md](doc/connections.md).
+
+### Schema Explorer
+
+Connection-scoped schema browsing for entities, attributes, and relationships.
+
+See [doc/schema-explorer.md](doc/schema-explorer.md).
+
+### Write Operations
+
+`UPDATE` and `DELETE` support, preview-before-confirm flows, request-parameter awareness, and row-count previews.
+
+See [doc/write-operations.md](doc/write-operations.md).
+
+### SQL Support
+
+Supported SQL statement families, query-oriented editor behavior, and current SQL feature boundaries.
+
+See [doc/sql-support.md](doc/sql-support.md).
+
+### Results and Export
+
+Virtualized result grid behavior, copy workflows, row numbering, inline errors, and export-related behavior.
+
+See [doc/results-and-export.md](doc/results-and-export.md).
+
+### Settings and Developer Workflow
+
+App settings, CLI parameters, Vim mode, keyboard shortcuts, and multi-instance dev workflow.
+
+See [doc/settings-and-cli.md](doc/settings-and-cli.md).
+
+### Not Supported / Known Limitations
+
+Current gaps, intentional omissions, and behavior that users should understand before depending on a workflow.
+
+See [doc/limitations.md](doc/limitations.md).
+
+## Current Feature Summary
+
 - Execute Dataverse SQL queries from a desktop client.
 - Translate SQL to FetchXML.
 - Preview generated FetchXML before execution.
-- Run paged Dataverse reads through the Rust backend.
+- Run paged Dataverse reads.
 - Open multiple query tabs.
-- Associate tabs with saved Dataverse connections.
-- Create, update, and persist connection profiles.
-- Open SQL files from disk.
-- Save SQL files.
-- Save SQL files as new files.
-- Open a SQL file on startup from CLI.
-- Select a startup connection from CLI.
-- Set backend log level from CLI.
-- Open webview devtools from CLI.
+- Associate runnable tabs with saved Dataverse connections.
+- Create, edit, delete, reorder, and organize connections and folders.
+- Open SQL files from disk and save them back to disk.
+- Open SQL files and selected connections from CLI startup parameters.
 - Browse Dataverse schema metadata.
-- Load entity definitions for the selected connection.
-- Load entity attributes on demand.
-- Execute `UPDATE` statements with preview-before-confirm flow.
-- Execute `DELETE` statements with preview-before-confirm flow.
-- Show affected row count before update/delete execution.
-- Show current Dataverse request-parameter state in update/delete confirmation dialogs.
-- Persist app settings locally.
-- Configure editor font size.
-- Enable or disable Vim mode for SQL tabs.
-- Enable or disable app keyboard shortcuts.
-- Toggle single quotes in FetchXML preview output.
-- Configure Dataverse request parameters from settings.
-- Support `BypassBusinessLogicExecution` request parameters.
-- Support `BypassCustomPluginExecution` request parameter.
-- Support `SuppressCallbackRegistrationExpanderJob` request parameter.
-- Show `BypassBusinessLogicExecutionStepIds` as not implemented yet in settings.
-- Apply Dataverse request parameters to update operations.
-- Apply Dataverse request parameters to delete operations.
-- Show query results in a virtualized grid.
-- Keep a visible row number column in results.
-- Show stronger grid-style row and cell separators in results.
-- Double-click a result cell to copy its value to the clipboard.
-- Show toast notifications for copy and other frontend actions.
-- Show query execution errors inline in the results area.
-- Keep per-tab query text, results, and execution state.
-
-## Known Issues
-- Companion lookup columns such as `owneridname`, `owneridtype`, or custom lookup `...name` / `...type` fields may require the base lookup column to also be present in the `SELECT` list. For example, `select ownerid, owneridname from account` is currently more reliable than `select owneridname from account`.
-
-## Dev CLI Params
-When running the Tauri dev app, the following CLI params are supported:
-- `--sql-file <path>`: Open a SQL file on startup.
-- `--connection <name>`: Select a connection profile on startup.
-- `--log-level <error|warn|information|debug|trace>`: Set backend logging level.
-- `--open-webview-console`: Open the webview devtools without stealing focus.
-
-Example:
-```powershell
-npm run tauri dev -- -- -- -- `
-  --sql-file C:\Users\Owner\dev\queryverse-test\query.sql `
-  --connection jyb `
-  --log-level debug `
-  --open-webview-console
-```
-
-## Multiple Dev Instances
-Use `scripts/dev_instance.ps1` to run multiple app instances while sharing the same Vite dev server.
-The script will:
-- Start Vite on port 1420 if it is not already running.
-- Launch the Tauri backend without starting a second dev server.
-
-Example:
-```powershell
-.\scripts\dev_instance.ps1 `
-  -SqlFile C:\Users\Owner\dev\queryverse-test\query.sql `
-  -Connection jyb `
-  -LogLevel debug `
-  -OpenWebviewConsole
-```
+- Support `SELECT`, `UPDATE`, and `DELETE` statement workflows.
+- Execute `UPDATE` and `DELETE` statements with preview-before-confirm flow.
+- Show query results in a virtualized grid with row numbers and inline errors.
+- Configure editor, shortcut, Vim, and Dataverse request-parameter settings.
 
 ## AI Disclosure
+
 Portions of this project were developed with the assistance of AI tools; all changes are reviewed and tested by maintainers.
 
 ## Acknowledgements
+
 QueryVerse is lovingly inspired by the [SQL4CDS](https://www.xrmtoolbox.com/plugins/MarkMpn.SQL4CDS/) project. <3
