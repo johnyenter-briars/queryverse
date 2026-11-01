@@ -20,7 +20,7 @@ use crate::{
 };
 
 use super::helpers::{
-    build_update_attributes, normalize_ident, resolve_primary_id_attribute,
+    build_update_attributes, normalize_ident, resolve_entity_set_name, resolve_primary_id_attribute,
     validate_update_attributes, value_to_string,
 };
 use super::metadata::{get_entity_attributes_cached, get_entity_definitions_cached};
@@ -65,9 +65,11 @@ pub async fn prepare_update_sql(
         get_or_create_service_client(&connection, &database, context.log_level, Some(&window))
             .await?;
 
-    let (entity_set, entity_logical) = sql::names::resolve_entity_names(&stmt.entity);
+    let (inferred_entity_set, entity_logical) = sql::names::resolve_entity_names(&stmt.entity);
     let definitions =
         get_entity_definitions_cached(&service_client, &database, connection_id).await?;
+    let entity_set =
+        resolve_entity_set_name(&definitions, &entity_logical, &inferred_entity_set);
     let primary_id_attribute =
         resolve_primary_id_attribute(&definitions, &entity_logical, &entity_set)?;
 
@@ -101,7 +103,7 @@ pub async fn prepare_update_sql(
         sql::api::update_to_fetchxml(&stmt, &primary_id_attribute).map_err(|e| e.to_string())?;
 
     let entities = service_client
-        .retrieve_multiple_fetchxml_paging(&fetch.entity_set, &fetch.fetchxml)
+        .retrieve_multiple_fetchxml_paging(&entity_set, &fetch.fetchxml)
         .await
         .map_err(|error| {
             error!("prepare_update_sql retrieve_multiple_fetchxml failed: {error}");

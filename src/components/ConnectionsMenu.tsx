@@ -37,6 +37,8 @@ import { ConnectionTreeList } from "./ConnectionTreeList";
 
 type ConnectionMethod = "ClientCredentials" | "DeviceCode";
 
+const MICROSOFT_DEFAULT_CLIENT_ID = "51f81489-12ee-4a9e-aaae-a2591f45987d";
+
 type ConnectionFormState = {
     id: string;
     method: ConnectionMethod;
@@ -633,7 +635,30 @@ export function ConnectionsMenu({ isOpen, onOpenConnection }: IConnectionsMenuPr
             )}
 
             <Field label="Client ID / App ID">
-                <Input value={formState.clientId} onChange={(_, data) => setFormState((prev) => ({ ...prev, clientId: data.value }))} />
+                <div className={styles.clientIdRow}>
+                    <Input
+                        className={styles.clientIdInput}
+                        value={formState.clientId}
+                        onChange={(_, data) =>
+                            setFormState((prev) => ({ ...prev, clientId: data.value }))
+                        }
+                    />
+                    {formState.method === "DeviceCode" ? (
+                        <Button
+                            appearance="secondary"
+                            size="small"
+                            title={MICROSOFT_DEFAULT_CLIENT_ID}
+                            onClick={() =>
+                                setFormState((prev) => ({
+                                    ...prev,
+                                    clientId: MICROSOFT_DEFAULT_CLIENT_ID,
+                                }))
+                            }
+                        >
+                            Use Microsoft default
+                        </Button>
+                    ) : null}
+                </div>
             </Field>
 
             {formState.method === "ClientCredentials" ? (

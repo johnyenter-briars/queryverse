@@ -76,6 +76,15 @@ export const useConnectionsMenuStyles = makeStyles({
         display: "grid",
         gap: tokens.spacingVerticalM,
     },
+    clientIdRow: {
+        display: "flex",
+        alignItems: "stretch",
+        gap: tokens.spacingHorizontalS,
+    },
+    clientIdInput: {
+        flexGrow: 1,
+        minWidth: 0,
+    },
     folderSelect: {
         backgroundColor: tokens.colorNeutralBackground1,
         color: tokens.colorNeutralForeground1,
